@@ -37,7 +37,7 @@ export const PanicButton: React.FC<PanicButtonProps> = ({ size = 'sm' }) => {
     <>
       <button
         onClick={handleClick}
-        className={`${sizing} font-black rounded-lg bg-stagespace-danger hover:opacity-90 text-white border-2 border-red-500 transition-colors tracking-wider active:scale-95 flex items-center gap-1.5`}
+        className={`${sizing} font-black rounded-lg bg-stagespace-danger hover:opacity-90 text-white border-2 border-white/40 transition-colors tracking-wider active:scale-95 flex items-center gap-1.5`}
         title="PANIC (Esc) — stops all moves and sends origin positions"
       >
         <OctagonX size={size === 'lg' ? 20 : 14} strokeWidth={2.5} />

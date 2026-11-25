@@ -99,7 +99,7 @@ export const OscMappingsPanel: React.FC = () => {
           </button>
           <button
             onClick={() => void removeOscMapping(m.address)}
-            className="text-gray-600 hover:text-red-400 px-1"
+            className="text-gray-600 hover:text-stagespace-danger px-1"
             title="Remove mapping"
           >
             ✕

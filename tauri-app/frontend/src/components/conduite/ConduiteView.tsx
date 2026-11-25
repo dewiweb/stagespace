@@ -8,6 +8,7 @@ import { ParkedChip } from '../perform/ParkedChip';
 import { ShowTransport } from '../show/ShowTransport';
 import { formatLogLabel } from '../../utils/liveActionsShared';
 import type { ConduiteHandlers, ConduiteViewState } from './types';
+import { SOURCE_OUTLINE } from '../../utils/sourceColors';
 
 export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteHandlers> = ({
   st,
@@ -76,7 +77,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             <ParkedChip
               parked={st.parked}
               onUnpark={onUnpark}
-              className="text-xl px-3 py-1.5 rounded font-bold border border-pink-600/60 text-pink-200 bg-pink-900/30 hover:bg-pink-800/40"
+              className={`text-xl px-3 py-1.5 rounded font-bold border ${SOURCE_OUTLINE.park}`}
             />
           )}
           {st && st.consoleAge !== null && (
@@ -109,9 +110,9 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
                 }}
                 className={`px-3 py-2.5 cursor-pointer text-sm truncate ${
                   c.current
-                    ? 'bg-amber-900/30 border-l-2 border-amber-500 font-bold'
+                    ? 'bg-stagespace-conduite/15 border-l-2 border-stagespace-conduite font-bold'
                     : c.id === armedCueId
-                      ? 'bg-amber-900/10 ring-1 ring-inset ring-amber-500/60 text-gray-200'
+                      ? 'bg-stagespace-conduite/10 ring-1 ring-inset ring-stagespace-conduite/60 text-gray-200'
                       : c.next
                         ? 'text-gray-300 hover:bg-gray-800/50'
                         : 'text-gray-500 hover:bg-gray-800/50'
@@ -139,7 +140,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             <div className="text-gray-500 text-base uppercase tracking-widest mb-1">Now</div>
             {/* Sans cue courante mais des moves live (busking) : NOW montre
                 la vérité — ce qui sonne — plutôt qu'un tiret trompeur. */}
-            <div className="text-5xl font-black text-amber-300 truncate max-w-[60vw]">
+            <div className="text-5xl font-black text-stagespace-conduite truncate max-w-[60vw]">
               {cur?.label ||
                 (st && st.playingNames.length > 0
                   ? st.playingNames.length > 2
@@ -155,11 +156,11 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
               </div>
             )}
             {st?.pending && (
-              <div className="text-amber-400 text-2xl font-bold mt-2 animate-pulse">
+              <div className="text-stagespace-conduite text-2xl font-bold mt-2 animate-pulse">
                 {st.pending.kind === 'pre_wait' ? 'pré-attente' : 'follow'} {st.pending.remainingSec.toFixed(1)}s
               </div>
             )}
-            {st?.isRecalling && <div className="text-amber-400 text-2xl font-bold mt-2 animate-pulse">RECALLING…</div>}
+            {st?.isRecalling && <div className="text-stagespace-conduite text-2xl font-bold mt-2 animate-pulse">RECALLING…</div>}
           </div>
           <div className="text-center min-w-0">
             <div className="text-gray-500 text-xs uppercase tracking-widest mb-1">Next</div>
@@ -169,7 +170,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             {st && st.playingCount > 0 ? `${st.playingCount} moves live` : 'IDLE'}
             {st && st.orphanCount > 0 && (
               <span
-                className="px-1.5 py-0.5 rounded bg-stagespace-warning/30 text-orange-300 text-xs font-bold"
+                className="px-1.5 py-0.5 rounded bg-stagespace-warning/30 text-stagespace-warning text-xs font-bold"
                 title={`${st.orphanCount} orphan movement(s) running — no slot controls them. PANIC clears.`}
               >
                 +{st.orphanCount} ⚠
@@ -186,7 +187,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             panic={
               <button
                 onClick={onPanic}
-                className="px-8 py-6 rounded-2xl bg-stagespace-danger/70 hover:bg-stagespace-danger text-red-100 text-2xl font-black active:scale-95"
+                className="px-8 py-6 rounded-2xl bg-stagespace-danger/70 hover:bg-stagespace-danger text-white text-2xl font-black active:scale-95"
               >
                 PANIC
               </button>
@@ -205,13 +206,13 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             >
               SETLIST ▶
             </button>
-            <span className="text-teal-200/70 text-base truncate max-w-[30vw]">
+            <span className="text-stagespace-target/80 text-base truncate max-w-[30vw]">
               {st?.nextSetlistName ?? 'fin de setlist'}
             </span>
             {st && st.soloRestoreCount > 0 && (
               <button
                 onClick={onUnsolo}
-                className="px-4 py-2 rounded-lg bg-stagespace-warning/70 hover:bg-stagespace-warning text-orange-100 text-sm font-bold active:scale-95"
+                className="px-4 py-2 rounded-lg bg-stagespace-warning/70 hover:bg-stagespace-warning text-white text-sm font-bold active:scale-95"
                 title={`UNSOLO — rejoue les ${st.soloRestoreCount} slots stoppés par le solo`}
               >
                 UNSOLO

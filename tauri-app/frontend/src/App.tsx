@@ -511,7 +511,7 @@ function AppMain() {
           ) : (
             <div className="h-9 border-b border-stagespace-border flex items-center px-3 bg-stagespace-panel flex-shrink-0">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                <div className="w-4 h-4 rounded bg-gradient-to-br from-stagespace-accent to-stagespace-info flex items-center justify-center">
                   <span className="text-white text-xs font-bold">3D</span>
                 </div>
                 <span className="text-gray-300 text-xs font-medium">Canvas</span>

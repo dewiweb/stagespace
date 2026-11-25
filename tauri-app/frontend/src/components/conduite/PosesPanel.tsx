@@ -71,7 +71,7 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
         <button
           onClick={capture}
           disabled={!newName.trim()}
-          className="px-2 py-1 rounded bg-stagespace-accent/20 hover:bg-stagespace-accent/30 text-blue-200 text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
+          className="px-2 py-1 rounded bg-stagespace-accent/20 hover:bg-stagespace-accent/30 text-stagespace-info text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
           title={
             selectedTrackIds.size > 0
               ? `Capture ${selectedTrackIds.size} selected track(s) at their current positions`
@@ -106,7 +106,7 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
                   {selectedPoseName === p.name ? '◈ ' : ''}{p.name}
                 </div>
                 <div
-                  className={`text-[10px] ${patched < ntracks ? 'text-amber-500' : 'text-gray-600'}`}
+                  className={`text-[10px] ${patched < ntracks ? 'text-stagespace-warning' : 'text-gray-600'}`}
                   title={
                     patched < ntracks
                       ? `${ntracks - patched} track(s) not patched — skipped at recall`
@@ -120,7 +120,7 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
                 onClick={() => setMorphSource(morphSource === p.name ? null : p.name)}
                 className={`px-1.5 py-0.5 rounded text-xs font-bold ${
                   morphSource === p.name
-                    ? 'bg-stagespace-target/25 text-teal-100'
+                    ? 'bg-stagespace-target/25 text-white'
                     : 'bg-gray-800 text-gray-500 hover:text-stagespace-target opacity-70 group-hover:opacity-100'
                 }`}
                 title={

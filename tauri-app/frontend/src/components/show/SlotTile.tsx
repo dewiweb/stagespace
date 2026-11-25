@@ -1,5 +1,6 @@
 import React from 'react';
 import { Play, Square, SlidersHorizontal } from 'lucide-react';
+import { SOURCE_BADGE, SOURCE_STRONG } from '../../utils/sourceColors';
 
 /// Tracks condensés en plages pour la lisibilité pad : 64 tracks = mur
 /// de chiffres, «1-32» se lit en un clin d'œil. Les tracks parkés ⏸
@@ -115,7 +116,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
         }}
         className={`relative flex flex-col justify-between p-3 rounded-xl ${big ? 'min-h-[150px] p-4' : 'min-h-[88px]'} select-none cursor-pointer transition-colors active:scale-95 border ${
           isPlaying
-            ? 'bg-stagespace-live/25 border-stagespace-live/60 text-green-50'
+            ? 'bg-stagespace-live/25 border-stagespace-live/60 text-stagespace-live'
             : 'bg-gray-800/80 border-gray-700 text-gray-200 hover:bg-gray-700/80'
         } ${p.isSelected ? 'ring-2 ring-inset ring-stagespace-accent/80' : ''}`}
         role="button"
@@ -129,7 +130,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
           {canSolo && p.onSolo && (
             <button
               onClick={(e) => { e.stopPropagation(); p.onSolo!(); }}
-              className="w-8 h-8 -m-1 rounded-lg bg-stagespace-warning/70 hover:bg-stagespace-warning text-orange-100 text-xs font-bold flex items-center justify-center"
+              className="w-8 h-8 -m-1 rounded-lg bg-stagespace-warning/70 hover:bg-stagespace-warning text-white text-xs font-bold flex items-center justify-center"
               title="SOLO — coupe les autres en fondu"
             >
               S
@@ -161,17 +162,17 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
         </div>
         {/* Badges source-de-contrôle — P park, H hold, S solo, ◎ attention. */}
         {p.parkedTracks && p.parkedTracks.length > 0 && (
-          <div className="absolute top-10 right-1.5 text-[9px] bg-pink-800 px-1 rounded" title={`Parké : ${p.parkedTracks.join(', ')}`}>P</div>
+          <div className={`absolute top-10 right-1.5 text-[9px] ${SOURCE_BADGE.park} px-1 rounded`} title={`Parké : ${p.parkedTracks.join(', ')}`}>P</div>
         )}
         {p.heldTracks && p.heldTracks.length > 0 && (
-          <div className="absolute bottom-1.5 right-1.5 text-[9px] bg-cyan-800 px-1 rounded" title={`Hold : ${p.heldTracks.join(', ')}`}>H</div>
+          <div className={`absolute bottom-1.5 right-1.5 text-[9px] ${SOURCE_BADGE.hold} px-1 rounded`} title={`Hold : ${p.heldTracks.join(', ')}`}>H</div>
         )}
         {p.isSolo && <div className="absolute top-1.5 left-1.5 text-[9px] bg-stagespace-warning px-1 rounded">S</div>}
         {p.onAttention && (
           <span
             onClick={(e) => { e.stopPropagation(); p.onAttention!(); }}
             title="Attention — fige les autres objets, seul celui-ci bouge (change blindness)"
-            className="absolute bottom-1.5 left-1.5 text-[9px] bg-pink-800 hover:bg-pink-700 px-1 rounded cursor-pointer"
+            className={`absolute bottom-1.5 left-1.5 text-[9px] ${SOURCE_STRONG.park} px-1 rounded cursor-pointer`}
           >
             ◎
           </span>
@@ -203,8 +204,8 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
         }}
         className={`w-11 h-11 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors active:scale-95 ${
           isPlaying
-            ? 'bg-stagespace-danger/25 hover:bg-stagespace-danger/40 text-red-200'
-            : 'bg-stagespace-live/25 hover:bg-stagespace-live/35 text-green-200'
+            ? 'bg-stagespace-danger/25 hover:bg-stagespace-danger/40 text-stagespace-danger'
+            : 'bg-stagespace-live/25 hover:bg-stagespace-live/35 text-stagespace-live'
         }`}
         title={isPlaying ? 'Stop this move' : 'Launch (layered — others keep running)'}
       >
@@ -242,7 +243,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
       {canSolo && p.onSolo && (
         <button
           onClick={(e) => { e.stopPropagation(); p.onSolo!(); }}
-          className="flex-shrink-0 w-11 h-11 rounded text-xs font-bold text-gray-400 hover:bg-stagespace-warning/40 hover:text-orange-200 transition-colors"
+          className="flex-shrink-0 w-11 h-11 rounded text-xs font-bold text-gray-400 hover:bg-stagespace-warning/40 hover:text-stagespace-warning transition-colors"
           title="SOLO — stoppe les autres moves (fade) puis joue celui-ci"
         >
           S

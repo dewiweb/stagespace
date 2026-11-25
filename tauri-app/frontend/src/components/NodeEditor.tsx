@@ -627,7 +627,7 @@ export const NodeEditor: React.FC = () => {
             </button>
             <button
               onClick={() => pushGlobalGraph()}
-              className="px-2 py-0.5 text-xs bg-stagespace-modulation/80 hover:bg-stagespace-modulation text-indigo-100 rounded"
+              className="px-2 py-0.5 text-xs bg-stagespace-modulation/80 hover:bg-stagespace-modulation text-white rounded"
               title="Compile and push to the backend"
             >
               ↑ Push
@@ -655,7 +655,7 @@ export const NodeEditor: React.FC = () => {
             </button>
             <button
               onClick={() => pushSignalGraph()}
-              className="px-2 py-0.5 text-xs bg-stagespace-modulation/80 hover:bg-stagespace-modulation text-indigo-100 rounded"
+              className="px-2 py-0.5 text-xs bg-stagespace-modulation/80 hover:bg-stagespace-modulation text-white rounded"
               title="Compile and push to the backend"
             >
               ↑ Push
@@ -842,7 +842,7 @@ export const NodeEditor: React.FC = () => {
 
         {/* Connecting hint badge */}
         {connectingFrom && (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-popover px-3 py-1.5 bg-stagespace-accent/80 border border-stagespace-accent rounded-lg text-blue-100 text-xs font-medium pointer-events-none">
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-popover px-3 py-1.5 bg-stagespace-accent/80 border border-stagespace-accent rounded-lg text-white text-xs font-medium pointer-events-none">
             Connecting from <span className="text-white font-bold">{connectingFrom.type}</span> — drag to a valid target or drop on the canvas to quick-add
           </div>
         )}

@@ -468,7 +468,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 step={0.05}
                 value={realityStrength}
                 onChange={(e) => setRealityStrength(parseFloat(e.target.value))}
-                className="w-full accent-amber-500"
+                className="w-full accent-stagespace-accent"
               />
             </div>
           </section>
@@ -565,7 +565,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 type="checkbox"
                 checked={viewerDimUnfocused}
                 onChange={(e) => setViewerDimUnfocused(e.target.checked)}
-                className="accent-amber-500"
+                className="accent-stagespace-accent"
               />
               Focus — estomper les objets hors du move édité (au lieu de les cacher)
             </label>
@@ -574,7 +574,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 type="checkbox"
                 checked={viewerRestGhosts}
                 onChange={(e) => setViewerRestGhosts(e.target.checked)}
-                className="accent-amber-500"
+                className="accent-stagespace-accent"
               />
               Fantômes — objets au repos à leur origine, cibles de la pose sélectionnée
             </label>

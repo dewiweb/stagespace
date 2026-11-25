@@ -72,7 +72,7 @@ export default function AudioPanel() {
       <div className="px-3 pb-3 flex flex-col gap-2">
 
       {error && (
-        <div className="p-2 bg-stagespace-danger/15 border border-stagespace-danger/50 rounded text-red-400 text-xs">
+        <div className="p-2 bg-stagespace-danger/15 border border-stagespace-danger/50 rounded text-stagespace-danger text-xs">
           {error}
         </div>
       )}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { doUnpark, doClearPosition, doClearAllPositions, doAttention } from '../../utils/liveActions';
-import { sourceText } from '../../utils/sourceColors';
+import { sourceText, SOURCE_STRONG, SOURCE_ROW } from '../../utils/sourceColors';
 
 /// États qui privent le moteur d'un objet — chacun avec son release :
 ///   manual/hold → clear_manual_position · park → unpark ·
@@ -44,12 +44,12 @@ export const StateChip: React.FC<{
   /// mixte ne ment plus sur la composition.
   const TONES = {
     orange: {
-      btn: 'bg-stagespace-warning/70 hover:bg-stagespace-warning text-orange-100',
+      btn: 'bg-stagespace-warning/70 hover:bg-stagespace-warning text-white',
       rowBtn: 'bg-gray-700 hover:bg-stagespace-warning',
     },
     pink: {
-      btn: 'bg-pink-800/70 hover:bg-pink-700 text-pink-100',
-      rowBtn: 'bg-gray-700 hover:bg-pink-700',
+      btn: SOURCE_STRONG.park,
+      rowBtn: SOURCE_ROW.park,
     },
   } as const;
   const t = TONES[tone];

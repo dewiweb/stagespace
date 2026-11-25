@@ -240,7 +240,7 @@ export const ScoreTimeline: React.FC<{
               <button
                 onClick={(e) => { e.stopPropagation(); onToggleLaneMute(laneId); }}
                 title={muted ? 'Lane mutée — ses événements/courbes ne jouent pas' : 'Mute lane'}
-                className={`w-3 h-3 rounded-sm border ${muted ? 'bg-orange-600 border-orange-400' : 'border-gray-600'}`}
+                className={`w-3 h-3 rounded-sm border ${muted ? 'bg-stagespace-warning/80 border-stagespace-warning' : 'border-gray-600'}`}
               />
               <span className={`text-[9px] font-bold tracking-wide flex-1 truncate ${muted ? 'text-gray-600 line-through' : isCond ? 'text-gray-300' : isOsc ? 'text-stagespace-osc' : isGfx ? 'text-stagespace-modulation' : isSfx ? 'text-gray-400' : 'text-stagespace-modulation'}`}>
                 {isCond ? 'CONDUCTOR' : isOsc ? 'OSC' : isGfx ? 'GLOBALFX' : isSfx ? 'SPATIALFX' : 'MODULATION'}
@@ -274,7 +274,7 @@ export const ScoreTimeline: React.FC<{
               <button
                 onClick={() => onToggleLaneMute(lane.id)}
                 title={muted ? 'Lane mutée — ses objets sont exclus des clips' : 'Mute lane'}
-                className={`w-3 h-3 rounded-sm border ${muted ? 'bg-orange-600 border-orange-400' : 'border-gray-600'}`}
+                className={`w-3 h-3 rounded-sm border ${muted ? 'bg-stagespace-warning/80 border-stagespace-warning' : 'border-gray-600'}`}
               />
               <button
                 onClick={() => onSetLaneMode(lane.id, stacked ? 'exclusive' : 'stacked')}
@@ -382,8 +382,8 @@ export const ScoreTimeline: React.FC<{
                   onContextMenu({ kind: 'marker', markerId: m.id }, e.clientX, e.clientY);
                 }}
               >
-                <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[7px] border-t-stagespace-accent group-hover:border-t-blue-300" />
-                <span className="text-[8px] text-stagespace-accent/80 group-hover:text-blue-300 whitespace-nowrap pl-0.5">{m.name}</span>
+                <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[7px] border-t-stagespace-accent group-hover:border-t-stagespace-info" />
+                <span className="text-[8px] text-stagespace-accent/80 group-hover:text-stagespace-info whitespace-nowrap pl-0.5">{m.name}</span>
               </div>
             ))}
           </div>
@@ -477,7 +477,7 @@ export const ScoreTimeline: React.FC<{
                 {clips.filter((c) => c.ref.type === 'cue' && (effectiveTrackIds(c).length === 0 || effectiveTrackIds(c).includes(lane.trackId))).map((c) => (
                   <div
                     key={`blast-${c.id}`}
-                    className="absolute top-0 bottom-0 w-0.5 bg-amber-400/50 pointer-events-none"
+                    className="absolute top-0 bottom-0 w-0.5 bg-stagespace-conduite/50 pointer-events-none"
                     style={{ left: ms2px(c.startMs) }}
                     title={`${clipLabel(c)} — touche T${lane.trackId}`}
                   />
@@ -497,14 +497,14 @@ export const ScoreTimeline: React.FC<{
                   return isSnap ? (
                     <div
                       key={`poseblast-${c.id}`}
-                      className="absolute top-0 bottom-0 w-0.5 bg-teal-400/50 pointer-events-none"
+                      className="absolute top-0 bottom-0 w-0.5 bg-stagespace-target/50 pointer-events-none"
                       style={{ left: ms2px(c.startMs) }}
                       title={`${clipLabel(c)} — snap T${lane.trackId} à la pose`}
                     />
                   ) : (
                     <div
                       key={`poseblast-${c.id}`}
-                      className="absolute top-1 bottom-1 rounded-sm bg-teal-500/15 border-l-2 border-teal-400/60 pointer-events-none"
+                      className="absolute top-1 bottom-1 rounded-sm bg-stagespace-target/15 border-l-2 border-stagespace-target/60 pointer-events-none"
                       style={{ left: ms2px(c.startMs), width: Math.max(3, ms2px(c.startMs + spanMs) - ms2px(c.startMs)) }}
                       title={`${clipLabel(c)} — T${lane.trackId} en transit vers la pose`}
                     />
@@ -515,7 +515,7 @@ export const ScoreTimeline: React.FC<{
                 {clips.filter((c) => c.ref.type === 'positions' && effectiveTrackIds(c).includes(lane.trackId)).map((c) => (
                   <div
                     key={`pos-${c.id}`}
-                    className={`absolute top-0 bottom-0 w-1 bg-teal-400/80 cursor-pointer hover:bg-teal-300 ${selected === c.id ? 'ring-1 ring-white' : ''}`}
+                    className={`absolute top-0 bottom-0 w-1 bg-stagespace-target/80 cursor-pointer hover:bg-stagespace-target ${selected === c.id ? 'ring-1 ring-white' : ''}`}
                     style={{ left: ms2px(c.startMs) - 2 }}
                     title={clipLabel(c)}
                     onPointerDown={(e) => onClipPointerDown(e, c, 'move')}

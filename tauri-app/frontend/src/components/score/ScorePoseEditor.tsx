@@ -65,7 +65,7 @@ export const ScorePoseEditor: React.FC<{
     <div className="flex-1 min-w-0 overflow-y-auto px-3 py-2 text-[10px] text-gray-400">
       <div className="font-bold text-gray-200 mb-2 flex items-center gap-2">
         {pose.name}
-        {dirty && <span className="text-amber-400 font-normal">modifié</span>}
+        {dirty && <span className="text-stagespace-warning font-normal">modifié</span>}
       </div>
 
       {/* Table x/y/z par track — la track non patchée (absente du
@@ -83,7 +83,7 @@ export const ScorePoseEditor: React.FC<{
           const patched = manualOscIds.includes(t);
           return (
             <div key={t} className="flex items-center gap-1">
-              <span className={`w-12 font-mono ${patched ? 'text-gray-300' : 'text-amber-500'}`}
+              <span className={`w-12 font-mono ${patched ? 'text-gray-300' : 'text-stagespace-warning'}`}
                 title={patched ? undefined : 'Track not patched — skipped at recall'}>
                 T{t}{patched ? '' : ' ⚠'}
               </span>
@@ -99,7 +99,7 @@ export const ScorePoseEditor: React.FC<{
               ))}
               <button
                 onClick={() => removeTrack(t)}
-                className="w-6 text-gray-600 hover:text-red-400"
+                className="w-6 text-gray-600 hover:text-stagespace-danger"
                 title={`Remove track ${t} from the pose`}
               >×</button>
             </div>

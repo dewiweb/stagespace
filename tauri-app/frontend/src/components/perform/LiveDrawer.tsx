@@ -179,7 +179,7 @@ export const LiveDrawer: React.FC = () => {
             editing:
             <button
               onClick={() => { selectSlotForEditing(null); setScope(null); }}
-              className="px-1.5 py-0.5 -my-0.5 rounded bg-stagespace-accent/20 hover:bg-stagespace-accent/30 text-blue-200 font-semibold"
+              className="px-1.5 py-0.5 -my-0.5 rounded bg-stagespace-accent/20 hover:bg-stagespace-accent/30 text-stagespace-info font-semibold"
               title="Click to deselect — back to overview (no move edited)"
             >
               {slot.name} ✕
@@ -207,7 +207,7 @@ export const LiveDrawer: React.FC = () => {
                 <span
                   key={t}
                   title={`objet ${t} : ${src}${stale ? ' (flux figé!)' : ''} — dernier envoyé${emittedStr}`}
-                  className={`px-1 rounded ${stale ? 'bg-stagespace-warning/30 text-amber-300 animate-pulse' : colors[src] ?? colors.track}`}
+                  className={`px-1 rounded ${stale ? 'bg-stagespace-warning/30 text-stagespace-warning animate-pulse' : colors[src] ?? colors.track}`}
                 >
                   {t}·{src}{stale ? '✕' : ''}
                 </span>

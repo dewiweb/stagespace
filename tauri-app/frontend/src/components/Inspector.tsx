@@ -14,7 +14,7 @@ function Section({ title, icon, defaultOpen = true, badge, badgeColor = 'gray', 
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
   const badgeCls = badgeColor === 'orange'
-    ? 'text-orange-400 bg-orange-900/40 px-1.5 py-0.5 rounded text-xs font-mono animate-pulse'
+    ? 'text-stagespace-warning bg-stagespace-warning/15 px-1.5 py-0.5 rounded text-xs font-mono animate-pulse'
     : 'text-gray-500 text-xs font-mono';
   return (
     <div className="border-b border-gray-700/40">
@@ -33,6 +33,7 @@ import Slider from './ui/Slider';
 import { GlobalTransformSurface } from './show/GlobalTransformSurface';
 import { AudioModList } from './AudioModControls';
 import { Zap, AudioLines, Hexagon, SlidersHorizontal, Play, CircleDot, X, Square, ChevronRight, TriangleAlert, Check } from 'lucide-react';
+import { PORT_TEXT_COLORS } from '../utils/connectionRules';
 
 export default function Inspector() {
   const showExpert = useMoveEditorStore((s) => s.showExpert);
@@ -190,13 +191,13 @@ export default function Inspector() {
               className={`flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold ${
                 editingSlot?.isPreview
                   ? 'bg-slate-800/60 text-slate-300 border border-slate-600/50'
-                  : 'bg-green-900/60 text-green-300 border border-green-700/50 animate-pulse'
+                  : 'bg-stagespace-live/20 text-stagespace-live border border-stagespace-live/50 animate-pulse'
               }`}
               title={editingSlot?.isPreview
                 ? 'This move runs in preview — edits apply live (no OSC out)'
                 : 'ON AIR — les edits de ce panneau partent au renderer en direct'}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${editingSlot?.isPreview ? 'bg-slate-400' : 'bg-green-400'}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${editingSlot?.isPreview ? 'bg-slate-400' : 'bg-stagespace-live'}`} />
               {editingSlot?.isPreview ? 'PREVIEW' : 'LIVE'}
             </span>
           )}
@@ -316,7 +317,7 @@ export default function Inspector() {
                 {(['forward', 'backward', 'ping_pong'] as const).map((d) => (
                   <button key={d} onClick={() => updateCurrent({ direction: d })}
                     title={d === 'forward' ? 'Direction — la trajectoire joue dans le sens du dessin' : d === 'backward' ? 'Direction — la trajectoire joue à rebours' : 'Direction — la trajectoire alterne aller/retour'}
-                    className={`flex-1 py-1 text-xs rounded ${current.direction === d ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-500'}`}>
+                    className={`flex-1 py-1 text-xs rounded ${current.direction === d ? 'bg-stagespace-accent text-white' : 'bg-gray-800 text-gray-500'}`}>
                     {d === 'forward' ? '→ Fwd' : d === 'backward' ? '← Bwd' : '↔ Ping'}
                   </button>
                 ))}
@@ -325,7 +326,7 @@ export default function Inspector() {
                 {(['loop', 'one_shot'] as const).map((l) => (
                   <button key={l} onClick={() => updateCurrent({ loop_mode: l })}
                     title={l === 'loop' ? 'Loop — la trajectoire recommence en boucle' : 'One-shot — joue une fois puis termine (voir End : revert/hold)'}
-                    className={`flex-1 py-1 text-xs rounded ${current.loop_mode === l ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-500'}`}>
+                    className={`flex-1 py-1 text-xs rounded ${current.loop_mode === l ? 'bg-stagespace-accent text-white' : 'bg-gray-800 text-gray-500'}`}>
                     {l === 'loop' ? '↻ Loop' : '▶ One-shot'}
                   </button>
                 ))}
@@ -428,18 +429,18 @@ export default function Inspector() {
                   }`}
                 >
                   <span className={`text-xs font-mono w-4 h-4 rounded flex items-center justify-center flex-shrink-0 ${
-                    mv.is_preview ? 'bg-slate-700 text-slate-300' : 'bg-green-800 text-green-300'
+                    mv.is_preview ? 'bg-slate-700 text-slate-300' : 'bg-stagespace-live/25 text-stagespace-live'
                   }`}>{idx + 1}</span>
                   <span className="text-white text-xs font-medium truncate flex-1">{mv.name}</span>
                   <span className="text-gray-500 text-xs font-mono flex-shrink-0">{trackCount}tr</span>
                   <button
                     onClick={(e) => { e.stopPropagation(); stopMovementWithFade(mv.id, useGraphStore.getState().moveSlots.find((sl) => sl.movementId === mv.id)?.fadeOut ?? 0.5); }}
-                    className="text-red-400/60 hover:text-red-300 text-xs px-1 flex-shrink-0"
+                    className="text-stagespace-danger/60 hover:text-stagespace-danger text-xs px-1 flex-shrink-0"
                     title="Stop avec fade (fade_out du slot, 0.5s par défaut)"
                   ><Square size={10} /></button>
                   <button
                     onClick={(e) => { e.stopPropagation(); stopMovement(mv.id); }}
-                    className="text-red-400 hover:text-red-300 text-xs px-1 flex-shrink-0"
+                    className="text-stagespace-danger/70 hover:text-stagespace-danger text-xs px-1 flex-shrink-0"
                     title="Immediate stop"
                   ><Square size={10} fill="currentColor" /></button>
                 </div>
@@ -447,7 +448,7 @@ export default function Inspector() {
             })}
             <button
               onClick={() => stopAllMovements().catch(silentCatch)}
-              className="w-full py-1 bg-red-900/50 hover:bg-red-900/70 text-red-400 text-xs rounded font-medium transition-colors"
+              className="w-full py-1 bg-stagespace-danger/15 hover:bg-stagespace-danger/25 text-stagespace-danger text-xs rounded font-medium transition-colors"
             >
               ■ Stop All
             </button>
@@ -459,9 +460,9 @@ export default function Inspector() {
             disabled={!hasEditingSlot}
             className={`flex-1 py-2 text-xs rounded-lg font-bold transition-colors flex items-center justify-center gap-1.5 border ${
               editingIsLive
-                ? 'bg-red-900/60 hover:bg-red-800/70 text-red-100 border-red-700/50'
+                ? 'bg-stagespace-danger/60 hover:bg-stagespace-danger text-white border-stagespace-danger/60'
                 : hasEditingSlot
-                  ? 'bg-green-700 hover:bg-green-600 text-white border-green-600/50'
+                  ? 'bg-stagespace-live hover:opacity-90 text-white border-stagespace-live/50'
                   : 'bg-gray-800/40 text-gray-500 border-gray-700/30 cursor-not-allowed'
             }`}
             title={hasEditingSlot ? `${editingIsLive ? 'Stop' : 'Play'} "${editingSlot?.name}" (Space)` : 'Select a slot in Moves first'}
@@ -471,7 +472,7 @@ export default function Inspector() {
           </button>
           <button
             onClick={() => panic()}
-            className="px-2 py-2.5 bg-red-800 hover:bg-red-700 text-white text-xs rounded-lg font-bold border border-red-500/50 transition-colors"
+            className="px-2 py-2.5 bg-stagespace-danger hover:opacity-90 text-white text-xs rounded-lg font-bold border border-stagespace-danger/50 transition-colors"
             title="PANIC (Esc) — Stop all + return to origin"
           >
             <TriangleAlert size={14} />
@@ -516,7 +517,7 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
   return (
     <div className="mt-3 pt-2 border-t border-gray-700/50 space-y-2">
       <div className="flex items-center gap-2">
-        <span className="text-violet-400 text-xs font-mono font-semibold">SPLINE LIBRARY</span>
+        <span className={`${PORT_TEXT_COLORS.Spline} text-xs font-mono font-semibold`}>SPLINE LIBRARY</span>
         <span className="text-gray-400 text-xs">{savedSplines.length} saved</span>
       </div>
 
@@ -546,7 +547,7 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
               >{s.name}</button>
               <button
                 onClick={() => deleteSpline(s.id)}
-                className="text-red-500 hover:text-red-400 px-1 flex-shrink-0"
+                className="text-stagespace-danger/70 hover:text-stagespace-danger px-1 flex-shrink-0"
                 title="Delete"
               ><X size={11} /></button>
             </div>
@@ -567,14 +568,14 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
             className="flex-1 px-2 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
           />
           <button onClick={handleSave}
-            className="text-stagespace-accent hover:text-blue-300 text-xs px-2" title="Confirm"><Check size={12} /></button>
+            className="text-stagespace-accent hover:text-stagespace-info text-xs px-2" title="Confirm"><Check size={12} /></button>
           <button onClick={() => setShowSave(false)}
             className="text-gray-500 hover:text-gray-400 text-xs px-2" title="Cancel"><X size={12} /></button>
         </div>
       ) : (
         <button
           onClick={() => setShowSave(true)}
-          className="w-full text-xs text-stagespace-accent hover:text-blue-300 border border-stagespace-accent/40 hover:border-stagespace-accent rounded py-1.5 transition-colors"
+          className="w-full text-xs text-stagespace-accent hover:text-stagespace-info border border-stagespace-accent/40 hover:border-stagespace-accent rounded py-1.5 transition-colors"
         >
           + Save this spline
         </button>

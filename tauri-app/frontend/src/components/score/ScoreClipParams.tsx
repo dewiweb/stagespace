@@ -52,7 +52,7 @@ export const ScoreClipParams: React.FC<{
             key={o.v}
             onClick={() => onPick(o.v)}
             className={`px-1.5 py-0.5 rounded border ${cur === o.v
-              ? 'bg-stagespace-accent/30 border-stagespace-accent text-blue-200'
+              ? 'bg-stagespace-accent/30 border-stagespace-accent text-stagespace-info'
               : 'bg-gray-800 border-gray-700 text-gray-500 hover:text-gray-300'}`}
           >{o.label}</button>
         ))}
@@ -221,14 +221,14 @@ export const ScoreClipParams: React.FC<{
                 </div>
                 <div className="flex items-center gap-1">
                   <span className={`w-20 ${slotPending ? 'text-stagespace-derived/70' : 'text-gray-600'}`}>fin</span>
-                  <span className={slot.endMode === 'hold' ? 'text-amber-400' : slotPending ? 'text-stagespace-derived' : 'text-gray-500'}>
+                  <span className={slot.endMode === 'hold' ? 'text-stagespace-warning' : slotPending ? 'text-stagespace-derived' : 'text-gray-500'}>
                     {slot.endMode ?? 'revert'}
                     {slot.endMode === 'hold' && ' — la position reste tenue après la fenêtre'}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
                   <span className={`w-20 ${slotPending ? 'text-stagespace-derived/70' : 'text-gray-600'}`}>ancre</span>
-                  <span className={(slot.anchorMode ?? 'origin') !== 'origin' ? 'text-amber-400' : slotPending ? 'text-stagespace-derived' : 'text-gray-500'}>
+                  <span className={(slot.anchorMode ?? 'origin') !== 'origin' ? 'text-stagespace-warning' : slotPending ? 'text-stagespace-derived' : 'text-gray-500'}>
                     {slot.anchorMode ?? 'origin'}
                     {(slot.anchorMode ?? 'origin') !== 'origin' && " — capture la position à l'instant du tir (non déterministe)"}
                   </span>

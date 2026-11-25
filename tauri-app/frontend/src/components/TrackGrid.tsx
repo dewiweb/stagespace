@@ -201,7 +201,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
                       updateAssignment(t.id, { depth: parseFloat(e.target.value) });
                     }}
                     onClick={(e) => e.stopPropagation()}
-                    className="w-full h-0.5 mt-0.5 accent-cyan-500"
+                    className="w-full h-0.5 mt-0.5 accent-stagespace-accent"
                   />
                 )}
               </div>

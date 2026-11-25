@@ -9,6 +9,7 @@ import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts, getOutp
 import { signalTargetOptions, modulatedParamKeys } from '../utils/signalTargets';
 import { LinkedTracksField, NODE_INPUT_CLS } from './editor/LinkedTracksField';
 import { ParamInput } from './ParamInput';
+import { PORT_TEXT_COLORS } from '../utils/connectionRules';
 
 const AUDIO_NODE_TYPES = new Set(['BPM', 'AudioAmplitude', 'AudioSpectrum', 'AudioAmplitudeFalloff']);
 
@@ -259,7 +260,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
           )}
           {pluginMissing && (
             <span
-              className="flex-shrink-0 px-1 py-px rounded bg-red-900/60 text-red-300 text-[11px] font-bold tracking-wide"
+              className="flex-shrink-0 px-1 py-px rounded bg-stagespace-danger/20 text-stagespace-danger text-[11px] font-bold tracking-wide"
               title={`Plugin '${pluginId ?? ''}' not loaded — .ssx missing from the plugins folder`}
             >
               MISSING
@@ -288,10 +289,10 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
           )}
           {data.type === 'AudioAmplitude' && (
             <>
-              <MiniBar label="RMS" value={audioRms ?? 0} color="bg-blue-500" />
-              <MiniBar label="Bass" value={audioBass ?? 0} color="bg-red-500" />
-              <MiniBar label="Mid" value={audioMid ?? 0} color="bg-green-500" />
-              <MiniBar label="High" value={audioHigh ?? 0} color="bg-yellow-500" />
+              <MiniBar label="RMS" value={audioRms ?? 0} color="bg-stagespace-accent" />
+              <MiniBar label="Bass" value={audioBass ?? 0} color="bg-stagespace-accent" />
+              <MiniBar label="Mid" value={audioMid ?? 0} color="bg-stagespace-accent" />
+              <MiniBar label="High" value={audioHigh ?? 0} color="bg-stagespace-accent" />
             </>
           )}
           {data.type === 'AudioSpectrum' && audioState?.spectrum && (
@@ -299,14 +300,14 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
               {audioState.spectrum.spectrum.slice(0, 16).map((v, i) => (
                 <div
                   key={i}
-                  className="flex-1 bg-gradient-to-t from-cyan-600 to-cyan-400 rounded-sm transition-all duration-75"
+                  className="flex-1 bg-gradient-to-t from-stagespace-accent to-stagespace-info rounded-sm transition-all duration-75"
                   style={{ height: `${Math.max(2, Math.min(100, v * 100))}%` }}
                 />
               ))}
             </div>
           )}
           {data.type === 'AudioAmplitudeFalloff' && (
-            <MiniBar label="RMS" value={audioRms ?? 0} color="bg-orange-500" />
+            <MiniBar label="RMS" value={audioRms ?? 0} color="bg-stagespace-accent" />
           )}
         </div>
       )}
@@ -338,7 +339,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
                 {def.label}
                 {modulated.has(def.key) && (
                   <span
-                    className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-indigo-400 align-middle"
+                    className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-stagespace-modulation align-middle"
                     title="Modulated by this move's signal graph"
                   />
                 )}
@@ -484,7 +485,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
 
   return (
     <div className="mt-2 pt-2 border-t border-gray-700 space-y-1.5">
-      <label className="text-violet-400 text-xs font-mono">Spline Library</label>
+      <label className={`${PORT_TEXT_COLORS.Spline} text-xs font-mono`}>Spline Library</label>
 
       {/* Charger depuis la bibliothèque */}
       {savedSplines.length > 0 && (
@@ -508,7 +509,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
               <span className="text-gray-400 font-mono truncate flex-1">{s.name}</span>
               <button
                 onClick={() => handleDelete(s.id)}
-                className="nodrag text-red-500 hover:text-red-400 px-1"
+                className="nodrag text-stagespace-danger/70 hover:text-stagespace-danger px-1"
                 title="Delete"
               ><X size={10} /></button>
             </div>
@@ -530,7 +531,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
           />
           <button
             onClick={handleSave}
-            className="nodrag text-stagespace-accent hover:text-blue-300 text-xs px-2"
+            className="nodrag text-stagespace-accent hover:text-stagespace-info text-xs px-2"
             title="Confirmer"
           ><Check size={10} /></button>
           <button
@@ -542,7 +543,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
       ) : (
         <button
           onClick={() => setShowSave(true)}
-          className="nodrag w-full text-xs text-stagespace-accent hover:text-blue-300 border border-stagespace-accent/40 hover:border-stagespace-accent rounded py-1"
+          className="nodrag w-full text-xs text-stagespace-accent hover:text-stagespace-info border border-stagespace-accent/40 hover:border-stagespace-accent rounded py-1"
         >
           + Save this spline
         </button>

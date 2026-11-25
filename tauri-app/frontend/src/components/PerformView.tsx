@@ -274,7 +274,7 @@ export const PerformView: React.FC = () => {
           <div className="text-lg font-black leading-tight">
             {armedPlaying ? 'STOP ■' : 'PLAY ▶'}
           </div>
-          <div className={`text-xs font-medium truncate leading-tight ${armedPlaying ? 'text-red-100/80' : 'text-green-100/80'}`}>
+          <div className={`text-xs font-medium truncate leading-tight text-white/80`}>
             {armedSlot ? armedSlot.name : 'tap a move'}
           </div>
         </button>
@@ -290,7 +290,7 @@ export const PerformView: React.FC = () => {
           title="SETLIST GO — crossfade vers le prochain move, les layers continuent (Enter). Cue recall (tue la scène) = Shift+Enter ou Conduite"
         >
           <div className="text-lg font-black leading-tight">SETLIST ▶</div>
-          <div className="text-xs font-medium text-teal-100/80 truncate leading-tight">
+          <div className="text-xs font-medium text-white/80 truncate leading-tight">
             {currentSetlistIndex + 1}/{setlistOrder.length} · {nextSetlistSlot ? nextSetlistSlot.name : 'end of setlist'}
           </div>
         </button>
@@ -328,7 +328,7 @@ export const PerformView: React.FC = () => {
         {getSoloRestoreIds().length > 0 && (
           <button
             onClick={() => doUnsolo()}
-            className="px-4 rounded-lg bg-stagespace-warning/70 hover:bg-stagespace-warning text-orange-100 text-xs font-bold active:scale-95"
+            className="px-4 rounded-lg bg-stagespace-warning/70 hover:bg-stagespace-warning text-white text-xs font-bold active:scale-95"
             title={`UNSOLO — rejoue les ${getSoloRestoreIds().length} slots stoppés par le solo`}
           >
             UNSOLO
@@ -337,7 +337,7 @@ export const PerformView: React.FC = () => {
         {playingCount > 0 && (
           <button
             onClick={() => doStop()}
-            className="px-4 rounded-lg bg-stagespace-danger/70 hover:bg-stagespace-danger text-red-100 text-xs font-bold active:scale-95"
+            className="px-4 rounded-lg bg-stagespace-danger/70 hover:bg-stagespace-danger text-white text-xs font-bold active:scale-95"
             title="Stop all moves en fondu — moins brutal que PANIC (le renderer reste armé)"
           >
             STOP ALL

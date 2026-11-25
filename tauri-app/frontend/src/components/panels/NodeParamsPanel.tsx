@@ -168,7 +168,7 @@ export const NodeParamsPanel: React.FC<{
                 onClick={() => togglePin(d.key)}
                 className={`mt-1.5 flex-shrink-0 transition-colors ${
                   pinnedSet.has(d.key)
-                    ? 'text-stagespace-accent hover:text-blue-300'
+                    ? 'text-stagespace-accent hover:text-stagespace-info'
                     : 'text-gray-500 hover:text-gray-200'
                 }`}
                 title={pinnedSet.has(d.key)
@@ -188,7 +188,7 @@ export const NodeParamsPanel: React.FC<{
         </div>
       )}
       {pluginMissing && (
-        <div className="text-red-400/90 text-xs font-mono pt-1">
+        <div className="text-stagespace-danger/90 text-xs font-mono pt-1">
           ⚠ Plugin '{selectedPid as string}' not loaded — install the .ssx or pick another plugin.
         </div>
       )}

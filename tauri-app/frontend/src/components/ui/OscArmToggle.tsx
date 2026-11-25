@@ -17,7 +17,7 @@ export function OscArmToggle({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
       onClick={() => setArmed(!armed)}
       className={`${sizing} font-bold transition-colors flex items-center gap-1.5 ${
         armed
-          ? 'bg-stagespace-danger/15 text-red-300 hover:bg-stagespace-danger/25 border border-stagespace-danger/50'
+          ? 'bg-stagespace-danger/15 text-stagespace-danger/80 hover:text-stagespace-danger hover:bg-stagespace-danger/25 border border-stagespace-danger/50'
           : 'bg-gray-800 text-gray-500 hover:text-gray-300 border border-gray-700'
       }`}
       title={armed

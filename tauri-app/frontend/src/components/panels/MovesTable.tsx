@@ -168,7 +168,7 @@ export default function MovesTable() {
     <div className="h-full flex flex-col bg-stagespace-panel">
       {/* ═══ Header ═══ */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-stagespace-border flex-shrink-0">
-        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center flex-shrink-0">
+        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-stagespace-accent to-stagespace-info flex items-center justify-center flex-shrink-0">
           <span className="text-white text-xs font-bold">MV</span>
         </div>
         <h3 className="text-white font-semibold text-sm">Moves</h3>
@@ -204,7 +204,7 @@ export default function MovesTable() {
             <button
               onClick={stopAllSlots}
               disabled={playingCount === 0}
-              className="px-2 py-1 bg-stagespace-danger/15 hover:bg-stagespace-danger/25 text-red-300 text-xs rounded font-medium transition-colors border border-stagespace-danger/40 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="px-2 py-1 bg-stagespace-danger/15 hover:bg-stagespace-danger/25 text-stagespace-danger text-xs rounded font-medium transition-colors border border-stagespace-danger/40 disabled:opacity-30 disabled:cursor-not-allowed"
               title="Stop all active moves"
             >
               ■ Stop All
@@ -236,7 +236,7 @@ export default function MovesTable() {
             <button
               onClick={handleGO}
               disabled={!nextSetlistSlotId}
-              className="px-4 py-2 bg-stagespace-target hover:bg-teal-300 text-gray-900 text-sm font-bold rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
+              className="px-4 py-2 bg-stagespace-target hover:opacity-90 text-gray-900 text-sm font-bold rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
               title="GO: advance to the next move in the setlist (crossfade) — Enter. RECALL cue = Shift+Enter."
             >
               GO ▶
@@ -365,7 +365,7 @@ export default function MovesTable() {
                       ) : (
                         <button
                           onClick={() => { selectSlotForEditing(slot.id); setEditingTemplateFor(slot.id); }}
-                          className="text-stagespace-accent hover:text-blue-300 text-xs font-mono px-1 py-0.5 rounded hover:bg-stagespace-accent/15 transition-colors"
+                          className="text-stagespace-accent hover:text-stagespace-info text-xs font-mono px-1 py-0.5 rounded hover:bg-stagespace-accent/15 transition-colors"
                           title="Changer de template"
                         >
                           {preset?.name ?? (slot.graphJson?.nodes?.length ? 'Custom' : slot.templateId)}
@@ -377,7 +377,7 @@ export default function MovesTable() {
                     <td className="px-2 py-1.5" onClick={() => selectSlotForEditing(slot.id)}>
                       <button
                         onClick={() => { selectSlotForEditing(slot.id); openTrackPicker(slot.id, slot.trackIds); }}
-                        className="text-stagespace-accent hover:text-blue-300 text-xs font-mono px-1 py-0.5 rounded hover:bg-stagespace-accent/15 transition-colors"
+                        className="text-stagespace-accent hover:text-stagespace-info text-xs font-mono px-1 py-0.5 rounded hover:bg-stagespace-accent/15 transition-colors"
                         title="Choisir les tracks"
                       >
                         {slot.trackIds.length}tr
@@ -478,7 +478,7 @@ export default function MovesTable() {
                             editSlotGraph(slot.id);
                             if (!showExpert) setShowExpert(true);
                           }}
-                          className={`text-stagespace-accent hover:text-blue-300 text-xs px-1 rounded hover:bg-stagespace-accent/15 ${editingSlotId === slot.id ? 'font-bold ring-1 ring-stagespace-accent/50' : ''}`}
+                          className={`text-stagespace-accent hover:text-stagespace-info text-xs px-1 rounded hover:bg-stagespace-accent/15 ${editingSlotId === slot.id ? 'font-bold ring-1 ring-stagespace-accent/50' : ''}`}
                           title="Edit the graph in the node editor"
                         ><Pencil size={10} /></button>
                         {isPlaying && (
@@ -557,7 +557,7 @@ export default function MovesTable() {
             <div className="flex gap-2 mt-4">
               <button
                 onClick={confirmTrackPicker}
-                className="flex-1 py-1.5 bg-stagespace-accent hover:bg-blue-600 text-white text-xs rounded font-medium"
+                className="flex-1 py-1.5 bg-stagespace-accent hover:opacity-90 text-white text-xs rounded font-medium"
               >Confirmer</button>
               <button
                 onClick={() => setEditingTracksFor(null)}
@@ -617,7 +617,7 @@ export default function MovesTable() {
               </div>
               <button
                 onClick={() => setEditingTransformFor(null)}
-                className="w-full mt-4 py-1.5 bg-stagespace-accent hover:bg-blue-600 text-white text-xs rounded font-medium"
+                className="w-full mt-4 py-1.5 bg-stagespace-accent hover:opacity-90 text-white text-xs rounded font-medium"
               >Close</button>
             </div>
           </Modal>

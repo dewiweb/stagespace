@@ -349,10 +349,37 @@ App.tsx → tracking ; toasts/IconButton/PanicButton/OscArmToggle →
 variants tokens ; CUE GO=live vs SETLIST GO=target partout ;
 sélections=accent, playing=live, danger=red-partout.
 
-**Reste ouvert :**
-- Q5 brand : gradients indigo→purple logos panels (P3 chrome).
-- H4 suite : P3 chrome/décor restant, règle lint anti-palette
-  (allowlist uiColors, mécanique z-index).
+**H4 — GARDE ACTIVE, CHANTIER VERT (session suivante) :**
+
+- **Garde vitest** `src/__tests__/colorTokens.test.ts` : scanne
+  `src/**` pour les classes palette chromatiques brutes
+  (`text|bg|border|fill|stroke|accent|ring|from|to|via|decoration-
+  {couleur}-{nuance}`), allowlist = les 4 modules de couleur
+  (`uiColors`, `sourceColors`, `connectionRules`, `scoreUtils`).
+  Toute nouvelle violation fait échouer `npm test` — mécanique
+  équivalente à l'échelle z-index, sans rule eslint (les className
+  sont des template literals).
+- **Balayage final** : ~230 occurrences résiduelles sur 36 fichiers
+  migrées — shades claires sur fond tokenisé → `text-white` ou
+  `/70→plein au hover` ; `accent-*` natifs → `accent-stagespace-*` ;
+  `to-blue-600` gradients logo → `to-stagespace-info` ; violet
+  drawMode/DrawToolbar → `accent` (mode interaction, siblings
+  manipulate/assign déjà accent, modes mutuellement exclusifs) ;
+  orphelin clip → `warning` ; events dope → `accent` (points
+  éditables) ; légende Edges NodePalette → dots `PORT_COLORS`.
+- **Modules enrichis** : `CLIP_HOVER` (scoreUtils, hovers du picker
+  = familles CLIP_COLORS), `SOURCE_STRONG/SOURCE_BADGE/SOURCE_OUTLINE/
+  SOURCE_ROW` (sourceColors), `PORT_TEXT_COLORS` (connectionRules),
+  `modulation/accent/info` ajoutés à `UI_HEX` (parité tokens).
+- **Q5 brand tranchée** : gradients logo unifiés
+  `from-stagespace-accent to-stagespace-info` (4 surfaces).
+- **État** : 613/613 tests, tsc/lint(0 err)/build verts.
+  **Zéro classe palette chromatique hors allowlist.**
+
+**Reste ouvert :** rien de bloquant — le chantier doctrine est
+acté et enforce. Améliorations possibles (non requises) : revue
+visuelle du nuancier final sur la timeline réelle ; arbitrage sur
+les teintes `track` procédurales (identité, hors scope).
 
 **Questions doctrinales OUVERTES (à trancher par l'utilisateur) :**
 1. **Domaine spatial** : SpatialFxPanel=cyan identité + lane

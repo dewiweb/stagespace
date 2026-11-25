@@ -366,7 +366,7 @@ export default function SpatialFxPanel() {
   return (
     <div className="p-3 h-full flex flex-col gap-3 overflow-y-auto">
       <div className="flex items-center gap-2">
-        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-stagespace-accent to-blue-600 flex items-center justify-center">
+        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-stagespace-accent to-stagespace-info flex items-center justify-center">
           <span className="text-white text-xs">FX</span>
         </div>
         <h3 className="text-white font-semibold text-sm">Spatial FX</h3>
@@ -376,7 +376,7 @@ export default function SpatialFxPanel() {
           (ex : holophonix ne sérialise que gain — les réglages sur les
           autres canaux sont calculés mais jamais envoyés au renderer). */}
       {profileChannels && profileChannels.length < SPATIAL_CHANNELS.length && (
-        <div className="mx-2 mt-1.5 px-2 py-1 bg-stagespace-warning/15 border border-stagespace-warning/40 rounded text-orange-300/90 text-[10px] font-mono">
+        <div className="mx-2 mt-1.5 px-2 py-1 bg-stagespace-warning/15 border border-stagespace-warning/40 rounded text-stagespace-warning/90 text-[10px] font-mono">
           profile {oscProfile} sends: {profileChannels.map((c) => c.toLowerCase()).join(' ')}
           — other channels produce silence
         </div>
@@ -485,11 +485,11 @@ export default function SpatialFxPanel() {
             {zChannelRows.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {zChannelRows.map(([c, v]) => (
-                  <span key={c} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-stagespace-accent/10 border border-stagespace-accent/40 rounded text-blue-200 text-xs font-mono">
+                  <span key={c} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-stagespace-accent/10 border border-stagespace-accent/40 rounded text-stagespace-info text-xs font-mono">
                     {c.toLowerCase()}={v}
                     <button
                       onClick={() => setZChannelRows((rows) => rows.filter(([rc]) => rc !== c))}
-                      className="text-blue-300 hover:text-stagespace-danger"
+                      className="text-stagespace-info hover:text-stagespace-danger"
                       aria-label={`Remove ${c} channel`}
                     ><X size={10} /></button>
                   </span>

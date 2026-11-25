@@ -98,7 +98,7 @@ export function AudioModList() {
             <span className="text-stagespace-modulation text-xs font-mono">
               {audioSourceLabel(mod.source)} → {audioTargetLabel(mod.target)}
             </span>
-            <button onClick={() => removeAudioMod(i)} className="text-red-400 text-xs"><X size={11} /></button>
+            <button onClick={() => removeAudioMod(i)} className="text-stagespace-danger text-xs"><X size={11} /></button>
           </div>
           <Slider label={`Intensity${ROTATION_TARGETS.has(mod.target) ? ' (deg)' : ''}`}
             value={mod.amount} min={0} {...amountRange(mod.target)}

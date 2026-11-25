@@ -20,6 +20,10 @@ export const UI_HEX = {
   dim: '#6b7280',
   target: '#2dd4bf',
   derived: '#94a3b8',
+  // Parité avec les tokens tailwind — SVG/three.js en ont besoin.
+  modulation: '#818cf8',
+  accent: '#3b82f6',
+  info: '#60a5fa',
 } as const;
 
 // ── Viz — visualisations spatiales (3D/radar) ───────────────────────

@@ -12,6 +12,7 @@ import { useElementSize } from './useElementSize';
 import { ScoreParamsPanel, type ParamGroup } from './ScoreParamsPanel';
 import { DOPE_ROW_H, DOPE_HEADER_H } from '../../utils/scoreDopesheet';
 import { MERGE_BLEND_DEFS, OBJECT_LANE_DEFS, type ParamDef } from './scoreParams';
+import { UI_HEX } from '../../utils/uiColors';
 
 /// Enveloppe fade-in → sustain → tail fade-out APRÈS la fin de
 /// fenêtre du clip (le move s'éteint au-delà du bord). Les deux
@@ -58,20 +59,20 @@ const EnvelopeEditor: React.FC<{
       }}
       onPointerUp={() => { drag.current = null; }}
     >
-      <rect x={x(0)} y={0} width={x(end) - x(0)} height={H} className="fill-purple-500/10" />
-      <rect x={x(end)} y={0} width={x(end + fades.outMs) - x(end)} height={H} className="fill-purple-500/5" />
-      <line x1={x(end)} y1={0} x2={x(end)} y2={H} stroke="#a78bfa" strokeOpacity={0.5} strokeDasharray="3 3" />
-      <polyline points={pts} fill="none" stroke="#c4b5fd" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+      <rect x={x(0)} y={0} width={x(end) - x(0)} height={H} className="fill-stagespace-modulation/10" />
+      <rect x={x(end)} y={0} width={x(end + fades.outMs) - x(end)} height={H} className="fill-stagespace-modulation/5" />
+      <line x1={x(end)} y1={0} x2={x(end)} y2={H} stroke={UI_HEX.modulation} strokeOpacity={0.5} strokeDasharray="3 3" />
+      <polyline points={pts} fill="none" stroke={UI_HEX.modulation} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
       {fades.inMs > 0 && (
-        <line x1={x(0)} y1={H - 4} x2={x(fades.inMs)} y2={H - 4} stroke="#67e8f9" strokeOpacity={0.6} />
+        <line x1={x(0)} y1={H - 4} x2={x(fades.inMs)} y2={H - 4} stroke={UI_HEX.modulation} strokeOpacity={0.6} />
       )}
       {fades.outMs > 0 && (
-        <line x1={x(end)} y1={H - 4} x2={x(end + fades.outMs)} y2={H - 4} stroke="#67e8f9" strokeOpacity={0.6} />
+        <line x1={x(end)} y1={H - 4} x2={x(end + fades.outMs)} y2={H - 4} stroke={UI_HEX.modulation} strokeOpacity={0.6} />
       )}
       <text x={x(0) + 2} y={H - 10} className="fill-gray-500" fontSize="9">0</text>
-      <text x={x(end) + 2} y={12} className="fill-purple-300" fontSize="9">fin clip</text>
+      <text x={x(end) + 2} y={12} className="fill-stagespace-modulation" fontSize="9">fin clip</text>
       {fades.outMs > 0 && (
-        <text x={x(end + fades.outMs) - 30} y={H - 10} className="fill-cyan-300" fontSize="9">
+        <text x={x(end + fades.outMs) - 30} y={H - 10} className="fill-stagespace-modulation" fontSize="9">
           +{(fades.outMs / 1000).toFixed(1)}s tail
         </text>
       )}
@@ -80,7 +81,7 @@ const EnvelopeEditor: React.FC<{
           {/* Poignée fade-in — clampée sur la fenêtre du clip */}
           <circle
             cx={x(fades.inMs)} cy={8} r={5}
-            className="fill-cyan-300 stroke-gray-900 cursor-ew-resize"
+            className="fill-stagespace-modulation stroke-gray-900 cursor-ew-resize"
             strokeWidth={1.5}
             onPointerDown={(e) => {
               if (e.button !== 0) return;
@@ -90,13 +91,13 @@ const EnvelopeEditor: React.FC<{
               (e.target as Element).setPointerCapture(e.pointerId);
             }}
           />
-          <text x={x(fades.inMs) + 7} y={16} className="fill-cyan-300" fontSize="9">
+          <text x={x(fades.inMs) + 7} y={16} className="fill-stagespace-modulation" fontSize="9">
             {(fades.inMs / 1000).toFixed(1)}s in
           </text>
           {/* Poignée de fin de tail — fade-out post-clip */}
           <circle
             cx={x(end + fades.outMs)} cy={H - 8} r={5}
-            className="fill-violet-300 stroke-gray-900 cursor-ew-resize"
+            className="fill-stagespace-modulation stroke-gray-900 cursor-ew-resize"
             strokeWidth={1.5}
             onPointerDown={(e) => {
               if (e.button !== 0) return;

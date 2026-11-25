@@ -36,7 +36,7 @@ export function Titlebar() {
     >
       {/* Brand — vit dans le chrome de la fenêtre */}
       <div className="flex items-center gap-2 pl-3 pr-1">
-        <div className="w-5 h-5 rounded bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow">
+        <div className="w-5 h-5 rounded bg-gradient-to-br from-stagespace-accent to-stagespace-info flex items-center justify-center shadow">
           <span className="text-white font-bold text-[10px] leading-none">S</span>
         </div>
         <span className="text-white font-bold text-xs tracking-tight hidden md:inline">

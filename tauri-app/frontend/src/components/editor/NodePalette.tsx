@@ -8,6 +8,7 @@ import {
 import type { NodeType } from '../../store/useGraphStore';
 import type { PluginManifest } from '../../types/generated/PluginManifest';
 import { PALETTE_DRAG_MIME, paletteDragRef, type PaletteDragPayload } from '../../hooks/useNodeInsertion';
+import { PORT_COLORS } from '../../utils/connectionRules';
 
 /// Palette de nodes — extraite de NodeEditor (P2.4). Gère le rail replié,
 /// les catégories filtrées par tab (sub/global/signal), les items natifs +
@@ -229,7 +230,7 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
                   {p.pluginErrors.map((e, i) => (
                     <div
                       key={i}
-                      className="px-2.5 text-red-400/80 text-[11px] font-mono truncate"
+                      className="px-2.5 text-stagespace-danger/80 text-[11px] font-mono truncate"
                       title={e}
                     >
                       ⚠ {e}
@@ -276,7 +277,11 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
           <div><span className="text-gray-400 font-semibold">Chain:</span> Engine → Modifier → Output</div>
           <div><span className="text-gray-400 font-semibold">Blend:</span> 2 Engines → Mix → Output</div>
           <div><span className="text-gray-400 font-semibold">Time:</span> 2 Engines → Sequence/Crossfade</div>
-          <div className="pt-1"><span className="text-gray-400 font-semibold">Edges:</span> <span className="text-gray-300">gray</span> trajectory · <span className="text-yellow-400">yellow dashes</span> duration · <span className="text-violet-400">violet</span> spline</div>
+          <div className="pt-1"><span className="text-gray-400 font-semibold">Edges:</span>{' '}
+            <span className={`inline-block w-2 h-2 rounded-full ${PORT_COLORS.Positions} align-middle`} /> trajectory ·{' '}
+            <span className={`inline-block w-2 h-2 rounded-full ${PORT_COLORS.Duration} align-middle`} /> duration ·{' '}
+            <span className={`inline-block w-2 h-2 rounded-full ${PORT_COLORS.Spline} align-middle`} /> spline
+          </div>
           <div className="pt-1 text-gray-500">Drag from a node's bottom handle to connect. Invalid connections are blocked.</div>
         </div>
       </div>

@@ -110,7 +110,7 @@ export const ScoreTransport: React.FC<{
     })()}
     <button
       onClick={onCaptureCue}
-      className="px-2 py-0.5 text-[10px] font-bold rounded bg-stagespace-accent/20 text-amber-200 hover:bg-stagespace-accent/30"
+      className="px-2 py-0.5 text-[10px] font-bold rounded bg-stagespace-accent/20 text-stagespace-accent hover:bg-stagespace-accent/30"
       title="Re-capture : matérialise l'état de la partition AU CURSEUR en nouvelle cue — clips → moves, courbes → valeurs, inverse du flatten"
     >
       ★ cue
@@ -124,7 +124,7 @@ export const ScoreTransport: React.FC<{
     </button>
     <button
       onClick={onTcChase}
-      className={`px-2 py-0.5 text-[10px] font-bold rounded ${tcChase ? 'bg-stagespace-live/25 text-green-200' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
+      className={`px-2 py-0.5 text-[10px] font-bold rounded ${tcChase ? 'bg-stagespace-live/25 text-stagespace-live' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
       title="Chase timecode — le transport suit le TC entrant (/stagespace/timecode) : locate à l'arrêt, rebase en lecture, démarrage quand le TC roule"
     >
       TC
@@ -155,7 +155,7 @@ export const ScoreTransport: React.FC<{
       <input
         type="range" min={24} max={96} step={4} value={laneH}
         onChange={(e) => onLaneH(Number(e.target.value))}
-        className="w-16 accent-cyan-500"
+        className="w-16 accent-stagespace-accent"
       />
     </label>
   </div>

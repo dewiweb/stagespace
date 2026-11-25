@@ -90,6 +90,35 @@ export const CLIP_COLORS: Record<string, string> = {
   view: 'bg-cyan-900/80 border-cyan-500',
 };
 
+/// Survol du picker — teinte de la FAMILLE du clip (miroir de
+/// CLIP_COLORS : re-teinter une famille = éditer les deux maps
+/// côte à côte). Consommé par ScoreClipPicker.
+export const CLIP_HOVER: Record<string, string> = {
+  slot: 'hover:bg-purple-700/40',
+  cue: 'hover:bg-amber-700/40',
+  cueArm: 'hover:bg-amber-700/40',
+  cueGo: 'hover:bg-amber-700/40',
+  stopAll: 'hover:bg-red-800/40',
+  panic: 'hover:bg-red-900/40',
+  pose: 'hover:bg-teal-700/40',
+  positions: 'hover:bg-teal-700/40',
+  throw: 'hover:bg-teal-800/40',
+  gesture: 'hover:bg-teal-700/40',
+  park: 'hover:bg-fuchsia-700/40',
+  unpark: 'hover:bg-fuchsia-700/40',
+  solo: 'hover:bg-fuchsia-700/40',
+  unsolo: 'hover:bg-fuchsia-700/40',
+  attention: 'hover:bg-fuchsia-700/40',
+  manualClear: 'hover:bg-fuchsia-700/40',
+  modGraph: 'hover:bg-indigo-700/40',
+  postGraph: 'hover:bg-indigo-700/40',
+  chanMods: 'hover:bg-indigo-700/40',
+  zones: 'hover:bg-indigo-700/40',
+  osc: 'hover:bg-cyan-700/40',
+  soundcheck: 'hover:bg-cyan-700/40',
+  view: 'hover:bg-cyan-700/40',
+};
+
 /// Label affiché d'un clip — nom du slot/cue ou marqueur.
 /// `⚠` = référence cassée (orphelin).
 export function clipLabel(

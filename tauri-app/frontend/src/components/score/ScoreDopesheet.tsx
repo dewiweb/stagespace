@@ -165,7 +165,7 @@ export const ScoreDopesheet: React.FC<{
                         key={i}
                         className={`absolute w-2 h-2 rotate-45 cursor-ew-resize border ${
                           r.kind === 'events'
-                            ? 'bg-amber-500/80 border-amber-300'
+                            ? 'bg-stagespace-accent/80 border-stagespace-accent'
                             : 'bg-stagespace-modulation/80 border-stagespace-modulation'
                         }`}
                         style={{ left, top }}

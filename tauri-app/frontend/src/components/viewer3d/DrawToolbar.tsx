@@ -18,7 +18,7 @@ import { tbAction, tbIcon, tbSep } from './toolbarStyles';
 /** Bouton carré de palette — même langage que tbBtn mais vertical. */
 const palBtn = (active: boolean) =>
   `w-7 h-7 flex items-center justify-center rounded transition-colors ${
-    active ? 'bg-violet-600 text-white' : 'text-gray-400 hover:bg-gray-700/70 hover:text-gray-200'
+    active ? 'bg-stagespace-accent text-white' : 'text-gray-400 hover:bg-gray-700/70 hover:text-gray-200'
   }`;
 
 export const DrawPaletteTools: React.FC = () => {

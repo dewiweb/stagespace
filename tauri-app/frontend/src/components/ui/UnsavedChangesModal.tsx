@@ -37,7 +37,7 @@ export const UnsavedChangesModal: React.FC = () => {
         </button>
         <button
           onClick={run}
-          className="px-3 py-1.5 text-xs rounded bg-stagespace-danger/20 text-red-200 hover:bg-stagespace-danger/30 transition-colors"
+          className="px-3 py-1.5 text-xs rounded bg-stagespace-danger/20 text-stagespace-danger hover:bg-stagespace-danger/30 transition-colors"
         >
           Discard changes
         </button>

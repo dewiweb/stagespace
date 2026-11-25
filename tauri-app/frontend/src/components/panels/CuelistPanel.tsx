@@ -143,7 +143,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
         <button
           onClick={() => doCueNext('cuelist')}
           disabled={currentCueIndex + 1 >= cues.length || isRecalling}
-          className="px-1.5 py-0.5 text-xs bg-amber-800/80 hover:bg-amber-700 text-amber-100 rounded disabled:opacity-30"
+          className="px-1.5 py-0.5 text-xs bg-stagespace-conduite/70 hover:bg-stagespace-conduite text-white rounded disabled:opacity-30"
           title="Next cue — RECALL replaces the whole scene (kill + respawn). Setlist GO = Enter."
         >
           RECALL ▶
@@ -176,13 +176,13 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
         <button
           onClick={() => handleStoreCue()}
           disabled={!newCueName.trim()}
-          className="flex-shrink-0 px-2 py-1 text-xs bg-purple-700 hover:bg-purple-600 text-white rounded disabled:opacity-30 font-medium"
+          className="flex-shrink-0 px-2 py-1 text-xs bg-stagespace-tracking hover:opacity-90 text-white rounded disabled:opacity-30 font-medium"
         >
           ★ Store
         </button>
         <button
           onClick={() => handleStoreCue(`Cue ${cues.length + 1}`)}
-          className="flex-shrink-0 px-2 py-1 text-xs bg-purple-900/70 hover:bg-purple-700 text-purple-200 rounded font-medium active:scale-95"
+          className="flex-shrink-0 px-2 py-1 text-xs bg-stagespace-tracking/25 hover:bg-stagespace-tracking/40 text-stagespace-tracking rounded font-medium active:scale-95"
           title={`Capture instantanée — stocke l'état en « Cue ${cues.length + 1} » (renommable après)`}
         >
           ⚡
@@ -207,9 +207,9 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                 key={cue.id + '-row'}
                 className={`px-3 py-2 flex items-center gap-2 cursor-pointer transition-colors ${
                   idx === currentCueIndex
-                    ? 'bg-amber-900/30 border-l-2 border-amber-500'
+                    ? 'bg-stagespace-conduite/15 border-l-2 border-stagespace-conduite'
                     : cue.id === armedCueId
-                      ? 'bg-amber-900/10 ring-1 ring-inset ring-amber-500/60'
+                      ? 'bg-stagespace-conduite/10 ring-1 ring-inset ring-stagespace-conduite/60'
                       : 'hover:bg-gray-800/50'
                 }`}
                 onClick={() => setArmedCueId(cue.id === armedCueId ? null : cue.id)}
@@ -255,7 +255,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                           placeholder="n°"
                           onBlur={(e) => updateCue({ ...cue, cue_number: e.target.value.trim() || null })}
                           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-                          className="w-10 px-1 py-0 bg-gray-900 border border-gray-700 rounded text-amber-300 text-right text-xs font-mono focus:outline-none"
+                          className="w-10 px-1 py-0 bg-gray-900 border border-gray-700 rounded text-stagespace-conduite text-right text-xs font-mono focus:outline-none"
                           title="cue_number — le label que /stagespace/cue/recall matche"
                         />
                       </>
@@ -283,7 +283,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                       return parts ? <span className="text-[9px] text-stagespace-derived font-mono" title="audition : ce que la cue va toucher (scope-respecté)">{parts}</span> : null;
                     })()}
                     {cue.mode === 'Tracking' && (
-                      <Badge className="bg-purple-900/60 text-purple-300">TRK</Badge>
+                      <Badge className="bg-stagespace-tracking/25 text-stagespace-tracking">TRK</Badge>
                     )}
                     {(cue.pre_wait ?? 0) > 0 && (
                       <Badge>w{cue.pre_wait}s</Badge>
@@ -313,7 +313,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                     )}
                     {!readonly && cue.id === armedCueId ? (
                       <label
-                        className="flex items-center gap-1 text-amber-400"
+                        className="flex items-center gap-1 text-stagespace-conduite"
                         onClick={(e) => e.stopPropagation()}
                         onDoubleClick={(e) => e.stopPropagation()}
                       >
@@ -328,7 +328,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                             const v = Math.max(0, Number(e.target.value));
                             if (!isNaN(v)) updateCue({ ...cue, fade_duration: v });
                           }}
-                          className="w-12 px-1 py-0 bg-gray-900 border border-amber-700/60 rounded text-amber-300 text-right font-mono focus:outline-none"
+                          className="w-12 px-1 py-0 bg-gray-900 border border-stagespace-conduite/60 rounded text-stagespace-conduite text-right font-mono focus:outline-none"
                         />
                         s
                       </label>
@@ -529,7 +529,7 @@ function PendingCountdown({ deadline, kind }: { deadline: number; kind: 'pre_wai
   }, []);
   const left = Math.max(0, (deadline - Date.now()) / 1000);
   return (
-    <Badge className="bg-amber-800/80 text-amber-200" title={kind}>
+    <Badge className="bg-stagespace-conduite/70 text-white" title={kind}>
       {kind === 'pre_wait' ? 'in' : 'follow'} {left.toFixed(1)}s
     </Badge>
   );

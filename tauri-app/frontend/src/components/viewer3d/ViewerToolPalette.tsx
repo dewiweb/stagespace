@@ -86,7 +86,7 @@ export const ViewerToolPalette: React.FC = () => {
       {!detached &&
         modeBtn(
           drawMode,
-          'bg-violet-600',
+          'bg-stagespace-accent',
           hasDrawableNode
             ? 'Draw — spline studio (freehand, place, edit)'
             : 'No drawable node — add a DrawSpline / EvaluateSpline / VectorField(drawn) node first',

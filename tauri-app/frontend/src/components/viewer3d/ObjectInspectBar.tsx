@@ -6,6 +6,7 @@ import React from 'react';
 import { useGraphStore } from '../../store/useGraphStore';
 import { doClearPosition, doUnpark, doPark, doAttention } from '../../utils/liveActions';
 import { sourceHex, SOURCE_LABEL } from '../../utils/sourceColors';
+import { SOURCE_STRONG } from '../../utils/sourceColors';
 
 interface ObjectInspectBarProps {
   /// Positions live à afficher (radar: livePositions/emittedPositions,
@@ -46,7 +47,7 @@ export const ObjectInspectBar: React.FC<ObjectInspectBarProps> = ({ positions })
       {OVERRIDE_RELEASE[src] && (
         <button
           onClick={() => OVERRIDE_RELEASE[src](selectedObj)}
-          className="px-1.5 py-0.5 rounded bg-stagespace-warning/70 text-orange-200 hover:bg-stagespace-warning text-[10px] font-bold"
+          className="px-1.5 py-0.5 rounded bg-stagespace-warning/70 text-white hover:bg-stagespace-warning text-[10px] font-bold"
           title={`Release obj ${selectedObj} (${src}) — le moteur reprend`}
         >
           release
@@ -54,7 +55,7 @@ export const ObjectInspectBar: React.FC<ObjectInspectBarProps> = ({ positions })
       )}
       <button
         onClick={() => (src === 'park' ? doUnpark(selectedObj) : doPark(selectedObj))}
-        className="px-1.5 py-0.5 rounded bg-pink-900/70 text-pink-200 hover:bg-pink-700 text-[10px] font-bold"
+        className={`px-1.5 py-0.5 rounded ${SOURCE_STRONG.park} text-[10px] font-bold`}
         title={src === 'park' ? 'Unpark — l\'objet rejoint recalls/stop' : 'Park — gèle l\'objet hors recalls/stop/panic'}
       >
         {src === 'park' ? 'unpark' : 'park'}
