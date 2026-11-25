@@ -205,7 +205,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             >
               SETLIST ▶
             </button>
-            <span className="text-green-200/70 text-base truncate max-w-[30vw]">
+            <span className="text-teal-200/70 text-base truncate max-w-[30vw]">
               {st?.nextSetlistName ?? 'fin de setlist'}
             </span>
             {st && st.soloRestoreCount > 0 && (
