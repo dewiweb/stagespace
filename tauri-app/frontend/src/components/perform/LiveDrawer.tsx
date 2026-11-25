@@ -104,7 +104,7 @@ export const LiveDrawer: React.FC = () => {
       disabled={needsSlot && !slot}
       className={`px-4 py-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors active:scale-95 ${
         scope === sc
-          ? sc === 'global' ? 'bg-stagespace-warning text-white' : 'bg-stagespace-accent text-white'
+          ? sc === 'global' ? 'bg-stagespace-warning text-gray-950' : 'bg-stagespace-accent text-gray-950'
           : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700'
       } disabled:opacity-30 disabled:cursor-not-allowed`}
       title={title}
@@ -125,7 +125,7 @@ export const LiveDrawer: React.FC = () => {
             onClick={() => { selectSlotForEditing(null); setScope(null); }}
             className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
               !editingSlotId
-                ? 'bg-stagespace-accent text-white'
+                ? 'bg-stagespace-accent text-gray-950'
                 : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
             }`}
             title="Overview — all tracks of all moves"
@@ -139,7 +139,7 @@ export const LiveDrawer: React.FC = () => {
             onClick={() => selectMove(s.id)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
               editingSlotId === s.id && scope !== 'global'
-                ? 'bg-stagespace-accent text-white'
+                ? 'bg-stagespace-accent text-gray-950'
                 : 'bg-stagespace-live/15 text-stagespace-live hover:bg-stagespace-live/25 border border-stagespace-live/40'
             }`}
             title="Live params of this move"
@@ -263,7 +263,7 @@ export const LiveDrawer: React.FC = () => {
                     onClick={() => setSlotDirection(slot.id, d)}
                     className={`flex-1 py-1.5 text-xs rounded ${
                       slot.direction === d
-                        ? 'bg-stagespace-accent text-white'
+                        ? 'bg-stagespace-accent text-gray-950'
                         : 'bg-gray-800 text-gray-500 hover:text-gray-300'
                     }`}
                   >
@@ -281,7 +281,7 @@ export const LiveDrawer: React.FC = () => {
                     onClick={() => setSlotLoopMode(slot.id, l)}
                     className={`flex-1 py-1.5 text-xs rounded ${
                       slot.loopMode === l
-                        ? 'bg-stagespace-accent text-white'
+                        ? 'bg-stagespace-accent text-gray-950'
                         : 'bg-gray-800 text-gray-500 hover:text-gray-300'
                     }`}
                   >
@@ -299,7 +299,7 @@ export const LiveDrawer: React.FC = () => {
                     onClick={() => setSlotEndMode(slot.id, m)}
                     className={`flex-1 py-1.5 text-xs rounded ${
                       (slot.endMode ?? 'revert') === m
-                        ? 'bg-stagespace-accent text-white'
+                        ? 'bg-stagespace-accent text-gray-950'
                         : 'bg-gray-800 text-gray-500 hover:text-gray-300'
                     }`}
                   >
@@ -317,7 +317,7 @@ export const LiveDrawer: React.FC = () => {
                     onClick={() => setSlotAnchorMode(slot.id, m)}
                     className={`flex-1 py-1.5 text-xs rounded ${
                       (slot.anchorMode ?? 'origin') === m
-                        ? 'bg-stagespace-accent text-white'
+                        ? 'bg-stagespace-accent text-gray-950'
                         : 'bg-gray-800 text-gray-500 hover:text-gray-300'
                     }`}
                   >

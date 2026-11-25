@@ -65,7 +65,7 @@ export function AudioModAdder({ onAdd, onCancel }: { onAdd: (mod: AudioMod) => v
         onChange={setAmount} tone="modulation" />
       <div className="flex gap-1.5">
         <button onClick={() => onAdd({ source, target, amount, base_value: 0, smoothing: 0.3 })}
-          className="flex-1 py-1.5 bg-stagespace-modulation hover:brightness-110 text-white text-xs rounded font-medium">
+          className="flex-1 py-1.5 bg-stagespace-modulation hover:brightness-110 text-gray-950 text-xs rounded font-medium">
           Add
         </button>
         <IconButton onClick={onCancel}>

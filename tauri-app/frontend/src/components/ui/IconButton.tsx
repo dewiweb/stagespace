@@ -20,10 +20,10 @@ const BASE: Record<NonNullable<IconButtonProps['variant']>, string> = {
 
 const ACTIVE: Record<NonNullable<IconButtonProps['variant']>, string> = {
   default: 'bg-gray-600 text-white',
-  primary: 'bg-stagespace-accent text-white',
+  primary: 'bg-stagespace-accent text-gray-950',
   danger: 'bg-stagespace-danger text-white border border-stagespace-danger/60',
-  success: 'bg-stagespace-live text-white',
-  warning: 'bg-stagespace-warning text-white',
+  success: 'bg-stagespace-live text-gray-950',
+  warning: 'bg-stagespace-warning text-gray-950',
 };
 
 export const IconButton: React.FC<IconButtonProps> = ({

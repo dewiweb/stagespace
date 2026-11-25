@@ -432,7 +432,7 @@ export default function SpatialFxPanel() {
               onClick={() => setZonePlaceMode(!zonePlaceMode)}
               className={`px-2.5 py-1.5 text-xs rounded whitespace-nowrap transition-colors ${
                 zonePlaceMode
-                  ? 'bg-stagespace-accent text-white'
+                  ? 'bg-stagespace-accent text-gray-950'
                   : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
               }`}
               title="Place the zone center on the 3D scene — then click the floor"
@@ -556,7 +556,7 @@ export default function SpatialFxPanel() {
             onClick={() => setZoneEditMode(!zoneEditMode)}
             className={`w-full mb-1.5 py-1.5 text-xs rounded font-medium transition-colors ${
               zoneEditMode
-                ? 'bg-stagespace-accent text-white'
+                ? 'bg-stagespace-accent text-gray-950'
                 : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
             }`}
             title="Edit zones on the scene — drag to move, scroll over a zone to resize"
@@ -658,7 +658,7 @@ export default function SpatialFxPanel() {
           <button
             onClick={handleAddModulation}
             disabled={isNaN(parseFloat(mScale))}
-            className="w-full py-1.5 bg-stagespace-accent hover:opacity-90 text-white text-xs rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full py-1.5 bg-stagespace-accent hover:opacity-90 text-gray-950 text-xs rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Add Modulation
           </button>
@@ -736,7 +736,7 @@ export default function SpatialFxPanel() {
           <button
             onClick={handleSetChannel}
             disabled={isNaN(parseInt(cObject, 10)) || isNaN(parseFloat(cValue))}
-            className="w-full py-1.5 bg-stagespace-accent hover:opacity-90 text-white text-xs rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full py-1.5 bg-stagespace-accent hover:opacity-90 text-gray-950 text-xs rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Set Channel
           </button>

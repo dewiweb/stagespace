@@ -317,7 +317,7 @@ export default function Inspector() {
                 {(['forward', 'backward', 'ping_pong'] as const).map((d) => (
                   <button key={d} onClick={() => updateCurrent({ direction: d })}
                     title={d === 'forward' ? 'Direction — la trajectoire joue dans le sens du dessin' : d === 'backward' ? 'Direction — la trajectoire joue à rebours' : 'Direction — la trajectoire alterne aller/retour'}
-                    className={`flex-1 py-1 text-xs rounded ${current.direction === d ? 'bg-stagespace-accent text-white' : 'bg-gray-800 text-gray-500'}`}>
+                    className={`flex-1 py-1 text-xs rounded ${current.direction === d ? 'bg-stagespace-accent text-gray-950' : 'bg-gray-800 text-gray-500'}`}>
                     {d === 'forward' ? '→ Fwd' : d === 'backward' ? '← Bwd' : '↔ Ping'}
                   </button>
                 ))}
@@ -326,7 +326,7 @@ export default function Inspector() {
                 {(['loop', 'one_shot'] as const).map((l) => (
                   <button key={l} onClick={() => updateCurrent({ loop_mode: l })}
                     title={l === 'loop' ? 'Loop — la trajectoire recommence en boucle' : 'One-shot — joue une fois puis termine (voir End : revert/hold)'}
-                    className={`flex-1 py-1 text-xs rounded ${current.loop_mode === l ? 'bg-stagespace-accent text-white' : 'bg-gray-800 text-gray-500'}`}>
+                    className={`flex-1 py-1 text-xs rounded ${current.loop_mode === l ? 'bg-stagespace-accent text-gray-950' : 'bg-gray-800 text-gray-500'}`}>
                     {l === 'loop' ? '↻ Loop' : '▶ One-shot'}
                   </button>
                 ))}
@@ -462,7 +462,7 @@ export default function Inspector() {
               editingIsLive
                 ? 'bg-stagespace-danger/60 hover:bg-stagespace-danger text-white border-stagespace-danger/60'
                 : hasEditingSlot
-                  ? 'bg-stagespace-live hover:opacity-90 text-white border-stagespace-live/50'
+                  ? 'bg-stagespace-live hover:opacity-90 text-gray-950 border-stagespace-live/50'
                   : 'bg-gray-800/40 text-gray-500 border-gray-700/30 cursor-not-allowed'
             }`}
             title={hasEditingSlot ? `${editingIsLive ? 'Stop' : 'Play'} "${editingSlot?.name}" (Space)` : 'Select a slot in Moves first'}

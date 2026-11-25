@@ -123,7 +123,7 @@ export const NodeParamsPanel: React.FC<{
               onClick={() => setParamNodeId(n.id)}
               className={`px-2 py-1 rounded text-xs font-medium transition-colors inline-flex items-center gap-1 ${
                 active
-                  ? 'bg-stagespace-accent text-white'
+                  ? 'bg-stagespace-accent text-gray-950'
                   : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
               }`}
               title={`Node ${i + 1} — params`}

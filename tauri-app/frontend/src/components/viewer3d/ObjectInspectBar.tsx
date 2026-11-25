@@ -47,7 +47,7 @@ export const ObjectInspectBar: React.FC<ObjectInspectBarProps> = ({ positions })
       {OVERRIDE_RELEASE[src] && (
         <button
           onClick={() => OVERRIDE_RELEASE[src](selectedObj)}
-          className="px-1.5 py-0.5 rounded bg-stagespace-warning/70 text-white hover:bg-stagespace-warning text-[10px] font-bold"
+          className="px-1.5 py-0.5 rounded bg-stagespace-warning/70 text-gray-950 hover:bg-stagespace-warning text-[10px] font-bold"
           title={`Release obj ${selectedObj} (${src}) — le moteur reprend`}
         >
           release

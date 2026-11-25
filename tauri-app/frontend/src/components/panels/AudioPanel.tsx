@@ -152,7 +152,7 @@ export default function AudioPanel() {
               ? 'bg-stagespace-danger hover:opacity-90 text-white'
               : audioDevices.length === 0
               ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-              : 'bg-stagespace-accent hover:opacity-90 text-white'
+              : 'bg-stagespace-accent hover:opacity-90 text-gray-950'
           }`}
         >
           {isListening ? 'Stop' : 'Start'}

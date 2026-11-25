@@ -47,7 +47,7 @@ export const ScoreTransport: React.FC<{
     >⏮</button>
     <button
       onClick={onPlayStop}
-      className={`px-3 py-1 text-xs font-bold rounded ${playing ? 'bg-stagespace-danger hover:opacity-90' : 'bg-stagespace-live hover:opacity-90'}`}
+      className={`px-3 py-1 text-xs font-bold rounded ${playing ? 'bg-stagespace-danger hover:opacity-90 text-white' : 'bg-stagespace-live hover:opacity-90 text-gray-950'}`}
     >
       {playing ? '■ STOP' : '⏵ PLAY'}
     </button>

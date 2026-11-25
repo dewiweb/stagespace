@@ -130,7 +130,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
         <button
           onClick={() => setShowDepth(!showDepth)}
           className={`px-1.5 py-0.5 text-xs rounded transition-colors ${
-            showDepth ? 'bg-stagespace-accent text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            showDepth ? 'bg-stagespace-accent text-gray-950' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
           }`}
         >
           {showDepth ? 'Depth' : 'Select'}

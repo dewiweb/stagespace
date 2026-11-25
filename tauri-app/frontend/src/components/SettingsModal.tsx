@@ -221,7 +221,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <button
                 onClick={handleDiscover}
                 disabled={discovering}
-                className="px-3 py-1.5 text-xs font-medium rounded bg-stagespace-osc/80 hover:bg-stagespace-osc text-white transition-colors disabled:opacity-40"
+                className="px-3 py-1.5 text-xs font-medium rounded bg-stagespace-osc/80 hover:bg-stagespace-osc text-gray-950 transition-colors disabled:opacity-40"
               >
                 {discovering ? 'Scanning…' : 'Discover renderers'}
               </button>
@@ -270,7 +270,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               </div>
               <button
                 onClick={handleOscInPortApply}
-                className="px-3 py-1.5 bg-stagespace-accent hover:opacity-90 text-white text-xs font-medium rounded transition-colors"
+                className="px-3 py-1.5 bg-stagespace-accent hover:opacity-90 text-gray-950 text-xs font-medium rounded transition-colors"
               >
                 Apply
               </button>
@@ -298,7 +298,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 onClick={() => void setRemoteUi({ enabled: !remoteUiEnabled })}
                 className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
                   remoteUiEnabled
-                    ? 'bg-stagespace-accent text-white'
+                    ? 'bg-stagespace-accent text-gray-950'
                     : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
                 }`}
               >
@@ -342,7 +342,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <button
                 onClick={() => setPsnConfig({ enabled: !psnEnabled, group: psnGroupStr, port: parseInt(psnPortStr) || 56565, map: psnMapStr })}
                 className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
-                  psnEnabled ? 'bg-stagespace-accent text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                  psnEnabled ? 'bg-stagespace-accent text-gray-950' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
                 }`}
               >
                 {psnEnabled ? 'ON' : 'OFF'}
@@ -414,7 +414,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <button
                 onClick={() => setVenueConfig({ enabled: !venueEnabled, scale: venueScaleStr, offset: venueOffsetStr })}
                 className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
-                  venueEnabled ? 'bg-stagespace-accent text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                  venueEnabled ? 'bg-stagespace-accent text-gray-950' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
                 }`}
               >
                 {venueEnabled ? 'ON' : 'OFF'}
@@ -488,7 +488,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <button
                 onClick={() => setMediaSync({ enabled: !mediaSyncEnabled })}
                 className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
-                  mediaSyncEnabled ? 'bg-stagespace-accent text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                  mediaSyncEnabled ? 'bg-stagespace-accent text-gray-950' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
                 }`}
               >
                 {mediaSyncEnabled ? 'ON' : 'OFF'}

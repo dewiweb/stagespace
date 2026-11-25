@@ -376,10 +376,59 @@ sélections=accent, playing=live, danger=red-partout.
 - **État** : 613/613 tests, tsc/lint(0 err)/build verts.
   **Zéro classe palette chromatique hors allowlist.**
 
+**P4 — CONTRASTE & CONVENTIONS CONSOLE (session suivante) :**
+
+Revue visuelle par captures (vite :5199 + puppeteer, état démo
+injecté `__live.score`/`__live.cues`) + audit computed WCAG des
+styles rendus. Constat : la doctrine sémantique tenait, mais le
+`text-white` uniforme sur fills mid-saturés échouait AA partout —
+pire cas SETLIST 1.86:1 (`target` teal-400), PLAY 2.28 (`live`
+green-500), clips cyan/teal/fuchsia 1.96-2.79.
+
+**Règle finale (convention console live — grandMA3, ETC Eos,
+Lawo mc², DiGiCo/dLive) :**
+- `text-gray-950` **uniquement** sur les fills intrinsèquement
+  claires (`live` #22c55e, `target` #2dd4bf, `conduite` amber,
+  `osc` cyan, `warning`, `info`, `accent`, `tracking`,
+  `modulation`, et les fills claires CLIP_COLORS) — le pattern
+  « étiquette jaune de desk » : sur ces teintes le noir est le
+  meilleur ratio *et* le bon look.
+- `text-white` **explicite** sur les fills profondes, dont la
+  nuance est assombrie d'un cran si nécessaire pour ≥4.5:1 — le
+  blanc sur saturé profond est le look pad/executor des desks ;
+  le noir y « vibre » (halation sur hue saturée) même quand son
+  ratio est supérieur.
+- `danger` garde `text-white` (convention sécurité, AA-large ✓).
+- Translucides `/NN` gardent le texte clair.
+
+**`CLIP_COLORS` ajusté (scoreUtils)** : pose teal-600→700,
+unpark fuchsia-600→700, solo/unsolo fuchsia-500→600, chanMods
+indigo-500→600, zones indigo-400→600 — toutes → `text-white`
+explicite (les chips héritaient `text-gray-200`, d'où des ratios
+3.6-4.4 juste sous AA). Restés clairs + noir : `cue` amber-600,
+`gesture` teal-500, `soundcheck` cyan-500.
+
+**Mesuré après** : pire clip 1.96→4.71 (SOLO fuchsia-600) ;
+SETLIST 1.86→10.82, PLAY 2.28→8.84 ; 18/18 labels ≥4.5:1.
+park/attention/manualClear migrés fuchsia→pink stase (aligné sur
+les vues live — cohérence `sourceColors`).
+
+**Références console intégrées à la doctrine :**
+- grandMA3 2.5 : éléments non-sélectionnés à intensité réduite —
+  piste future (dim les clips non-actifs en lecture), hors scope.
+- ETC Eos : texte coloré sur tombstone neutre pour la
+  provenance/état (manual=rouge, tracked=magenta…) — cohérent
+  avec notre doctrine tokens-texte vs fills-identité.
+- Lawo mc² : couleurs sémantiques de canal + button-glow basse
+  lumière — cohérent avec une couleur = un sens.
+
+**Correctifs connexes** : IDLE ConduiteView vert→gris quand idle
+(aligné sur PerformView — le vert `live` mentait).
+
 **Reste ouvert :** rien de bloquant — le chantier doctrine est
-acté et enforce. Améliorations possibles (non requises) : revue
-visuelle du nuancier final sur la timeline réelle ; arbitrage sur
-les teintes `track` procédurales (identité, hors scope).
+acté et enforce. Améliorations possibles (non requises) : dim des
+éléments non-actifs façon grandMA3 ; arbitrage sur les teintes
+`track` procédurales (identité, hors scope).
 
 **Questions doctrinales OUVERTES (à trancher par l'utilisateur) :**
 1. **Domaine spatial** : SpatialFxPanel=cyan identité + lane

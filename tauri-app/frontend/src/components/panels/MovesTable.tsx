@@ -236,7 +236,7 @@ export default function MovesTable() {
             <button
               onClick={handleGO}
               disabled={!nextSetlistSlotId}
-              className="px-4 py-2 bg-stagespace-target hover:opacity-90 text-gray-900 text-sm font-bold rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
+              className="px-4 py-2 bg-stagespace-target hover:opacity-90 text-gray-950 text-sm font-bold rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
               title="GO: advance to the next move in the setlist (crossfade) — Enter. RECALL cue = Shift+Enter."
             >
               GO ▶
@@ -546,7 +546,7 @@ export default function MovesTable() {
                   }}
                   className={`text-xs font-mono px-2 py-1.5 rounded transition-colors ${
                     tempTrackIds.includes(id)
-                      ? 'bg-stagespace-accent text-white'
+                      ? 'bg-stagespace-accent text-gray-950'
                       : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                   }`}
                 >
@@ -557,7 +557,7 @@ export default function MovesTable() {
             <div className="flex gap-2 mt-4">
               <button
                 onClick={confirmTrackPicker}
-                className="flex-1 py-1.5 bg-stagespace-accent hover:opacity-90 text-white text-xs rounded font-medium"
+                className="flex-1 py-1.5 bg-stagespace-accent hover:opacity-90 text-gray-950 text-xs rounded font-medium"
               >Confirmer</button>
               <button
                 onClick={() => setEditingTracksFor(null)}
@@ -617,7 +617,7 @@ export default function MovesTable() {
               </div>
               <button
                 onClick={() => setEditingTransformFor(null)}
-                className="w-full mt-4 py-1.5 bg-stagespace-accent hover:opacity-90 text-white text-xs rounded font-medium"
+                className="w-full mt-4 py-1.5 bg-stagespace-accent hover:opacity-90 text-gray-950 text-xs rounded font-medium"
               >Close</button>
             </div>
           </Modal>

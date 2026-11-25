@@ -130,7 +130,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
           {canSolo && p.onSolo && (
             <button
               onClick={(e) => { e.stopPropagation(); p.onSolo!(); }}
-              className="w-8 h-8 -m-1 rounded-lg bg-stagespace-warning/70 hover:bg-stagespace-warning text-white text-xs font-bold flex items-center justify-center"
+              className="w-8 h-8 -m-1 rounded-lg bg-stagespace-warning/70 hover:bg-stagespace-warning text-gray-950 text-xs font-bold flex items-center justify-center"
               title="SOLO — coupe les autres en fondu"
             >
               S
@@ -167,7 +167,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
         {p.heldTracks && p.heldTracks.length > 0 && (
           <div className={`absolute bottom-1.5 right-1.5 text-[9px] ${SOURCE_BADGE.hold} px-1 rounded`} title={`Hold : ${p.heldTracks.join(', ')}`}>H</div>
         )}
-        {p.isSolo && <div className="absolute top-1.5 left-1.5 text-[9px] bg-stagespace-warning px-1 rounded">S</div>}
+        {p.isSolo && <div className="absolute top-1.5 left-1.5 text-[9px] bg-stagespace-warning text-gray-950 px-1 rounded">S</div>}
         {p.onAttention && (
           <span
             onClick={(e) => { e.stopPropagation(); p.onAttention!(); }}

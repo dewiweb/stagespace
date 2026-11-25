@@ -59,7 +59,7 @@ export function Titlebar() {
             title={tab.title}
             className={`px-2.5 py-0.5 text-[11px] font-bold rounded transition-all ${
               surface === tab.id
-                ? `${tab.color} text-white shadow`
+                ? `${tab.color} text-gray-950 shadow`
                 : 'text-gray-400 hover:text-gray-200'
             }`}
           >

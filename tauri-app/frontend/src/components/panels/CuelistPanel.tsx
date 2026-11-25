@@ -143,7 +143,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
         <button
           onClick={() => doCueNext('cuelist')}
           disabled={currentCueIndex + 1 >= cues.length || isRecalling}
-          className="px-1.5 py-0.5 text-xs bg-stagespace-conduite/70 hover:bg-stagespace-conduite text-white rounded disabled:opacity-30"
+          className="px-1.5 py-0.5 text-xs bg-stagespace-conduite/70 hover:bg-stagespace-conduite text-gray-950 rounded disabled:opacity-30"
           title="Next cue — RECALL replaces the whole scene (kill + respawn). Setlist GO = Enter."
         >
           RECALL ▶
@@ -176,7 +176,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
         <button
           onClick={() => handleStoreCue()}
           disabled={!newCueName.trim()}
-          className="flex-shrink-0 px-2 py-1 text-xs bg-stagespace-tracking hover:opacity-90 text-white rounded disabled:opacity-30 font-medium"
+          className="flex-shrink-0 px-2 py-1 text-xs bg-stagespace-tracking hover:opacity-90 text-gray-950 rounded disabled:opacity-30 font-medium"
         >
           ★ Store
         </button>

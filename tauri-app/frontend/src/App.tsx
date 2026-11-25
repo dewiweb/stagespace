@@ -472,7 +472,7 @@ function AppMain() {
                 onClick={() => setEditorFocus(!editorFocus)}
                 className={`px-2 py-0.5 text-xs rounded font-medium flex items-center gap-1 transition-colors ${
                   editorFocus
-                    ? 'bg-stagespace-tracking text-white'
+                    ? 'bg-stagespace-tracking text-gray-950'
                     : 'bg-gray-800 text-gray-400 hover:text-white'
                 }`}
                 title={editorFocus
@@ -493,7 +493,7 @@ function AppMain() {
                   useMoveEditorStore.getState().saveAnimation();
                   setShowExpert(false);
                 }}
-                className="px-2 py-0.5 text-xs bg-stagespace-tracking/80 hover:bg-stagespace-tracking text-white rounded font-medium"
+                className="px-2 py-0.5 text-xs bg-stagespace-tracking/80 hover:bg-stagespace-tracking text-gray-950 rounded font-medium"
                 title="Save the graph as a Custom animation"
               >
                 ★ Save
@@ -536,7 +536,7 @@ function AppMain() {
                   // Focus direct (le split 50/50 écrase le canvas).
                   setEditorFocus(true);
                 }}
-                className="px-2 py-0.5 text-xs rounded font-bold bg-stagespace-tracking text-white hover:opacity-80 transition-colors flex items-center gap-1"
+                className="px-2 py-0.5 text-xs rounded font-bold bg-stagespace-tracking text-gray-950 hover:opacity-80 transition-colors flex items-center gap-1"
                 title="Expert mode — advanced graph editor (nodes, connections, custom trajectories)"
               >
                 <Workflow size={11} />

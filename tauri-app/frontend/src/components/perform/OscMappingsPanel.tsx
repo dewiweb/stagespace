@@ -133,14 +133,14 @@ export const OscMappingsPanel: React.FC = () => {
             void addOscMapping(addr.trim(), dest.trim(), transform.trim() || null);
             setAddr('');
           }}
-          className="px-3 py-1.5 rounded bg-stagespace-accent text-white font-semibold"
+          className="px-3 py-1.5 rounded bg-stagespace-accent text-gray-950 font-semibold"
         >
           Add
         </button>
         <button
           onClick={() => void doLearn()}
           disabled={learning}
-          className={`px-4 py-1.5 rounded font-bold ${learning ? 'bg-stagespace-osc animate-pulse' : 'bg-stagespace-osc/80 hover:bg-stagespace-osc'} text-white`}
+          className={`px-4 py-1.5 rounded font-bold ${learning ? 'bg-stagespace-osc animate-pulse' : 'bg-stagespace-osc/80 hover:bg-stagespace-osc'} text-gray-950`}
           title="OSC learn — bouge le fader : l'adresse se remplit"
         >
           {learning ? 'MOVE…' : 'LEARN'}
