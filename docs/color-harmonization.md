@@ -122,6 +122,20 @@ Trois règles de câblage :
 
 | Phase | Contenu | Vérif |
 |---|---|---|
+## État d'avancement (au commit e585ffb)
+
+| Phase | État |
+|---|---|
+| **H1 — fondations** | ✅ fait — tokens target/derived/info, `uiColors.ts`, CLIP_COLORS par familles (v2 validée au swatch : objectCtl fuchsia, zones→indigo) |
+| **H2 — surfaces live** | ✅ fait — StatusBar/PerformView/CuelistPanel migrés, convergé sur StatusChip/STATUS_TONES, arm unifié, sémaphores healthTone |
+| **H3 — viz 3D/radar** | ⬜ à faire — centraliser les hex three.js dans `uiColors.VIZ`, dissoudre le violet pose-ghost dans `target` (doctrine), rest-ghosts dim |
+| **H4 — ratissage + enforcement** | ⬜ à faire — chrome indigo (toggles), couleurs-décor SettingsModal, règle lint anti-palette brute hors allowlist |
+
+Branche : `feat/color-harmonization`. Reprise : lire les décisions
+H1/H2 ci-dessous puis attaquer H3 — les points d'entrée sont
+`usePoseGhosts.ts` (violet→target), `useRenderLoop`/`Scene3D` (hex zones
+déjà nommés dans uiColors.VIZ), `Radar2D.tsx` (mêmes teintes SVG).
+
 ### Décisions H1 actées (swatch review)
 
 - **objectCtl = fuchsia, pas emerald** — la première passe (emerald)
