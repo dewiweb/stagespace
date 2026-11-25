@@ -185,7 +185,7 @@ export const LiveDrawer: React.FC = () => {
               {slot.name} ✕
             </button>
             {slot.movementId
-              ? <span className={`px-1 rounded ${slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'}`}>{slot.isPreview ? 'PREV' : 'LIVE'}</span>
+              ? <span className={`px-1 rounded ${slot.isPreview ? 'bg-slate-800 text-slate-300' : 'bg-green-900 text-green-300'}`}>{slot.isPreview ? 'PREV' : 'LIVE'}</span>
               : <span className="text-gray-400">(stopped)</span>}
             {/* Source-de-contrôle par objet du slot — qui pilote quoi. */}
             {slot.trackIds.map((t) => {

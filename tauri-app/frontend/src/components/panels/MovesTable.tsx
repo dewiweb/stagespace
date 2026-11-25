@@ -310,7 +310,7 @@ export default function MovesTable() {
                         onClick={() => selectSlotForEditing(editingSlotId === slot.id ? null : slot.id)}>
                       <span className={`text-xs font-mono w-5 h-5 rounded flex items-center justify-center ${
                         isPlaying
-                          ? (slot.isPreview ? 'bg-cyan-800 text-cyan-300' : 'bg-green-800 text-green-300')
+                          ? (slot.isPreview ? 'bg-slate-700 text-slate-300' : 'bg-green-800 text-green-300')
                           : 'bg-gray-800 text-gray-500'
                       }`}>{idx + 1}</span>
                     </td>
@@ -467,7 +467,7 @@ export default function MovesTable() {
                           <button
                             onClick={(e) => { e.stopPropagation(); playSlot(slot.id); }}
                             className={`text-xs px-1.5 rounded hover:bg-green-900/30 font-bold ${
-                              slot.isPreview ? 'text-cyan-400 hover:text-cyan-300' : 'text-green-400 hover:text-green-300'
+                              slot.isPreview ? 'text-slate-400 hover:text-slate-300' : 'text-green-400 hover:text-green-300'
                             }`}
                             title={slot.isPreview ? 'Launch in preview (no OSC out)' : 'Launch live (OSC out)'}
                           ><Play size={10} fill="currentColor" /></button>

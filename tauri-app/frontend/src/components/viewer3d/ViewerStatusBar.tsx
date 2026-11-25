@@ -96,7 +96,7 @@ export const ViewerStatusBar: React.FC<ViewerStatusBarProps> = ({ cursorReadoutR
             <span
               key={mv.id}
               className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                mv.is_preview ? 'bg-cyan-900 text-cyan-400' : 'bg-green-900 text-green-400'
+                mv.is_preview ? 'bg-slate-800 text-slate-300' : 'bg-green-900 text-green-400'
               }`}
               title={`${mv.name} — ${mv.track_count} tracks`}
             >

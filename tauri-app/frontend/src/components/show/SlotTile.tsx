@@ -222,7 +222,7 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
           {isPlaying && (
             <span
               className={`text-xs px-1 rounded ${
-                slot.isPreview ? 'bg-cyan-900 text-cyan-300' : 'bg-green-900 text-green-300'
+                slot.isPreview ? 'bg-slate-800 text-slate-300' : 'bg-green-900 text-green-300'
               }`}
             >
               {slot.isPreview ? 'PREV' : 'LIVE'}

@@ -72,8 +72,8 @@ export const VIZ = {
   obj: {
     off: '#000000',            // pas d'émission
     drag: '#446688',           // membre en cours de drag
-    preview: '#00ccff',        // track couverte par un move preview
-    previewEmissive: '#003344',
+    preview: '#94a3b8',        // track couverte par un move preview — derived (projeté, rien ne sort)
+    previewEmissive: '#1e293b',
     selected: '#555555',       // sélection (clic proximité / manipulate)
     hot: '#664400',            // track du move sélectionné
     assignMember: '#1a5c2e',   // membre du slot édité (mode assign)

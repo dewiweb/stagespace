@@ -190,14 +190,14 @@ export default function Inspector() {
             <span
               className={`flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold ${
                 editingSlot?.isPreview
-                  ? 'bg-cyan-900/60 text-cyan-300 border border-cyan-700/50'
+                  ? 'bg-slate-800/60 text-slate-300 border border-slate-600/50'
                   : 'bg-green-900/60 text-green-300 border border-green-700/50 animate-pulse'
               }`}
               title={editingSlot?.isPreview
                 ? 'This move runs in preview — edits apply live (no OSC out)'
                 : 'ON AIR — les edits de ce panneau partent au renderer en direct'}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${editingSlot?.isPreview ? 'bg-cyan-400' : 'bg-green-400'}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${editingSlot?.isPreview ? 'bg-slate-400' : 'bg-green-400'}`} />
               {editingSlot?.isPreview ? 'PREVIEW' : 'LIVE'}
             </span>
           )}
@@ -430,7 +430,7 @@ export default function Inspector() {
                   }`}
                 >
                   <span className={`text-xs font-mono w-4 h-4 rounded flex items-center justify-center flex-shrink-0 ${
-                    mv.is_preview ? 'bg-cyan-800 text-cyan-300' : 'bg-green-800 text-green-300'
+                    mv.is_preview ? 'bg-slate-700 text-slate-300' : 'bg-green-800 text-green-300'
                   }`}>{idx + 1}</span>
                   <span className="text-white text-xs font-medium truncate flex-1">{mv.name}</span>
                   <span className="text-gray-500 text-xs font-mono flex-shrink-0">{trackCount}tr</span>
