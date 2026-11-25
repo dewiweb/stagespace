@@ -11,10 +11,10 @@ const realWindow =
   !('__STAGESPACE_BRIDGE__' in window);
 
 const SURFACES = [
-  { id: 'atelier', label: 'Atelier', color: 'bg-purple-600', title: 'Composer/préparer — graphes, moves, cues, score, réglages' },
-  { id: 'jeu', label: 'Jeu', color: 'bg-green-600', title: 'Interagir live — pads, gestes, radar, sources' },
-  { id: 'score', label: 'Score', color: 'bg-cyan-700', title: 'Composer le show dans le temps — timeline multipiste, clips moves/cues' },
-  { id: 'conduite', label: 'Conduite', color: 'bg-amber-600', title: 'Faire avancer le show — cues, GO, surveillance, log' },
+  { id: 'atelier', label: 'Atelier', color: 'bg-stagespace-modulation', title: 'Composer/préparer — graphes, moves, cues, score, réglages' },
+  { id: 'jeu', label: 'Jeu', color: 'bg-stagespace-live', title: 'Interagir live — pads, gestes, radar, sources' },
+  { id: 'score', label: 'Score', color: 'bg-stagespace-accent', title: 'Composer le show dans le temps — timeline multipiste, clips moves/cues' },
+  { id: 'conduite', label: 'Conduite', color: 'bg-stagespace-conduite', title: 'Faire avancer le show — cues, GO, surveillance, log' },
 ] as const;
 
 /** Barre de titre custom (fenêtre frameless — `decorations: false`).

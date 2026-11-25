@@ -627,7 +627,7 @@ export const NodeEditor: React.FC = () => {
             </button>
             <button
               onClick={() => pushGlobalGraph()}
-              className="px-2 py-0.5 text-xs bg-indigo-800 hover:bg-indigo-700 text-indigo-200 rounded"
+              className="px-2 py-0.5 text-xs bg-stagespace-modulation/80 hover:bg-stagespace-modulation text-indigo-100 rounded"
               title="Compile and push to the backend"
             >
               ↑ Push
@@ -637,7 +637,7 @@ export const NodeEditor: React.FC = () => {
         <button
           onClick={() => setActiveTab('signal')}
           className={`px-2 py-0.5 text-xs rounded font-medium transition-colors ${
-            activeTab === 'signal' ? 'bg-indigo-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+            activeTab === 'signal' ? 'bg-stagespace-modulation text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
           }`}
           title="Modulation — signal graph writing additive deltas into param/transform targets (LFO, audio, OSC…)"
         >
@@ -655,7 +655,7 @@ export const NodeEditor: React.FC = () => {
             </button>
             <button
               onClick={() => pushSignalGraph()}
-              className="px-2 py-0.5 text-xs bg-indigo-800 hover:bg-indigo-700 text-indigo-200 rounded"
+              className="px-2 py-0.5 text-xs bg-stagespace-modulation/80 hover:bg-stagespace-modulation text-indigo-100 rounded"
               title="Compile and push to the backend"
             >
               ↑ Push
@@ -778,7 +778,7 @@ export const NodeEditor: React.FC = () => {
                   <button
                     key={p.id}
                     onClick={() => openExampleFor(nodeMenu.nodeType, p.id, p.name)}
-                    className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-cyan-900/40 hover:text-white transition-colors"
+                    className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-stagespace-accent/10 hover:text-white transition-colors"
                     title={p.description}
                   >
                     {p.icon} {p.name}
@@ -803,7 +803,7 @@ export const NodeEditor: React.FC = () => {
                 <button
                   key={label}
                   onClick={() => { fn(); setNodeMenu(null); }}
-                  className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-cyan-900/40 hover:text-white transition-colors"
+                  className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-stagespace-accent/10 hover:text-white transition-colors"
                 >
                   {label}
                 </button>
@@ -842,7 +842,7 @@ export const NodeEditor: React.FC = () => {
 
         {/* Connecting hint badge */}
         {connectingFrom && (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-popover px-3 py-1.5 bg-blue-900/80 border border-blue-600 rounded-lg text-blue-200 text-xs font-medium pointer-events-none">
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-popover px-3 py-1.5 bg-stagespace-accent/80 border border-stagespace-accent rounded-lg text-blue-100 text-xs font-medium pointer-events-none">
             Connecting from <span className="text-white font-bold">{connectingFrom.type}</span> — drag to a valid target or drop on the canvas to quick-add
           </div>
         )}

@@ -78,9 +78,9 @@ export const OscMappingsPanel: React.FC = () => {
             className="w-4 h-4 flex-shrink-0"
             title={m.enabled !== false ? 'Disable (kept, no dispatch)' : 'Enable'}
           />
-          <span className="text-cyan-300 font-mono truncate flex-1">{m.address}</span>
+          <span className="text-stagespace-osc font-mono truncate flex-1">{m.address}</span>
           {liveValues[m.address] && (
-            <span className="text-green-400/80 font-mono text-[10px] tabular-nums">
+            <span className="text-stagespace-live/80 font-mono text-[10px] tabular-nums">
               {liveValues[m.address].map((v) => v.toFixed(2)).join(' ')}
             </span>
           )}
@@ -92,7 +92,7 @@ export const OscMappingsPanel: React.FC = () => {
               setDest(describe(m.destination));
               setTransform(describeTransform(m.transform));
             }}
-            className="text-gray-500 hover:text-cyan-300 px-1"
+            className="text-gray-500 hover:text-stagespace-osc px-1"
             title="Edit — pré-remplit le formulaire (Add remplace à même adresse)"
           >
             ✎
@@ -133,14 +133,14 @@ export const OscMappingsPanel: React.FC = () => {
             void addOscMapping(addr.trim(), dest.trim(), transform.trim() || null);
             setAddr('');
           }}
-          className="px-3 py-1.5 rounded bg-indigo-600 text-white font-semibold"
+          className="px-3 py-1.5 rounded bg-stagespace-accent text-white font-semibold"
         >
           Add
         </button>
         <button
           onClick={() => void doLearn()}
           disabled={learning}
-          className={`px-4 py-1.5 rounded font-bold ${learning ? 'bg-cyan-600 animate-pulse' : 'bg-cyan-700 hover:bg-cyan-600'} text-white`}
+          className={`px-4 py-1.5 rounded font-bold ${learning ? 'bg-stagespace-osc animate-pulse' : 'bg-stagespace-osc/80 hover:bg-stagespace-osc'} text-white`}
           title="OSC learn — bouge le fader : l'adresse se remplit"
         >
           {learning ? 'MOVE…' : 'LEARN'}
