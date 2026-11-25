@@ -10,6 +10,7 @@
 /// store garde l'objet Cue backend depuis store_cue) — la
 /// couverture trackIds est info visuelle, le recall reste global.
 import { useGraphStore } from '../store/useGraphStore';
+import { usePoseStore } from '../store/usePoseStore';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { normalizeSlot } from '../store/slices/moveSlotsTypes';
 import { buildSlotActivation } from './slotActivation';
@@ -380,6 +381,16 @@ export function effectiveTrackIds(c: ScoreClipDoc): number[] {
       // Les positions sont portées en track_id (espace opérateur).
       return Object.keys((c.ref as { positions: Record<number, [number, number, number]> }).positions)
         .map(Number).filter((t) => Number.isFinite(t));
+    case 'pose': {
+      // Couverture = distribution de la pose CIBLE (morph : c'est B qui
+      // définit les objets distribués, pas A). Dérivation live du
+      // contenu courant — la pose est référentielle (relue au fire) :
+      // éditer la pose déplace le blast radius sur les lanes, à juste
+      // titre. Pose inconnue ou supprimée → vide (warning de validation).
+      const name = (c.ref as { name: string }).name;
+      const pose = usePoseStore.getState().poses.find((x) => x.name === name);
+      return pose ? Object.keys(pose.positions).map(Number).filter((t) => Number.isFinite(t)) : [];
+    }
     case 'park':
     case 'unpark':
     case 'throw':
