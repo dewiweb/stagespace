@@ -22,6 +22,7 @@ pub mod plugins;
 pub mod position_buffer;
 pub mod position_sink;
 pub mod post_process_compiler;
+pub mod poses;
 pub mod presets;
 pub mod psn_receiver;
 pub mod rng;
@@ -100,6 +101,7 @@ pub use post_process_compiler::{
     compile_post_process, extract_graph_effects, GraphEffects, PostProcessCompileError,
     PostProcessCompileParams,
 };
+pub use poses::Pose;
 pub use presets::{Preset, PresetManager};
 pub use rng::SimpleRng;
 pub use runtime::{

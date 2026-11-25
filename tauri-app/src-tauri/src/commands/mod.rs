@@ -7,6 +7,7 @@ pub mod merge_commands;
 pub mod network;
 pub mod osc;
 pub mod playback;
+pub mod poses;
 pub mod plugins;
 pub mod presets;
 pub mod remote_ui;

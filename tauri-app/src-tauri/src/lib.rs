@@ -52,6 +52,7 @@ use commands::osc::{
 };
 use commands::playback::set_macro;
 use commands::plugins::{import_plugin, list_plugins, reload_plugins};
+use commands::poses::{pose_capture, pose_delete, pose_list, pose_replace_all, pose_save, pose_snap};
 use commands::presets::{preset_delete, preset_list, preset_load, preset_save};
 use commands::remote_ui::{remote_ui_status, set_remote_ui};
 use commands::sampling::{
@@ -68,6 +69,10 @@ pub struct AppState {
     pub audio_state: Arc<Mutex<AudioState>>,
     pub osc_receiver: Arc<Mutex<OscReceiver>>,
     pub presets: Arc<Mutex<PresetManager>>,
+    /// Poses — presets de positions nommés, track_id-keyed (design :
+    /// docs/position-presets-design.md). Backend = source de vérité ;
+    /// persistées via la section `poses` de l'enveloppe .hfg.
+    pub poses: Arc<Mutex<std::collections::HashMap<String, stagespace_engines::Pose>>>,
     /// Sink d'événements UI (positions, logs, resyncs) — branché au setup
     /// par la fenêtre ; `None` en headless pur (CLI/tests sans frontend).
     pub event_sink: Arc<Mutex<Option<commands::state::EventSink>>>,
@@ -229,6 +234,7 @@ pub fn new_app_state() -> AppState {
         audio_state,
         osc_receiver: Arc::new(Mutex::new(OscReceiver::new(8001))),
         presets: Arc::new(Mutex::new(PresetManager::new())),
+        poses: Arc::new(Mutex::new(std::collections::HashMap::new())),
         event_sink: Arc::new(Mutex::new(None)),
         movements: Arc::new(Mutex::new(HashMap::new())),
         pending_move_ids: Arc::new(Mutex::new(HashSet::new())),
@@ -302,6 +308,7 @@ pub fn setup_backend_runtime<R: tauri::Runtime>(
             let stop_movements = state.movements.clone();
             let stop_merge = state.merge_runtime.clone();
             let stop_gen = state.deactivate_gen.clone();
+            let poses_handle = state.poses.clone();
             // Socket de réponse partagé — le sink peut répondre
             // au demandeur d'un `positions` query sans webview.
             let reply_handle = receiver.reply_socket_handle();
@@ -347,6 +354,30 @@ pub fn setup_backend_runtime<R: tauri::Runtime>(
                         // setTimeout armé dans une autre fenêtre
                         // (revue H1 — sinon la cue tire après panic).
                         let _ = app_handle.emit("timers:cancel", ());
+                    }
+                    stagespace_engines::osc_receiver::ShowCommand::PoseList => {
+                        // `/stagespace/pose/list` — dump des poses au
+                        // demandeur. Backend-direct : pas de webview requise.
+                        let table = poses_handle.lock().unwrap_or_else(|e| e.into_inner());
+                        let sock = reply_handle
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .clone();
+                        if let Some(sock) = sock {
+                            let mut entries: Vec<_> =
+                                table.values().collect();
+                            entries.sort_by(|a, b| a.name.cmp(&b.name));
+                            for pose in entries {
+                                if let Some(bytes) =
+                                    stagespace_engines::osc_receiver::encode_pose_feedback(
+                                        &pose.name,
+                                        pose.positions.len(),
+                                    )
+                                {
+                                    let _ = sock.send_to(&bytes, addr);
+                                }
+                            }
+                        }
                     }
                     stagespace_engines::osc_receiver::ShowCommand::PositionsQuery => {
                         // `/stagespace/positions` — dump des positions
@@ -448,6 +479,12 @@ pub fn stagespace_invoke_handler<R: tauri::Runtime>(invoke: tauri::ipc::Invoke<R
         set_osc_armed,
         get_osc_armed,
         get_osc_receiver_port,
+        pose_capture,
+        pose_delete,
+        pose_list,
+        pose_replace_all,
+        pose_save,
+        pose_snap,
         preset_save,
         preset_load,
         preset_delete,
@@ -713,3 +750,7 @@ mod show_control_e2e_test_file;
 #[cfg(test)]
 #[path = "tests/osc_locks_tests.rs"]
 mod osc_locks_test_file;
+
+#[cfg(test)]
+#[path = "tests/pose_tests.rs"]
+mod pose_test_file;

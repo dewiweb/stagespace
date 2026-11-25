@@ -43,6 +43,9 @@ pub struct Shared {
     pub audio_state: Arc<Mutex<AudioState>>,
     pub event_sink: Arc<Mutex<Option<EventSink>>>,
     pub movements: Arc<Mutex<HashMap<String, Movement>>>,
+    /// Poses — presets de positions nommés (track_id-keyed). Partagé
+    /// avec le scheduler score et les futures commandes goto/morph.
+    pub poses: Arc<Mutex<HashMap<String, stagespace_engines::Pose>>>,
     pub pending_move_ids: Arc<Mutex<HashSet<String>>>,
     pub move_generation: Arc<AtomicU64>,
     pub merge_runtime: Arc<Mutex<MergeRuntime>>,
@@ -70,6 +73,7 @@ impl Shared {
             audio_state: state.audio_state.clone(),
             event_sink: state.event_sink.clone(),
             movements: state.movements.clone(),
+            poses: state.poses.clone(),
             pending_move_ids: state.pending_move_ids.clone(),
             move_generation: state.move_generation.clone(),
             merge_runtime: state.merge_runtime.clone(),

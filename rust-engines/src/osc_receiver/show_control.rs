@@ -50,6 +50,16 @@ pub enum ShowCommand {
     /// d'une track (où panic renvoie, base du Barycenter — équivalent
     /// à l'import .hol pour un contrôleur externe).
     SetTrackPosition(u32, f64, f64, f64),
+    /// `/stagespace/pose/capture <name> [track…]` — capture les positions
+    /// live dans la pose nommée (toutes les tracks connues si aucune
+    /// passée). Dispatch frontend → commande `pose_capture`.
+    PoseCapture(String, Vec<u32>),
+    /// `/stagespace/pose/snap <name>` — rappel instantané de la pose
+    /// (positions manuelles, même chemin que `/stagespace/position`).
+    PoseSnap(String),
+    /// `/stagespace/pose/list` — le demandeur reçoit
+    /// `/stagespace/pose/state <name> <ntracks>` par pose.
+    PoseList,
     /// `/stagespace/panic` — Esc panic.
     Panic,
     /// `/stagespace/stop` — stop tous les moves.
@@ -255,6 +265,35 @@ pub(crate) fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Opti
             }
         }
         "unsolo" => Some(ShowCommand::Unsolo),
+        "pose/capture" | "pose/snap" | "pose/list" => {
+            let string_arg = |a: &OscType| match a {
+                OscType::String(s) => Some(s.clone()),
+                OscType::Float(v) => Some(format!("{v}")),
+                OscType::Int(v) => Some(v.to_string()),
+                OscType::Long(v) => Some(v.to_string()),
+                _ => None,
+            };
+            let track_arg = |a: &OscType| match a {
+                OscType::Float(v) => Some(*v as u32),
+                OscType::Int(v) => Some((*v).max(0) as u32),
+                OscType::Long(v) => Some((*v).max(0) as u32),
+                OscType::String(s) => s.parse::<u32>().ok(),
+                _ => None,
+            };
+            match tail {
+                "pose/list" => Some(ShowCommand::PoseList),
+                "pose/snap" => args
+                    .first()
+                    .and_then(string_arg)
+                    .map(ShowCommand::PoseSnap),
+                "pose/capture" => {
+                    let name = args.first().and_then(string_arg)?;
+                    let tracks = args[1..].iter().filter_map(track_arg).collect();
+                    Some(ShowCommand::PoseCapture(name, tracks))
+                }
+                _ => None,
+            }
+        }
         "position" | "position/clear" | "position/clearall" | "trackpos" => {
             let index_arg = |a: &OscType| match a {
                 OscType::Float(v) => Some(*v as usize),

@@ -2,6 +2,7 @@
 /// compression spatiale, attention, gestes, positions d'origine,
 /// park/unpark. Extrait de liveActions.ts.
 import { useGraphStore } from '../store/useGraphStore';
+import { usePoseStore } from '../store/usePoseStore';
 import { toast } from './toast-helpers';
 import { safeInvoke as invoke, silentCatch } from './tauri';
 import { logAction, rec } from './liveActionsShared';
@@ -168,4 +169,23 @@ export function doUnpark(obj: number, from?: string) {
   const tid = useGraphStore.getState().manualOscIds[obj];
   rec('doUnpark', [obj], { trackId: tid ?? null });
   invoke('unpark_object', { obj }).catch((e) => toast.error('Unpark failed: ' + e));
+}
+
+/** /stagespace/pose/capture <name> [track…] — capture les positions live
+ *  dans la pose nommée (upsert). tracks vide/absent = toutes connues. */
+export function doPoseCapture(name: string, tracks?: number[], from?: string) {
+  logAction('doPoseCapture', from);
+  void usePoseStore.getState().capturePose(name, tracks);
+}
+
+/** /stagespace/pose/snap <name> — rappel instantané : positions manuelles
+ *  pour les tracks de la pose (partiel — les autres ne bougent pas). */
+export function doPoseSnap(name: string, from?: string) {
+  logAction('doPoseSnap', from);
+  // Ref d'enregistrement : la tape rehearsal capture les positions
+  // résolues (track_id-keyed, même shape que les clips `positions`) —
+  // le replay ne dépend pas de l'existence future de la pose.
+  const pose = usePoseStore.getState().poses.find((p) => p.name === name);
+  if (pose) rec('doPoseSnap', [], { positions: pose.positions });
+  void usePoseStore.getState().snapPose(name);
 }

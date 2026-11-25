@@ -115,6 +115,16 @@ export async function buildShowEnvelope(s: PersistenceStore): Promise<ShowFileEn
     toast.warning(`OSC IN mappings not saved — list failed: ${e}`);
   }
 
+  // Poses — backend-owned : fetch pour la section enveloppe (pattern
+  // oscMappings — la source de vérité est le backend, pas le store UI).
+  let poses: import('../../types/generated/Pose').Pose[] | undefined;
+  try {
+    poses = await invoke<import('../../types/generated/Pose').Pose[]>('pose_list');
+  } catch (e) {
+    console.error('[buildShowEnvelope] pose_list failed:', e);
+    toast.warning(`Poses not saved — list failed: ${e}`);
+  }
+
   return {
     format: SHOW_FILE_FORMAT,
     version: SHOW_FILE_VERSION,
@@ -146,6 +156,7 @@ export async function buildShowEnvelope(s: PersistenceStore): Promise<ShowFileEn
       markers: scoreStore.markers,
     },
     oscMappings,
+    poses,
     macros: s.macros,
     osc: {
       oscAddress: s.oscAddress,
@@ -211,6 +222,8 @@ export interface ShowFileEnvelope {
   spatialFx?: SpatialFxData;
   tracks?: TracksData;
   oscMappings?: OscMapping[];
+  /// Poses — presets de positions nommés (P1, docs/position-presets-design.md).
+  poses?: import('../../types/generated/Pose').Pose[];
   macros?: MacrosState;
 }
 
@@ -247,6 +260,7 @@ function validateSections(raw: ShowFileEnvelope) {
     ['cues', raw.cues],
     ['setlistOrder', raw.setlistOrder],
     ['oscMappings', raw.oscMappings],
+    ['poses', raw.poses],
   ];
   for (const [name, v] of arrays) {
     if (v !== undefined && !Array.isArray(v)) {
@@ -476,6 +490,20 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       // Section absente du fichier = état vide pour ce show — sinon les
       // mappings de l'ancien show resteraient actifs en silence (leak).
       await invoke('osc_clear_mappings').catch(silentCatch);
+    }
+
+    // 3b-pose. Poses — contenu de show backend-owned : remplacement
+    //     atomique de la table (une seule commande — pas de risque de
+    //     restauration partielle à mi-parcours). Section absente = table
+    //     vide, comme les mappings : les poses de l'ancien show ne
+    //     survivent pas en silence au changement de show.
+    try {
+      await invoke('pose_replace_all', { poses: raw.poses ?? [] });
+      const { usePoseStore } = await import('../usePoseStore');
+      await usePoseStore.getState().refreshPoses();
+    } catch (e) {
+      console.error('Failed to restore poses:', e);
+      toast.error(`Show loaded but poses restore failed: ${e}`);
     }
 
     // 3c. Macros globales — restore frontend + push backend. Sur échec du

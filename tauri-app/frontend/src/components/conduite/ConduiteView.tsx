@@ -8,6 +8,7 @@ import { ParkedChip } from '../perform/ParkedChip';
 import { ShowTransport } from '../show/ShowTransport';
 import { formatLogLabel } from '../../utils/liveActionsShared';
 import type { ConduiteHandlers, ConduiteViewState } from './types';
+import { PosesPanel } from './PosesPanel';
 
 export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteHandlers> = ({
   st,
@@ -219,6 +220,11 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
             )}
           </div>
         </div>
+
+        {/* Poses — colonne droite : lit usePoseStore directement (backend-
+            owned, invoke atteint le backend sans passer par le broadcast
+            de la conduite — la fenêtre détachée est couverte aussi). */}
+        <PosesPanel />
       </div>
 
       {/* Log opérationnel — les 8 dernières lignes, réticulaire : l'œil
