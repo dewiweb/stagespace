@@ -16,6 +16,8 @@ interface PoseStore {
   snapPose: (name: string) => Promise<void>;
   /// Rampe animée vers la pose (oneshot + hold — la cible est tenue).
   gotoPose: (name: string, duration?: number, easing?: string) => Promise<void>;
+  /// Morph animé pose A → pose B (départ live pour les objets hors de A).
+  morphPose: (fromPose: string, toPose: string, duration?: number, easing?: string) => Promise<void>;
   deletePose: (name: string) => Promise<void>;
   savePose: (pose: Pose) => Promise<void>;
 }
@@ -67,6 +69,19 @@ export const usePoseStore = create<PoseStore>((set, get) => ({
       toast.success(`Goto '${name}' — ${res.objects} object${res.objects > 1 ? 's' : ''} ramping${skip}`);
     } catch (e) {
       toast.error(`Pose goto failed: ${e}`);
+    }
+  },
+
+  morphPose: async (fromPose, toPose, duration, easing) => {
+    try {
+      const res = await invoke<{ movement_id: string; objects: number; skipped: number[] }>(
+        'pose_morph',
+        { fromPose, toPose, duration: duration ?? null, easing: easing ?? null },
+      );
+      const skip = res.skipped.length ? ` — ${res.skipped.length} track(s) skipped` : '';
+      toast.success(`Morph '${fromPose}' → '${toPose}' — ${res.objects} object${res.objects > 1 ? 's' : ''}${skip}`);
+    } catch (e) {
+      toast.error(`Pose morph failed: ${e}`);
     }
   },
 

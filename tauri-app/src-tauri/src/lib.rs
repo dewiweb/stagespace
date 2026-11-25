@@ -53,7 +53,8 @@ use commands::osc::{
 use commands::playback::set_macro;
 use commands::plugins::{import_plugin, list_plugins, reload_plugins};
 use commands::poses::{
-    pose_capture, pose_delete, pose_goto, pose_list, pose_replace_all, pose_save, pose_snap,
+    pose_capture, pose_delete, pose_goto, pose_list, pose_morph, pose_replace_all, pose_save,
+    pose_snap,
 };
 use commands::presets::{preset_delete, preset_list, preset_load, preset_save};
 use commands::remote_ui::{remote_ui_status, set_remote_ui};
@@ -482,6 +483,7 @@ pub fn stagespace_invoke_handler<R: tauri::Runtime>(invoke: tauri::ipc::Invoke<R
         get_osc_receiver_port,
         pose_capture,
         pose_goto,
+        pose_morph,
         pose_delete,
         pose_list,
         pose_replace_all,

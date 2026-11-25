@@ -2,7 +2,9 @@
 // docs/position-presets-design.md). Logique pure sur Shared headless.
 #[allow(clippy::uninlined_format_args)]
 mod pose_tests {
-    use crate::commands::poses::{capture_pose, goto_pose, poseramp_graph_json, snap_pose};
+    use crate::commands::poses::{
+        capture_pose, goto_pose, morph_pose, poseramp_graph_json, snap_pose,
+    };
     use crate::commands::state::Shared;
     use stagespace_engines::{AudioState, MergeRuntime, OscProfile, OscReceiver, OscSender, Pose};
     use std::collections::{HashMap, HashSet};
@@ -143,7 +145,7 @@ mod pose_tests {
         // Le graphe généré est le graphe standard Objects→PoseRamp→Output,
         // référentiel (from: live, to: pose:<name>) — aucune position
         // cuite, résolution au compile (design §5).
-        let g = poseramp_graph_json(3, "line-up", 2.0, "smooth");
+        let g = poseramp_graph_json(3, "live", "line-up", 2.0, "smooth");
         assert_eq!(g.nodes.len(), 4);
         let ramp = g
             .nodes
@@ -310,5 +312,93 @@ mod pose_tests {
         assert!(goto_pose(&sh, "t", Some(0.0), None).is_err());
         assert!(goto_pose(&sh, "t", Some(-5.0), None).is_err());
         assert!(goto_pose(&sh, "t", Some(f64::NAN), None).is_err());
+    }
+
+    fn pose_pair(sh: &Shared) {
+        // A : tracks 1,2 — B : tracks 2,3 (recouvrement partiel volontaire)
+        let mut a = HashMap::new();
+        a.insert(1u32, [1.0, 0.0, 0.0]);
+        a.insert(2u32, [2.0, 0.0, 0.0]);
+        let mut b = HashMap::new();
+        b.insert(2u32, [0.0, 2.0, 0.0]);
+        b.insert(3u32, [0.0, 3.0, 0.0]);
+        let mut poses = sh.poses.lock().unwrap_or_else(|e| e.into_inner());
+        poses.insert(
+            "A".to_string(),
+            Pose {
+                name: "A".to_string(),
+                positions: a,
+            },
+        );
+        poses.insert(
+            "B".to_string(),
+            Pose {
+                name: "B".to_string(),
+                positions: b,
+            },
+        );
+    }
+
+    #[test]
+    fn morph_graph_references_both_poses() {
+        let sh = make_shared();
+        pose_pair(&sh);
+        let res = morph_pose(&sh, "A", "B", Some(2.0), None).expect("morph");
+        let movements = sh.movements.lock().unwrap_or_else(|e| e.into_inner());
+        let mv = movements.get(&res.movement_id).expect("movement");
+        let ramp = mv
+            .graph_json
+            .nodes
+            .iter()
+            .find(|n| n.data.node_type.as_deref() == Some("PoseRamp"))
+            .expect("poseramp node");
+        assert_eq!(ramp.data.params["from"], serde_json::json!("pose:A"));
+        assert_eq!(ramp.data.params["to"], serde_json::json!("pose:B"));
+    }
+
+    #[test]
+    fn morph_distribution_is_defined_by_target() {
+        // B définit la distribution (design §7) : tracks 2,3 — pas 1
+        // (dans A mais pas B → ne participe pas).
+        let sh = make_shared();
+        pose_pair(&sh);
+        let res = morph_pose(&sh, "A", "B", Some(1.0), None).expect("morph");
+        assert_eq!(res.objects, 2);
+        let movements = sh.movements.lock().unwrap_or_else(|e| e.into_inner());
+        let mv = movements.get(&res.movement_id).unwrap();
+        assert_eq!(mv.osc_ids, vec![2, 3], "distribution = pose B");
+    }
+
+    #[test]
+    fn morph_errors_unknown_source() {
+        // Source absente = erreur de config — pas un goto déguisé.
+        let sh = make_shared();
+        pose_pair(&sh);
+        assert!(morph_pose(&sh, "ghost", "B", None, None).is_err());
+        let movements = sh.movements.lock().unwrap_or_else(|e| e.into_inner());
+        assert!(movements.is_empty(), "aucune mutation");
+    }
+
+    #[test]
+    fn morph_errors_unknown_target() {
+        let sh = make_shared();
+        pose_pair(&sh);
+        assert!(morph_pose(&sh, "A", "ghost", None, None).is_err());
+    }
+
+    #[test]
+    fn morph_capture_then_clear_like_goto() {
+        let sh = make_shared();
+        pose_pair(&sh);
+        {
+            let merge = sh.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
+            merge.set_manual_position(1, [5.0, 5.0, 0.0]); // obj1 = track 2, membre
+        }
+        morph_pose(&sh, "A", "B", Some(1.0), None).expect("morph");
+        let merge = sh.merge_runtime.lock().unwrap_or_else(|e| e.into_inner());
+        assert!(
+            merge.manual_positions().is_empty(),
+            "takeover explicite — même sémantique que goto"
+        );
     }
 }

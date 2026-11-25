@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import { usePoseStore } from '../../store/usePoseStore';
 import { useGraphStore } from '../../store/useGraphStore';
-import { doPoseCapture, doPoseSnap, doPoseGoto } from '../../utils/liveActions';
+import { doPoseCapture, doPoseSnap, doPoseGoto, doPoseMorph } from '../../utils/liveActions';
 
 export const PosesPanel: React.FC = () => {
   const poses = usePoseStore((s) => s.poses);
@@ -16,6 +16,9 @@ export const PosesPanel: React.FC = () => {
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
   const [newName, setNewName] = useState('');
   const [gotoDuration, setGotoDuration] = useState(2.0);
+  // Source du morph — une seule pose « A » à la fois ; chaque autre
+  // row expose alors son bouton morph A→elle.
+  const [morphSource, setMorphSource] = useState<string | null>(null);
 
   useEffect(() => {
     void refreshPoses();
@@ -98,6 +101,30 @@ export const PosesPanel: React.FC = () => {
                   {patched < ntracks ? `${patched}/${ntracks} tracks ⚠` : `${ntracks} tracks`}
                 </div>
               </div>
+              <button
+                onClick={() => setMorphSource(morphSource === p.name ? null : p.name)}
+                className={`px-1.5 py-0.5 rounded text-xs font-bold ${
+                  morphSource === p.name
+                    ? 'bg-violet-800/70 text-violet-100'
+                    : 'bg-gray-800 text-gray-500 hover:text-violet-300 opacity-70 group-hover:opacity-100'
+                }`}
+                title={
+                  morphSource === p.name
+                    ? 'Morph source A — click to unselect'
+                    : 'Select as morph source A (then hit A→B on the target pose)'
+                }
+              >
+                A
+              </button>
+              {morphSource && morphSource !== p.name && (
+                <button
+                  onClick={() => doPoseMorph(morphSource, p.name, gotoDuration)}
+                  className="px-1.5 py-0.5 rounded bg-violet-900/50 hover:bg-violet-800/60 text-violet-200 text-xs"
+                  title={`Morph '${morphSource}' → '${p.name}' in ${gotoDuration}s — objects absent from the source start from their live positions`}
+                >
+                  A→B
+                </button>
+              )}
               <button
                 onClick={() => doPoseGoto(p.name, gotoDuration)}
                 className="px-2 py-0.5 rounded bg-gray-800 hover:bg-cyan-900/60 text-gray-400 hover:text-cyan-200 text-xs opacity-70 group-hover:opacity-100"

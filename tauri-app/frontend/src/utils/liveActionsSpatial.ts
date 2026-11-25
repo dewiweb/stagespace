@@ -196,3 +196,10 @@ export function doPoseGoto(name: string, duration?: number, from?: string) {
   logAction('doPoseGoto', from);
   void usePoseStore.getState().gotoPose(name, duration);
 }
+
+/** /stagespace/pose/morph <from> <to> [duration] — morph animé A → B :
+ *  départ depuis la pose A (fallback live hors de A), distribution = B. */
+export function doPoseMorph(fromPose: string, toPose: string, duration?: number, from?: string) {
+  logAction('doPoseMorph', from);
+  void usePoseStore.getState().morphPose(fromPose, toPose, duration);
+}

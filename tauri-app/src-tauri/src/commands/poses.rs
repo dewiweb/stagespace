@@ -153,6 +153,25 @@ pub async fn pose_goto(
         .map_err(|e| IpcError::io(format!("pose_goto task failed: {e}")))?
 }
 
+/// Morph animé pose A → pose B : chaque objet part de sa position dans
+/// la pose A (fallback live si absent de A) et rampe vers sa position
+/// dans la pose B. La distribution est définie par B.
+#[tauri::command]
+pub async fn pose_morph(
+    from_pose: String,
+    to_pose: String,
+    duration: Option<f64>,
+    easing: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<PoseGotoResult, IpcError> {
+    let sh = Shared::from_state(&state);
+    tauri::async_runtime::spawn_blocking(move || {
+        morph_pose(&sh, &from_pose, &to_pose, duration, easing)
+    })
+    .await
+    .map_err(|e| IpcError::io(format!("pose_morph task failed: {e}")))?
+}
+
 // ─── Logique pure — testable sans `State` (pattern recall_tests) ─────
 
 /// Capture les positions live dans une Pose. `track_ids` : None = toutes
@@ -228,6 +247,7 @@ pub(crate) fn snap_pose(sh: &Shared, pose: &Pose) -> Result<usize, IpcError> {
 /// compile. `n` = taille de la distribution pré-filtrée.
 pub(crate) fn poseramp_graph_json(
     n: usize,
+    from_spec: &str,
     pose_name: &str,
     duration: f64,
     easing: &str,
@@ -262,7 +282,7 @@ pub(crate) fn poseramp_graph_json(
                 "PoseRamp",
                 serde_json::json!({
                     "n_objects": n,
-                    "from": "live",
+                    "from": from_spec,
                     "to": format!("pose:{pose_name}"),
                     "easing": easing,
                 }),
@@ -285,6 +305,53 @@ pub(crate) fn goto_pose(
     name: &str,
     duration: Option<f64>,
     easing: Option<String>,
+) -> Result<PoseGotoResult, IpcError> {
+    spawn_pose_ramp(sh, "live", name, duration, easing, "goto")
+}
+
+/// Morph animé pose A → pose B (P3, design §4.4) : la distribution est
+/// définie par la **cible** B (une track dans A mais pas B ne participe
+/// pas). Les objets absents de A partent de leur position live —
+/// fallback du resolver au compile (matrice §7). Même mécanique de
+/// spawn que le goto : oneshot + hold + capture-then-clear.
+pub(crate) fn morph_pose(
+    sh: &Shared,
+    from_pose: &str,
+    to_pose: &str,
+    duration: Option<f64>,
+    easing: Option<String>,
+) -> Result<PoseGotoResult, IpcError> {
+    // La pose source doit exister — sinon le morph est une erreur de
+    // config, pas un goto déguisé (l'opérateur a `pose_goto` pour ça).
+    let src_exists = lock_or_recover(&sh.poses)
+        .get(from_pose)
+        .is_some_and(|p| !p.positions.is_empty());
+    if !src_exists {
+        return Err(IpcError::not_found(format!(
+            "Pose source '{from_pose}' not found or empty"
+        )));
+    }
+    spawn_pose_ramp(
+        sh,
+        &format!("pose:{from_pose}"),
+        to_pose,
+        duration,
+        easing,
+        "morph",
+    )
+}
+
+/// Corps partagé goto/morph — spawn du graphe poseramp standard avec
+/// `from_spec` ("live" ou "pose:<name>") vers la pose `name`. Le
+/// graphe est référentiel : la résolution (live/pose, fallbacks) se
+/// fait au compile via le resolver injecté par le chemin de spawn.
+fn spawn_pose_ramp(
+    sh: &Shared,
+    from_spec: &str,
+    name: &str,
+    duration: Option<f64>,
+    easing: Option<String>,
+    kind: &str,
 ) -> Result<PoseGotoResult, IpcError> {
     let duration = duration.unwrap_or(2.0);
     if !(duration.is_finite() && duration > 0.0 && duration <= 3600.0) {
@@ -343,7 +410,8 @@ pub(crate) fn goto_pose(
     };
 
     let movement_id = format!(
-        "pose-goto-{}-{}",
+        "pose-{}-{}-{}",
+        kind,
         name,
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -352,8 +420,8 @@ pub(crate) fn goto_pose(
     );
     let spec = MoveSpec {
         id: movement_id.clone(),
-        name: format!("goto {name}"),
-        graph_json: poseramp_graph_json(n, name, duration, &easing),
+        name: format!("{kind} {name}"),
+        graph_json: poseramp_graph_json(n, from_spec, name, duration, &easing),
         osc_ids: tracks,
         track_indices,
         is_preview: false,
@@ -379,7 +447,9 @@ pub(crate) fn goto_pose(
     };
     spawn_move(spec, sh)?;
     if !skipped.is_empty() {
-        eprintln!("[POSE] goto '{name}' — tracks exclues (non patchées/parkées/PSN): {skipped:?}");
+        eprintln!(
+            "[POSE] {kind} '{name}' — tracks exclues (non patchées/parkées/PSN): {skipped:?}"
+        );
     }
     Ok(PoseGotoResult {
         movement_id,

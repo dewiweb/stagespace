@@ -60,6 +60,9 @@ pub enum ShowCommand {
     /// `/stagespace/pose/goto <name> [duration]` — rampe animée vers la
     /// pose (défaut 2 s). Dispatch frontend → commande `pose_goto`.
     PoseGoto(String, Option<f64>),
+    /// `/stagespace/pose/morph <from> <to> [duration]` — morph animé
+    /// pose A → pose B. Dispatch frontend → commande `pose_morph`.
+    PoseMorph(String, String, Option<f64>),
     /// `/stagespace/pose/list` — le demandeur reçoit
     /// `/stagespace/pose/state <name> <ntracks>` par pose.
     PoseList,
@@ -268,7 +271,7 @@ pub(crate) fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Opti
             }
         }
         "unsolo" => Some(ShowCommand::Unsolo),
-        "pose/capture" | "pose/snap" | "pose/goto" | "pose/list" => {
+        "pose/capture" | "pose/snap" | "pose/goto" | "pose/morph" | "pose/list" => {
             let string_arg = |a: &OscType| match a {
                 OscType::String(s) => Some(s.clone()),
                 OscType::Float(v) => Some(format!("{v}")),
@@ -283,20 +286,27 @@ pub(crate) fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Opti
                 OscType::String(s) => s.parse::<u32>().ok(),
                 _ => None,
             };
+            let num_arg = |a: &OscType| match a {
+                OscType::Float(v) => Some(*v as f64),
+                OscType::Double(v) => Some(*v),
+                OscType::Int(v) => Some(*v as f64),
+                OscType::Long(v) => Some(*v as f64),
+                OscType::String(s) => s.parse::<f64>().ok(),
+                _ => None,
+            };
             match tail {
                 "pose/list" => Some(ShowCommand::PoseList),
                 "pose/snap" => args.first().and_then(string_arg).map(ShowCommand::PoseSnap),
                 "pose/goto" => {
                     let name = args.first().and_then(string_arg)?;
-                    let duration = args.get(1).and_then(|a| match a {
-                        OscType::Float(v) => Some(*v as f64),
-                        OscType::Double(v) => Some(*v),
-                        OscType::Int(v) => Some(*v as f64),
-                        OscType::Long(v) => Some(*v as f64),
-                        OscType::String(s) => s.parse::<f64>().ok(),
-                        _ => None,
-                    });
+                    let duration = args.get(1).and_then(num_arg);
                     Some(ShowCommand::PoseGoto(name, duration))
+                }
+                "pose/morph" => {
+                    let from = args.first().and_then(string_arg)?;
+                    let to = args.get(1).and_then(string_arg)?;
+                    let duration = args.get(2).and_then(num_arg);
+                    Some(ShowCommand::PoseMorph(from, to, duration))
                 }
                 "pose/capture" => {
                     let name = args.first().and_then(string_arg)?;
