@@ -240,7 +240,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
                 if (e.key === 'Enter') commitLabel(e.currentTarget.value);
                 if (e.key === 'Escape') setEditingLabel(false);
               }}
-              className="nodrag nowheel bg-gray-900 text-white text-sm font-semibold rounded px-1 w-32 border border-cyan-600 focus:outline-none"
+              className="nodrag nowheel bg-gray-900 text-white text-sm font-semibold rounded px-1 w-32 border border-stagespace-accent/60 focus:outline-none"
               aria-label="Rename node"
             />
           ) : (
@@ -283,7 +283,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
           {data.type === 'BPM' && audioBpm !== null && (
             <div className="flex items-center justify-between text-xs">
               <span className="text-gray-500">BPM live</span>
-              <span className="text-cyan-400 font-mono font-bold">{audioBpm.toFixed(0)}</span>
+              <span className="text-stagespace-live font-mono font-bold">{audioBpm.toFixed(0)}</span>
             </div>
           )}
           {data.type === 'AudioAmplitude' && (
@@ -314,8 +314,8 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
       {/* Binary composite labels for A/B inputs */}
       {isBinary && hasInput && (
         <div className="flex justify-between px-1 py-0.5 text-xs text-gray-500 font-mono">
-          <span className="text-blue-400">A</span>
-          <span className="text-purple-400">B</span>
+          <span className="text-gray-400">A</span>
+          <span className="text-gray-400">B</span>
         </div>
       )}
 
@@ -388,7 +388,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
         <div className="px-3 py-1.5 border-t border-gray-700">
           {data.params?.track_range ? (
             <>
-              <label className="text-green-400 text-xs font-mono">Track Range: {data.params.track_range}</label>
+              <label className="text-gray-400 text-xs font-mono">Track Range: {data.params.track_range}</label>
               <div className="flex flex-wrap gap-0.5 mt-1">
                 {(() => {
                   const range = data.params.track_range as string;
@@ -404,7 +404,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
                   const ids: number[] = [];
                   for (let i = start; i <= end && i < start + 24; i++) ids.push(i);
                   return ids.map((id) => (
-                    <span key={id} className="text-xs font-mono px-1 py-0.5 bg-green-900/40 text-green-400 rounded">
+                    <span key={id} className="text-xs font-mono px-1 py-0.5 bg-stagespace-accent/10 text-stagespace-accent rounded">
                       {id}
                     </span>
                   ));
@@ -484,14 +484,14 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
 
   return (
     <div className="mt-2 pt-2 border-t border-gray-700 space-y-1.5">
-      <label className="text-cyan-400 text-xs font-mono">Spline Library</label>
+      <label className="text-violet-400 text-xs font-mono">Spline Library</label>
 
       {/* Charger depuis la bibliothèque */}
       {savedSplines.length > 0 && (
         <select
           onChange={handleLoad}
           defaultValue=""
-          className="nodrag w-full px-2 py-1 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
+          className="nodrag w-full px-2 py-1 bg-gray-900 text-gray-300 text-xs font-mono rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
         >
           <option value="" disabled>Load a spline...</option>
           {savedSplines.map((s) => (
@@ -530,7 +530,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
           />
           <button
             onClick={handleSave}
-            className="nodrag text-green-400 hover:text-green-300 text-xs px-2"
+            className="nodrag text-stagespace-accent hover:text-blue-300 text-xs px-2"
             title="Confirmer"
           ><Check size={10} /></button>
           <button
@@ -542,7 +542,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
       ) : (
         <button
           onClick={() => setShowSave(true)}
-          className="nodrag w-full text-xs text-cyan-400 hover:text-cyan-300 border border-cyan-800 hover:border-cyan-600 rounded py-1"
+          className="nodrag w-full text-xs text-stagespace-accent hover:text-blue-300 border border-stagespace-accent/40 hover:border-stagespace-accent rounded py-1"
         >
           + Save this spline
         </button>
