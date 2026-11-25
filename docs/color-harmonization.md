@@ -263,6 +263,10 @@ migrées, couleurs-entités contraires à la doctrine.
 - **P2b** — warnings score amber→orange, mini-radar audition
   CuelistPanel sur tokens (destinations cue→target teal), orphelins
   score bordure orange dashed
+- **P2c** `087a2d5` — picker score aligné CLIP_COLORS, TC chase
+  score→live green
+- **P2d** `be4c30f` — metering audio monochrome accent
+- **P2e** — lane MODULATION score amber→indigo
 - **P1b** `1223204` — tokens graphe unifiés handles/edges/légendes
   (Duration yellow-400, Spline violet-400, Signal indigo=modulation,
   ObjectSet cyan=osc ; edges objectset/signal ajoutées), modulation
@@ -270,15 +274,17 @@ migrées, couleurs-entités contraires à la doctrine.
   freeze indigo→pink stase (libère indigo pour modulation),
   attention GestureStrip/SlotTile→pink
 
-**Reste à faire (P2/P3) :** migrations mécaniques score (picker
-aligné CLIP_COLORS — gesture orange→teal, objectControl sky→fuchsia ;
-sélection unifiée ; transport cyan→vocabulaire dédié ; lanes
-couleurs-domaines CONDUCTOR/OSC/MODULATION/SPATIALFX à arbitrer ;
-delete/clear→danger), live surfaces (verts/rouges corrects→tokens),
-hex résiduels courbes score (#a78bfa violet courbes !), metering
-audio (monochrome+healthTone bg), SettingsModal arc-en-ciel sections
-entity/décor, CHIP_SOLID PLAY/STOP/PANIC, badges source dupliqués
-SlotTile, data-viz palette, puis règle lint H4. Note : ports OSC 8001 peut être tenu par dev_bridge au
+**Reste à faire (P2/P3) :** score (sélection unifiée — 4
+conventions ring-white/cyan/bleu/violet ; transport cyan→vocabulaire
+dédié playhead/loop/courbes/fades #67e8f9 ; lanes CONDUCTOR rose /
+OSC emerald / GLOBALFX cyan / SPATIALFX violet à arbitrer ;
+delete/clear→danger ; dope amber events vs cyan curves), live
+surfaces (verts/rouges corrects→tokens), hex résiduels
+ScoreCurvePane/CurveEditor (#a78bfa/#c4b5fd/#67e8f9), CHIP_SOLID
+PLAY/STOP/PANIC, badges source dupliqués SlotTile (SOURCE_CHIP),
+SettingsModal arc-en-ciel entity/décor, data-viz palette, puis
+règle lint H4. Arbitrages ouverts restants : teintes exactes
+lanes score + vocabulaire transport. Note : ports OSC 8001 peut être tenu par dev_bridge au
 lieu de tauri dev (warning sans impact).
 
 **Bloqueurs structurels avant la règle lint :**
