@@ -75,7 +75,7 @@ export default function Inspector() {
   const [flashClass, setFlashClass] = React.useState('');
   React.useEffect(() => {
     if (launchFlash > 0) {
-      setFlashClass('ring-2 ring-green-400 scale-105');
+      setFlashClass('ring-2 ring-stagespace-accent scale-105');
       const t = setTimeout(() => setFlashClass(''), 600);
       return () => clearTimeout(t);
     }
@@ -206,7 +206,7 @@ export default function Inspector() {
             type="text"
             value={current.name}
             onChange={(e) => updateCurrent({ name: e.target.value, id: current.id })}
-            className="mt-1.5 w-full bg-transparent text-white text-sm font-semibold focus:outline-none focus:text-blue-400"
+            className="mt-1.5 w-full bg-transparent text-white text-sm font-semibold focus:outline-none focus:text-stagespace-accent"
             title="Rename the move"
           />
         )}
@@ -404,7 +404,7 @@ export default function Inspector() {
             </>
           )}
           {centroid && (
-            <div className="text-cyan-400 text-xs font-mono pt-1">
+            <div className="text-stagespace-derived text-xs font-mono pt-1">
               centre: ({centroid[0].toFixed(1)}, {centroid[1].toFixed(1)}, {centroid[2].toFixed(1)})
             </div>
           )}
@@ -461,7 +461,7 @@ export default function Inspector() {
               editingIsLive
                 ? 'bg-red-900/60 hover:bg-red-800/70 text-red-100 border-red-700/50'
                 : hasEditingSlot
-                  ? 'bg-indigo-700 hover:bg-indigo-600 text-white border-indigo-500/50'
+                  ? 'bg-green-700 hover:bg-green-600 text-white border-green-600/50'
                   : 'bg-gray-800/40 text-gray-500 border-gray-700/30 cursor-not-allowed'
             }`}
             title={hasEditingSlot ? `${editingIsLive ? 'Stop' : 'Play'} "${editingSlot?.name}" (Space)` : 'Select a slot in Moves first'}
@@ -516,7 +516,7 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
   return (
     <div className="mt-3 pt-2 border-t border-gray-700/50 space-y-2">
       <div className="flex items-center gap-2">
-        <span className="text-cyan-400 text-xs font-mono font-semibold">SPLINE LIBRARY</span>
+        <span className="text-violet-400 text-xs font-mono font-semibold">SPLINE LIBRARY</span>
         <span className="text-gray-400 text-xs">{savedSplines.length} saved</span>
       </div>
 
@@ -525,7 +525,7 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
         <select
           onChange={handleLoad}
           defaultValue=""
-          className="w-full px-2 py-1.5 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
+          className="w-full px-2 py-1.5 bg-gray-900 text-gray-300 text-xs font-mono rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
         >
           <option value="" disabled>↳ Load a spline...</option>
           {savedSplines.map((s) => (
@@ -541,7 +541,7 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
             <div key={s.id} className="flex items-center justify-between text-xs py-0.5">
               <button
                 onClick={() => onUpdate(s.points)}
-                className="text-gray-400 hover:text-cyan-300 font-mono truncate flex-1 text-left"
+                className="text-gray-400 hover:text-gray-200 font-mono truncate flex-1 text-left"
                 title="Load this spline"
               >{s.name}</button>
               <button
@@ -567,14 +567,14 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
             className="flex-1 px-2 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
           />
           <button onClick={handleSave}
-            className="text-green-400 hover:text-green-300 text-xs px-2" title="Confirm"><Check size={12} /></button>
+            className="text-stagespace-accent hover:text-blue-300 text-xs px-2" title="Confirm"><Check size={12} /></button>
           <button onClick={() => setShowSave(false)}
             className="text-gray-500 hover:text-gray-400 text-xs px-2" title="Cancel"><X size={12} /></button>
         </div>
       ) : (
         <button
           onClick={() => setShowSave(true)}
-          className="w-full text-xs text-cyan-400 hover:text-cyan-300 border border-cyan-800/60 hover:border-cyan-600 rounded py-1.5 transition-colors"
+          className="w-full text-xs text-stagespace-accent hover:text-blue-300 border border-stagespace-accent/40 hover:border-stagespace-accent rounded py-1.5 transition-colors"
         >
           + Save this spline
         </button>
