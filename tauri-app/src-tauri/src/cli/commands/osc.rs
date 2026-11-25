@@ -478,6 +478,7 @@ pub fn cmd_osc_validate(args: &[&str]) -> Result<String, String> {
         end_mode: stagespace_engines::EndMode::default(),
         anchor_mode: stagespace_engines::AnchorMode::default(),
         anchor_target: None,
+        clear_manual_positions: false,
     };
     stagespace_tauri::commands::merge_commands::spawn_move(spec, &state.shared)
         .map_err(|e| e.to_string())?;

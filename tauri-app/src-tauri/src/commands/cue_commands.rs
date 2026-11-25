@@ -829,6 +829,7 @@ pub(crate) fn recall_cue_inner(
                 end_mode: snap.end_mode.unwrap_or_default(),
                 anchor_mode: snap.anchor_mode.unwrap_or_default(),
                 anchor_target: snap.anchor_target,
+                clear_manual_positions: false,
             };
             match spawn_move_for_recall(spec, &sh) {
                 Ok(_) => {

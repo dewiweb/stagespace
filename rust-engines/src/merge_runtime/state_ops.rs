@@ -526,6 +526,15 @@ impl MergeRuntime {
 
     /// Marque les objets pilotés par flux PSN (source-de-contrôle) —
     /// appelé par `set_psn_config` avec les object_index du mapping.
+    /// Objets sous contrôle PSN (tracker externe) — même priorité que
+    /// park dans la chaîne documentée (intouchables par un goto).
+    pub fn psn_objects(&self) -> HashSet<usize> {
+        self.psn_objects
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
     pub fn set_psn_objects(&self, objs: HashSet<usize>) {
         *self.psn_objects.write().unwrap_or_else(|e| e.into_inner()) = objs;
     }

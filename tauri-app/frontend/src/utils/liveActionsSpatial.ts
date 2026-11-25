@@ -189,3 +189,10 @@ export function doPoseSnap(name: string, from?: string) {
   if (pose) rec('doPoseSnap', [], { positions: pose.positions });
   void usePoseStore.getState().snapPose(name);
 }
+
+/** /stagespace/pose/goto <name> [duration] — rampe animée vers la pose
+ *  (oneshot + hold : la cible est tenue exactement, enchaînable). */
+export function doPoseGoto(name: string, duration?: number, from?: string) {
+  logAction('doPoseGoto', from);
+  void usePoseStore.getState().gotoPose(name, duration);
+}

@@ -57,6 +57,9 @@ pub enum ShowCommand {
     /// `/stagespace/pose/snap <name>` — rappel instantané de la pose
     /// (positions manuelles, même chemin que `/stagespace/position`).
     PoseSnap(String),
+    /// `/stagespace/pose/goto <name> [duration]` — rampe animée vers la
+    /// pose (défaut 2 s). Dispatch frontend → commande `pose_goto`.
+    PoseGoto(String, Option<f64>),
     /// `/stagespace/pose/list` — le demandeur reçoit
     /// `/stagespace/pose/state <name> <ntracks>` par pose.
     PoseList,
@@ -265,7 +268,7 @@ pub(crate) fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Opti
             }
         }
         "unsolo" => Some(ShowCommand::Unsolo),
-        "pose/capture" | "pose/snap" | "pose/list" => {
+        "pose/capture" | "pose/snap" | "pose/goto" | "pose/list" => {
             let string_arg = |a: &OscType| match a {
                 OscType::String(s) => Some(s.clone()),
                 OscType::Float(v) => Some(format!("{v}")),
@@ -282,10 +285,19 @@ pub(crate) fn parse_show_command(addr: &str, args: &[OscType], fps: f64) -> Opti
             };
             match tail {
                 "pose/list" => Some(ShowCommand::PoseList),
-                "pose/snap" => args
-                    .first()
-                    .and_then(string_arg)
-                    .map(ShowCommand::PoseSnap),
+                "pose/snap" => args.first().and_then(string_arg).map(ShowCommand::PoseSnap),
+                "pose/goto" => {
+                    let name = args.first().and_then(string_arg)?;
+                    let duration = args.get(1).and_then(|a| match a {
+                        OscType::Float(v) => Some(*v as f64),
+                        OscType::Double(v) => Some(*v),
+                        OscType::Int(v) => Some(*v as f64),
+                        OscType::Long(v) => Some(*v as f64),
+                        OscType::String(s) => s.parse::<f64>().ok(),
+                        _ => None,
+                    });
+                    Some(ShowCommand::PoseGoto(name, duration))
+                }
                 "pose/capture" => {
                     let name = args.first().and_then(string_arg)?;
                     let tracks = args[1..].iter().filter_map(track_arg).collect();

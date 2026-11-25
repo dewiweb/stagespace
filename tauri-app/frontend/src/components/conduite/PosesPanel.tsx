@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import { usePoseStore } from '../../store/usePoseStore';
 import { useGraphStore } from '../../store/useGraphStore';
-import { doPoseCapture, doPoseSnap } from '../../utils/liveActions';
+import { doPoseCapture, doPoseSnap, doPoseGoto } from '../../utils/liveActions';
 
 export const PosesPanel: React.FC = () => {
   const poses = usePoseStore((s) => s.poses);
@@ -15,6 +15,7 @@ export const PosesPanel: React.FC = () => {
   const selectedTrackIds = useGraphStore((s) => s.selectedTrackIds);
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
   const [newName, setNewName] = useState('');
+  const [gotoDuration, setGotoDuration] = useState(2.0);
 
   useEffect(() => {
     void refreshPoses();
@@ -32,8 +33,20 @@ export const PosesPanel: React.FC = () => {
 
   return (
     <div className="w-56 border-l border-gray-800 flex flex-col flex-shrink-0">
-      <div className="px-3 py-2 text-[10px] text-gray-500 uppercase tracking-widest border-b border-gray-800">
-        Poses — position presets
+      <div className="px-3 py-2 text-[10px] text-gray-500 uppercase tracking-widest border-b border-gray-800 flex items-center justify-between">
+        <span>Poses — position presets</span>
+        <label className="flex items-center gap-1 normal-case tracking-normal" title="Goto ramp duration (seconds)">
+          <span className="text-gray-600">goto</span>
+          <input
+            type="number"
+            min={0.2}
+            step={0.5}
+            value={gotoDuration}
+            onChange={(e) => setGotoDuration(Math.max(0.2, Number(e.target.value) || 2.0))}
+            className="w-12 bg-gray-900 border border-gray-700 rounded px-1 py-0.5 text-[10px] text-gray-300 focus:border-cyan-600 focus:outline-none"
+          />
+          <span className="text-gray-600">s</span>
+        </label>
       </div>
 
       {/* Capture — nom + tracks sélectionnées (ou toutes). */}
@@ -85,6 +98,13 @@ export const PosesPanel: React.FC = () => {
                   {patched < ntracks ? `${patched}/${ntracks} tracks ⚠` : `${ntracks} tracks`}
                 </div>
               </div>
+              <button
+                onClick={() => doPoseGoto(p.name, gotoDuration)}
+                className="px-2 py-0.5 rounded bg-gray-800 hover:bg-cyan-900/60 text-gray-400 hover:text-cyan-200 text-xs opacity-70 group-hover:opacity-100"
+                title={`Goto — ramp objects to this pose in ${gotoDuration}s (smooth, holds the target at the end)`}
+              >
+                goto
+              </button>
               <button
                 onClick={() => doPoseSnap(p.name)}
                 className="px-2 py-0.5 rounded bg-gray-800 hover:bg-emerald-900/60 text-gray-400 hover:text-emerald-200 text-xs opacity-70 group-hover:opacity-100"

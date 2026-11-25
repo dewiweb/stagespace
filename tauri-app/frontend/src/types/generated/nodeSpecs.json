@@ -813,6 +813,76 @@
     ]
   },
   {
+    "node_type": "PoseRamp",
+    "category": "MathEngine",
+    "scope": "SubOnly",
+    "inputs": [
+      {
+        "name": "objects",
+        "port_type": "ObjectSet",
+        "required": false,
+        "label": "objects"
+      },
+      {
+        "name": "duration",
+        "port_type": "Duration",
+        "required": false,
+        "label": "duration"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "out",
+        "port_type": "Positions",
+        "required": false,
+        "label": "out"
+      }
+    ],
+    "description": "Per-object ramp to a named pose — endpoints resolved at compile (live/pose refs)",
+    "object_distribution": "None",
+    "stateful": false,
+    "params": [
+      {
+        "key": "from",
+        "label": "From",
+        "kind": "text",
+        "options": null,
+        "step": null,
+        "min": null,
+        "max": null,
+        "default_json": "\"live\"",
+        "modulable": false
+      },
+      {
+        "key": "to",
+        "label": "To",
+        "kind": "text",
+        "options": null,
+        "step": null,
+        "min": null,
+        "max": null,
+        "default_json": "\"pose:\"",
+        "modulable": false
+      },
+      {
+        "key": "easing",
+        "label": "Easing",
+        "kind": "enum",
+        "options": [
+          "smooth",
+          "linear",
+          "ease_in",
+          "ease_out"
+        ],
+        "step": null,
+        "min": null,
+        "max": null,
+        "default_json": "\"smooth\"",
+        "modulable": false
+      }
+    ]
+  },
+  {
     "node_type": "PerlinNoise",
     "category": "MathEngine",
     "scope": "SubOnly",

@@ -47,6 +47,11 @@ pub enum NodeType {
     Oscillation,
     PerlinNoise,
     Formation,
+    /// Rampe d'interpolation par objet vers une pose nommée — les
+    /// endpoints (`from`: "live"|"pose:<name>", `to`: "pose:<name>") sont
+    /// résolus au compile via `LiveInputs.pose_resolver` (design :
+    /// docs/position-presets-design.md). Stateless, déterministe.
+    PoseRamp,
     Converge,
     Pendulum,
     RoseCurve,

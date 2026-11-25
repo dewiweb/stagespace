@@ -19,10 +19,10 @@ pub mod osc_receiver;
 pub mod osc_sender;
 pub mod param_slots;
 pub mod plugins;
+pub mod poses;
 pub mod position_buffer;
 pub mod position_sink;
 pub mod post_process_compiler;
-pub mod poses;
 pub mod presets;
 pub mod psn_receiver;
 pub mod rng;
@@ -95,13 +95,13 @@ pub use osc_receiver::{
 };
 pub use osc_sender::{OscProfile, OscSender, SpatialChannel, SpatialChannels};
 pub use plugins::{PluginEngine, PluginError, PluginManifest, PluginRegistry};
+pub use poses::{Pose, PoseResolver};
 pub use position_buffer::{IndexedPosition, PositionBuffer};
 pub use position_sink::{OscSink, PositionSink, SendReport};
 pub use post_process_compiler::{
     compile_post_process, extract_graph_effects, GraphEffects, PostProcessCompileError,
     PostProcessCompileParams,
 };
-pub use poses::Pose;
 pub use presets::{Preset, PresetManager};
 pub use rng::SimpleRng;
 pub use runtime::{

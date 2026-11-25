@@ -606,6 +606,15 @@ fn build_catalog() -> Vec<NodeSpec> {
             ],
         ),
         spec(
+            NodeType::PoseRamp, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
+            "Per-object ramp to a named pose — endpoints resolved at compile (live/pose refs)",
+            vec![
+                txt("from", "From").d("live"),
+                txt("to", "To").d("pose:"),
+                enm("easing", "Easing", &["smooth", "linear", "ease_in", "ease_out"]).d("smooth"),
+            ],
+        ),
+        spec(
             NodeType::PerlinNoise, C::MathEngine, S::SubOnly, engine_in(), out_pos(),
             "Perlin noise — smooth organic random motion",
             vec![
@@ -1320,6 +1329,7 @@ mod tests {
             NodeType::Oscillation,
             NodeType::PerlinNoise,
             NodeType::Formation,
+            NodeType::PoseRamp,
             NodeType::Converge,
             NodeType::Pendulum,
             NodeType::RoseCurve,

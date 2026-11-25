@@ -14,6 +14,8 @@ interface PoseStore {
   /// tracks connues ; la sélection courante est passée par l'UI.
   capturePose: (name: string, trackIds?: number[]) => Promise<Pose | null>;
   snapPose: (name: string) => Promise<void>;
+  /// Rampe animée vers la pose (oneshot + hold — la cible est tenue).
+  gotoPose: (name: string, duration?: number, easing?: string) => Promise<void>;
   deletePose: (name: string) => Promise<void>;
   savePose: (pose: Pose) => Promise<void>;
 }
@@ -52,6 +54,19 @@ export const usePoseStore = create<PoseStore>((set, get) => ({
       toast.success(`Pose '${name}' — ${applied} object${applied > 1 ? 's' : ''} snapped`);
     } catch (e) {
       toast.error(`Pose snap failed: ${e}`);
+    }
+  },
+
+  gotoPose: async (name, duration, easing) => {
+    try {
+      const res = await invoke<{ movement_id: string; objects: number; skipped: number[] }>(
+        'pose_goto',
+        { name, duration: duration ?? null, easing: easing ?? null },
+      );
+      const skip = res.skipped.length ? ` — ${res.skipped.length} track(s) skipped` : '';
+      toast.success(`Goto '${name}' — ${res.objects} object${res.objects > 1 ? 's' : ''} ramping${skip}`);
+    } catch (e) {
+      toast.error(`Pose goto failed: ${e}`);
     }
   },
 

@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import { safeListen } from '../utils/tauri';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { useScoreStore } from '../store/useScoreStore';
-import { doGo, doCueNext, doCuePrev, doCueRecall, doCueArm, doCueGo, doMacro, doTcChase, doTcFps, doPanic, doStop, doPark, doUnpark, doArm, doStatus, doSlot, doSlotStop, doSolo, doUnsolo, doSetPosition, doClearPosition, doClearAllPositions, doSetTrackPosition, doSoundcheck, doThrow, doSpatial, doAttention, doGesture, doRehearsal, doView, doShowLoad, doPoseCapture, doPoseSnap } from '../utils/liveActions';
+import { doGo, doCueNext, doCuePrev, doCueRecall, doCueArm, doCueGo, doMacro, doTcChase, doTcFps, doPanic, doStop, doPark, doUnpark, doArm, doStatus, doSlot, doSlotStop, doSolo, doUnsolo, doSetPosition, doClearPosition, doClearAllPositions, doSetTrackPosition, doSoundcheck, doThrow, doSpatial, doAttention, doGesture, doRehearsal, doView, doShowLoad, doPoseCapture, doPoseSnap, doPoseGoto } from '../utils/liveActions';
 import type { ShowCommand } from '../types/generated/ShowCommand';
 
 interface ShowControlEvent {
@@ -136,6 +136,9 @@ export function useShowControl() {
               break;
             case 'PoseSnap':
               if (cmd.value != null) doPoseSnap(String(cmd.value), from);
+              break;
+            case 'PoseGoto':
+              if (cmd.value != null) doPoseGoto(cmd.value[0], cmd.value[1] ?? undefined, from);
               break;
             // PositionsQuery + PoseList : répondus côté backend (sink) — rien ici.
           }

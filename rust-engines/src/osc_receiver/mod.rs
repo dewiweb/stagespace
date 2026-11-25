@@ -31,8 +31,8 @@ mod show_control_tests;
 mod tests;
 mod types;
 
-pub use pipeline::{encode_pose_feedback, encode_position_feedback};
 use pipeline::*;
+pub use pipeline::{encode_pose_feedback, encode_position_feedback};
 pub(crate) use show_control::parse_show_command;
 pub use show_control::ShowCommand;
 pub(crate) use show_control::ShowSink;

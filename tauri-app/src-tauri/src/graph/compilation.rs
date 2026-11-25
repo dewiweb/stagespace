@@ -59,21 +59,81 @@ pub fn compile_graph_with_audio_osc(
 /// `param_slots` : table partagée entre la position_fn compilée, la
 /// sample_fn et la signal_fn du move (construite une fois par recompile
 /// via `ParamSlots::build(&graph)`). `None` → compile sans modulation.
+///
+/// `pose_ctx` : contexte du move pour les nodes PoseRamp — `(osc_ids,
+/// track_indices)` du spawn/hot-swap. Si le graphe contient un PoseRamp,
+/// le resolver est construit ici : capture des positions live par index
+/// local (chaîne `last_position`) + snapshot des poses. `None` → un
+/// PoseRamp échouerait la compile (graphes sans PoseRamp : aucun effet).
 pub fn compile_graph_live(
     graph: &Graph,
     sh: &Shared,
     param_slots: Option<std::sync::Arc<stagespace_engines::param_slots::ParamSlots>>,
     held_positions: Option<stagespace_engines::compiler::HeldPositions>,
+    pose_ctx: Option<(&[u32], &[usize])>,
 ) -> Result<PositionFn, String> {
     let osc_values = lock_or_recover(&sh.osc_receiver).address_values_handle();
+    let pose_resolver = pose_ctx.and_then(|(ids, idx)| build_pose_resolver(graph, ids, idx, sh));
     let live = LiveInputs {
         audio: Some(sh.audio_state.clone()),
         osc_values: Some(osc_values),
         plugins: sh.plugin_registry.clone(),
         param_slots,
         held_positions,
+        pose_resolver: pose_resolver.clone(),
     };
-    Compiler::compile_with_live_inputs(graph, live)
+    let result = Compiler::compile_with_live_inputs(graph, live)
         .map_err(|e| format!("Compilation failed: {e:?}"))
-        .map(std::sync::Arc::from)
+        .map(std::sync::Arc::from);
+    // Warnings de résolution PoseRamp — collectés au compile, remontés
+    // en log (les fallbacks des commandes goto sont pré-filtrés en amont ;
+    // ici les cas hand-authored : freeze-in-place, appear-at-target).
+    if result.is_ok() {
+        if let Some(resolver) = pose_resolver {
+            let warnings = resolver
+                .warnings
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            for w in warnings {
+                eprintln!("[POSE] {w}");
+            }
+        }
+    }
+    result
+}
+
+/// Construit le resolver PoseRamp d'un move — `None` si le graphe n'en
+/// contient pas (coût de capture évité). Capture par index LOCAL : la
+/// position live du track global correspondant (`track_indices[local]`),
+/// même pattern que la capture d'ancre `Current`. Les warnings de
+/// résolution sont collectés dans le resolver au compile — le spawn les
+/// lit ensuite (logs ; les fallbacks goto sont pré-filtrés en amont).
+pub fn build_pose_resolver(
+    graph: &Graph,
+    osc_ids: &[u32],
+    track_indices: &[usize],
+    sh: &Shared,
+) -> Option<std::sync::Arc<stagespace_engines::PoseResolver>> {
+    let has_poseramp = graph
+        .nodes
+        .values()
+        .any(|n| n.node_type == stagespace_engines::NodeType::PoseRamp);
+    if !has_poseramp {
+        return None;
+    }
+    let live_positions: Vec<Option<[f64; 3]>> = {
+        let merge_rt = lock_or_recover(&sh.merge_runtime);
+        track_indices
+            .iter()
+            .map(|&global| merge_rt.last_position(global))
+            .collect()
+    };
+    let poses = lock_or_recover(&sh.poses).clone();
+    Some(std::sync::Arc::new(stagespace_engines::PoseResolver {
+        track_ids: osc_ids.to_vec(),
+        live_positions,
+        poses,
+        warnings: std::sync::Mutex::new(Vec::new()),
+    }))
 }

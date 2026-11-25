@@ -125,11 +125,7 @@ fn parses_every_command() {
             ],
             ShowCommand::PoseCapture("trio".into(), vec![1, 3, 5]),
         ),
-        (
-            "/stagespace/pose/list",
-            vec![],
-            ShowCommand::PoseList,
-        ),
+        ("/stagespace/pose/list", vec![], ShowCommand::PoseList),
         (
             "/stagespace/timecode",
             vec![OscType::Float(12.5)],

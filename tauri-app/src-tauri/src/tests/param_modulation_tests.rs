@@ -100,6 +100,7 @@ mod param_modulation_tests {
             end_mode: stagespace_engines::EndMode::default(),
             anchor_mode: stagespace_engines::AnchorMode::default(),
             anchor_target: None,
+            clear_manual_positions: false,
         };
         spawn_move_for_recall(spec, &sh).expect("spawn with signal graph");
 
@@ -132,6 +133,7 @@ mod param_modulation_tests {
                 &sh,
                 Some(slots.clone()),
                 Some(m.runtime.held_positions()),
+                Some((m.osc_ids.as_slice(), m.track_indices.as_slice())),
             )
             .unwrap();
             let sig_graph = crate::graph::parser::build_graph_from_json(

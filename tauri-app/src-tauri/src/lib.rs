@@ -52,7 +52,9 @@ use commands::osc::{
 };
 use commands::playback::set_macro;
 use commands::plugins::{import_plugin, list_plugins, reload_plugins};
-use commands::poses::{pose_capture, pose_delete, pose_list, pose_replace_all, pose_save, pose_snap};
+use commands::poses::{
+    pose_capture, pose_delete, pose_goto, pose_list, pose_replace_all, pose_save, pose_snap,
+};
 use commands::presets::{preset_delete, preset_list, preset_load, preset_save};
 use commands::remote_ui::{remote_ui_status, set_remote_ui};
 use commands::sampling::{
@@ -364,8 +366,7 @@ pub fn setup_backend_runtime<R: tauri::Runtime>(
                             .unwrap_or_else(|e| e.into_inner())
                             .clone();
                         if let Some(sock) = sock {
-                            let mut entries: Vec<_> =
-                                table.values().collect();
+                            let mut entries: Vec<_> = table.values().collect();
                             entries.sort_by(|a, b| a.name.cmp(&b.name));
                             for pose in entries {
                                 if let Some(bytes) =
@@ -480,6 +481,7 @@ pub fn stagespace_invoke_handler<R: tauri::Runtime>(invoke: tauri::ipc::Invoke<R
         get_osc_armed,
         get_osc_receiver_port,
         pose_capture,
+        pose_goto,
         pose_delete,
         pose_list,
         pose_replace_all,

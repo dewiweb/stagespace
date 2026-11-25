@@ -21,6 +21,7 @@ pub mod oscillation;
 pub mod pendulum;
 pub mod perlin_noise;
 pub mod point_distance_falloff;
+pub mod poseramp;
 pub mod rose_curve;
 pub mod spiral;
 pub mod spline;

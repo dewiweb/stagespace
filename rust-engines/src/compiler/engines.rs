@@ -10,7 +10,13 @@ impl Compiler {
         live: &LiveInputs,
     ) -> Result<CompiledFunction, CompilationError> {
         let node_type = node.node_type.clone();
-        let params = Self::extract_params(graph, node)?;
+        let mut params = Self::extract_params(graph, node)?;
+        // PoseRamp — résolution des références live/pose au compile :
+        // les endpoints par objet sont cuits dans params.extra
+        // (resolved_from/resolved_to), l'engine reste pur.
+        if node_type == NodeType::PoseRamp {
+            resolve_poseramp(&mut params, live)?;
+        }
         let patch = build_slot_patch(&params, live, node);
 
         // Déterminer si ce moteur est un moteur audio qui nécessite l'injection
@@ -32,6 +38,7 @@ impl Compiler {
             NodeType::Linear => Box::new(crate::engines::linear::Linear),
             NodeType::Oscillation => Box::new(crate::engines::oscillation::Oscillation),
             NodeType::Formation => Box::new(crate::engines::formation::Formation),
+            NodeType::PoseRamp => Box::new(crate::engines::poseramp::PoseRamp),
             NodeType::PerlinNoise => Box::new(crate::engines::perlin_noise::PerlinNoise),
             NodeType::Converge => Box::new(crate::engines::converge::Converge),
             NodeType::Pendulum => Box::new(crate::engines::pendulum::Pendulum::default()),
@@ -243,4 +250,60 @@ impl Compiler {
             extra,
         })
     }
+}
+
+/// Résout les références `from`/`to` d'un node PoseRamp au compile —
+/// cuit les endpoints par objet local dans `params.extra`
+/// (`resolved_from`/`resolved_to`). Erreurs explicites :
+/// pas de resolver (compile hors chemin de spawn), `to` non-pose,
+/// pose référencée absente ou vide. Les fallbacks par objet
+/// (freeze-in-place, appear-at-target) sont collectés en warnings
+/// dans le resolver — lus par le spawn pour nack/toast.
+fn resolve_poseramp(params: &mut EngineParams, live: &LiveInputs) -> Result<(), CompilationError> {
+    let resolver = live.pose_resolver.as_ref().ok_or_else(|| {
+        CompilationError::InvalidParameter(
+            "PoseRamp node requires a pose resolution context (spawn path)".to_string(),
+        )
+    })?;
+    let from_spec = params
+        .extra
+        .get("from")
+        .and_then(|v| v.as_str())
+        .unwrap_or("live")
+        .to_string();
+    let to_spec = params
+        .extra
+        .get("to")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    if !to_spec.starts_with("pose:") {
+        return Err(CompilationError::InvalidParameter(format!(
+            "poseramp: 'to' must be a pose reference (pose:<name>), got '{to_spec}'"
+        )));
+    }
+    for spec in [&from_spec, &to_spec] {
+        if let Some(name) = spec.strip_prefix("pose:") {
+            if !resolver.pose_exists(name) {
+                return Err(CompilationError::InvalidParameter(format!(
+                    "poseramp: pose '{name}' not found or empty"
+                )));
+            }
+        }
+    }
+
+    let n = params.n_objects;
+    let mut froms = Vec::with_capacity(n);
+    let mut tos = Vec::with_capacity(n);
+    for obj in 0..n {
+        let (f, t) = resolver.resolve_pair(&from_spec, &to_spec, obj);
+        froms.push(f);
+        tos.push(t);
+    }
+    if let Some(map) = params.extra.as_object_mut() {
+        map.insert("resolved_from".to_string(), serde_json::json!(froms));
+        map.insert("resolved_to".to_string(), serde_json::json!(tos));
+    }
+    Ok(())
 }

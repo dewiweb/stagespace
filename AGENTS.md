@@ -220,6 +220,7 @@ dispatches to the same functions as the keyboard shortcuts (`liveActions.ts`).
 | `/stagespace/attention <obj>` · `/stagespace/attention/clear` | freeze all other objects (change blindness) / release stasis | — |
 | `/stagespace/gesture <name> [strength]` | composed gesture `explode`/`converge`/`orbit`/`front` — per-object ballistic velocity | — |
 | `/stagespace/rehearsal <record\|stop\|play\|clear>` · alias `/stagespace/record` | timestamped busking-capture tape, replayable | — |
+| `/stagespace/pose/capture <name> [track…]` · `/pose/snap <name>` · `/pose/goto <name> [dur]` · `/pose/list` | position presets — capture, instant recall, animated ramp (oneshot+hold), dump | — |
 
 ### "Continuous" semantics (per-move)
 

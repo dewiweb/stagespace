@@ -92,6 +92,9 @@ pub struct MoveSpec {
     pub end_mode: stagespace_engines::EndMode,
     /// Ancre : Origin (défaut) ou Current (capture la position courante).
     pub anchor_mode: stagespace_engines::AnchorMode,
+    /// Capture-then-clear des positions manuelles des objets membres au
+    /// spawn — réservé à `pose_goto` (takeover explicite, design §6.9).
+    pub clear_manual_positions: bool,
     /// Cible du mode Follow — la track suivie (None = pas de follow).
     pub anchor_target: Option<u32>,
 }
@@ -331,11 +334,13 @@ fn spawn_move_inner(
     // entre position_fn, sample_fn et la signal_fn du move (binding
     // compile-time des cibles `param:`).
     let slots = stagespace_engines::param_slots::ParamSlots::build(&graph);
+    let pose_ctx = Some((spec.osc_ids.as_slice(), spec.track_indices.as_slice()));
     let compiled = compile_graph_live(
         &graph,
         sh,
         Some(slots.clone()),
         Some(runtime.held_positions()),
+        pose_ctx,
     )
     .map_err(|e| {
         eprintln!("[ACTIVATE-ERROR] compile_graph failed: {e}");
@@ -349,6 +354,7 @@ fn spawn_move_inner(
         sh,
         Some(slots.clone()),
         Some(runtime.held_positions()),
+        pose_ctx,
     ) {
         runtime.set_sample_fn(sample_fn);
     }
@@ -436,6 +442,20 @@ fn spawn_move_inner(
             None => stagespace_engines::empty_signal_fn(),
         };
         runtime.swap_signal_fn(sig_fn, slots);
+    }
+
+    // Capture-then-clear (design poses §6.9) : le goto est une commande de
+    // takeover explicite — les positions manuelles des objets membres sont
+    // effacées APRÈS la capture du compile (le `from` de la rampe = la
+    // position effacée : continuité exacte à t=0, aucun saut). Les objets
+    // non membres ne sont jamais touchés — la reprise manuelle hors
+    // distribution reste sacrée. Réservé aux spawns poseramp : le flag
+    // n'est armé que par pose_goto, jamais par les slots hand-authored.
+    if spec.clear_manual_positions {
+        let merge_rt = lock_or_recover(&sh.merge_runtime);
+        for &global in &spec.track_indices {
+            merge_rt.clear_manual_position(global);
+        }
     }
 
     // 5. PositionBuffer → mode worker (le merge thread collecte les positions)
@@ -600,6 +620,10 @@ pub(crate) fn spec_from_request(request: ActivateMoveRequest) -> MoveSpec {
         end_mode: request.end_mode,
         anchor_mode: request.anchor_mode,
         anchor_target: request.anchor_target,
+        // Slots hand-authored : jamais de clear — le slot est un move
+        // comme un autre (design §6.9 : l'opérateur qui hand-craft sait
+        // que manual masque). Seul pose_goto arme le takeover explicite.
+        clear_manual_positions: false,
     }
 }
 

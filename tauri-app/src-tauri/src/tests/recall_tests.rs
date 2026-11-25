@@ -267,6 +267,7 @@ mod recall_tests {
             end_mode: stagespace_engines::EndMode::default(),
             anchor_mode: stagespace_engines::AnchorMode::default(),
             anchor_target: None,
+            clear_manual_positions: false,
         };
         spawn_move_for_recall(spec, &sh).expect("initial spawn");
         let gen_before = sh.movements.lock().unwrap()["mv-live"].generation;
@@ -507,6 +508,7 @@ mod recall_tests {
             end_mode: stagespace_engines::EndMode::default(),
             anchor_mode: stagespace_engines::AnchorMode::default(),
             anchor_target: None,
+            clear_manual_positions: false,
         };
         let err = spawn_move(spec, &sh).expect_err("spawn doit avorter pendant un recall");
         assert!(

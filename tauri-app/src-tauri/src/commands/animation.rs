@@ -73,6 +73,7 @@ pub async fn launch_animation(
         end_mode: stagespace_engines::EndMode::default(),
         anchor_mode: stagespace_engines::AnchorMode::default(),
         anchor_target: None,
+        clear_manual_positions: false,
     };
 
     let sh = Shared::from_state(&state);
@@ -156,11 +157,16 @@ pub async fn update_animation_state(
         None => stagespace_engines::empty_signal_fn(),
     };
     drop(audio_state);
+    let pose_ctx = Some((
+        movement.osc_ids.as_slice(),
+        movement.track_indices.as_slice(),
+    ));
     let compiled = crate::graph::compilation::compile_graph_live(
         &move_graph,
         &crate::commands::state::Shared::from_state(&state),
         Some(slots.clone()),
         Some(held_positions.clone()),
+        pose_ctx,
     )
     .map_err(IpcError::validation)?;
     let sample_fn = crate::graph::compilation::compile_graph_live(
@@ -168,6 +174,7 @@ pub async fn update_animation_state(
         &crate::commands::state::Shared::from_state(&state),
         Some(slots.clone()),
         Some(held_positions),
+        pose_ctx,
     )
     .map_err(IpcError::validation)?;
     movement

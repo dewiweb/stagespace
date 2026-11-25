@@ -1,9 +1,12 @@
 # Position presets (« poses ») — design complet
 
-> Investigation + spec. Statut : **P1 implémenté** (branche
+> Investigation + spec. Statut : **P1 + P2 implémentés** (branche
 > `feat/position-poses`) — modèle backend, capture, snap, OSC
-> capture/snap/list, section `.hfg`, panel Conduite. Reste : goto
-> animé (P2), morph (P3), ancre (P4), score (P5), ghosts (P6).
+> capture/snap/list, section `.hfg`, panel Conduite, **goto animé**
+> (engine `poseramp` + résolution compile via `LiveInputs.pose_resolver`
+> + capture-then-clear, vérifié live : smoothstep textbook, cible exacte
+> au millimètre, hold enchaînable). Reste : morph (P3), ancre (P4),
+> score (P5), ghosts (P6).
 > Question origine : enregistrer des presets de positions nommés,
 > les rappeler (snap ou animé), animer A→B, les utiliser comme ancre —
 > sans créer de conflit ni casser les mécanismes actuels.
@@ -414,7 +417,7 @@ warnings du check, même passe que les refs slot/cue orphelines.
 | Phase | Contenu | Dépendances |
 |---|---|---|
 | **P1 — modèle + snap** ✅ | `Pose` backend, CRUD commands, capture, snap, section `.hfg`, panel UI minimal (liste/capture/snap), OSC capture/snap/list | — |
-| **P2 — goto animé** | engine `poseramp` + tests, synthèse de graphe au fire, `pose_goto` (Tauri + OSC), boutons goto du panel | P1 |
+| **P2 — goto animé** ✅ | engine `poseramp` + tests, synthèse de graphe au fire, `pose_goto` (Tauri + OSC), boutons goto du panel | P1 |
 | **P3 — morph A→B** | `pose_morph`, UI sélection A→B | P2 |
 | **P4 — ancre pose** | `AnchorMode::Pose` — plomberie spawn + enum + UI slot | P1 (indépendant de P2/P3) |
 | **P5 — score** | clip payload `Pose`, résolution au fire, preflight check | P2 |
