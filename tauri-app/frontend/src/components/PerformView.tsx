@@ -17,6 +17,7 @@ import { ScoreProgress } from './jeu/ScoreProgress';
 import { GestureStrip } from './jeu/GestureStrip';
 import { isDetachedWindow } from '../utils/safeStorage';
 import { detachWindow } from '../utils/detachWindow';
+import { STATUS_TONES } from './ui/StatusChip';
 import { PanicButton } from './ui/PanicButton';
 import { OscArmToggle } from './ui/OscArmToggle';
 
@@ -200,7 +201,7 @@ export const PerformView: React.FC = () => {
         <div className="flex items-center gap-2.5">
           <div
             className={`w-4 h-4 rounded-full ${
-              playingCount > 0 ? 'bg-green-500 animate-pulse' : 'bg-gray-600'
+              playingCount > 0 ? 'bg-stagespace-live animate-pulse' : 'bg-stagespace-dim'
             }`}
           />
           <span className="text-white text-lg font-black tabular-nums tracking-wide">
@@ -208,7 +209,7 @@ export const PerformView: React.FC = () => {
           </span>
           {orphanCount > 0 && (
             <span
-              className="px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-300 text-[10px] font-bold"
+              className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${STATUS_TONES.warning}`}
               title={`${orphanCount} orphan movement(s) running — no slot controls them. STOP ALL clears.`}
             >
               +{orphanCount} ⚠
@@ -223,7 +224,7 @@ export const PerformView: React.FC = () => {
             endroit pour l'avancement, pas deux 'SETLIST' dans la barre. */}
         <div className="flex items-center gap-3 min-w-0 flex-1">
           {isRecalling && (
-            <span className="text-purple-400 text-xs font-bold animate-pulse flex-shrink-0">
+            <span className="text-stagespace-tracking text-xs font-bold animate-pulse flex-shrink-0">
               RECALLING…
             </span>
           )}
@@ -233,7 +234,7 @@ export const PerformView: React.FC = () => {
               title="Conduite — cue courante / cue suivante (armée)"
             >
               <span className="text-gray-500 uppercase">Cue </span>
-              <span className="text-amber-300 font-semibold truncate">{cueLabel(curCue, currentCueIndex)}</span>
+              <span className="text-stagespace-conduite font-semibold truncate">{cueLabel(curCue, currentCueIndex)}</span>
               <span className="text-gray-500 mx-1">→</span>
               <span className="text-gray-400 truncate">{nextCue ? cueLabel(nextCue, currentCueIndex + 1) : '—'}</span>
             </span>
@@ -242,7 +243,7 @@ export const PerformView: React.FC = () => {
           {goFeedback && (
             <span
               className={`text-sm font-bold animate-pulse truncate ${
-                goFeedback.ok ? 'text-green-400' : 'text-red-400'
+                goFeedback.ok ? 'text-stagespace-live' : 'text-stagespace-danger'
               }`}
             >
               {goFeedback.message}
@@ -264,7 +265,7 @@ export const PerformView: React.FC = () => {
           className={`px-6 py-2.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[140px] text-white ${
             armedPlaying
               ? 'bg-red-600 hover:bg-red-500'
-              : 'bg-indigo-600 hover:bg-indigo-500'
+              : 'bg-green-700 hover:bg-green-600'
           }`}
           title={armedSlot
             ? `${armedPlaying ? 'Stop' : 'Play'} "${armedSlot.name}" — layered, autres moves continuent (Space)`
@@ -273,7 +274,7 @@ export const PerformView: React.FC = () => {
           <div className="text-lg font-black leading-tight">
             {armedPlaying ? 'STOP ■' : 'PLAY ▶'}
           </div>
-          <div className={`text-xs font-medium truncate leading-tight ${armedPlaying ? 'text-red-100/80' : 'text-indigo-100/80'}`}>
+          <div className={`text-xs font-medium truncate leading-tight ${armedPlaying ? 'text-red-100/80' : 'text-green-100/80'}`}>
             {armedSlot ? armedSlot.name : 'tap a move'}
           </div>
         </button>
@@ -296,7 +297,7 @@ export const PerformView: React.FC = () => {
         {tcChaseEnabled && (
           <span
             className={`font-mono text-xs px-1.5 py-0.5 rounded border flex-shrink-0 ${
-              tcActive ? 'border-emerald-600 text-emerald-400' : 'border-gray-600 text-gray-500'
+              tcActive ? 'border-stagespace-live/40 text-stagespace-live' : 'border-gray-600 text-gray-500'
             }`}
             title={tcActive ? 'Timecode actif (chase on)' : 'TC lost — pas de message depuis >1s'}
           >
@@ -349,7 +350,7 @@ export const PerformView: React.FC = () => {
         {/* Colonne gauche : SETLIST (flux du show) + LAYERS (ad-hoc) + cues */}
         <div className="w-80 flex-shrink-0 border-r border-stagespace-border flex flex-col bg-stagespace-panel min-h-0">
           <div className="flex-1 overflow-y-auto min-h-0">
-            <div className="px-3 py-2 text-gray-400 text-xs uppercase tracking-wider border-b border-stagespace-border bg-purple-950/20 flex items-center justify-between">
+            <div className="px-3 py-2 text-gray-400 text-xs uppercase tracking-wider border-b border-stagespace-border flex items-center justify-between">
               <span>Setlist — GO avance ici</span>
               {/* "+ Move" masqué en fenêtre détachée — créer un slot y
                   serait non persisté (read-only storage) et divergerait

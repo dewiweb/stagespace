@@ -66,3 +66,28 @@ export const CLIP_FAMILY_HEX: Record<ClipFamily, string> = {
   system: UI_HEX.osc,
   slot: '#a78bfa',          // violet-400 — le contenu, neutre
 };
+
+// ── Chips — le vocabulaire tonal vit dans ui/StatusChip.tsx ─────────
+/// (STATUS_TONES, tokens + opacités). Ici ne restent que les variantes
+/// que StatusChip ne couvre pas : boutons pleins et sémaphores.
+
+/// Variante pleine (boutons d'action type PANIC) — fond opaque.
+export const CHIP_SOLID: Record<'live' | 'conduite' | 'warning' | 'danger' | 'osc' | 'tracking' | 'info' | 'dim', string> = {
+  live: 'bg-green-700 hover:bg-green-600 text-white',
+  conduite: 'bg-amber-700 hover:bg-amber-600 text-white',
+  warning: 'bg-orange-700 hover:bg-orange-600 text-white',
+  danger: 'bg-red-700 hover:bg-red-600 text-white',
+  osc: 'bg-cyan-700 hover:bg-cyan-600 text-white',
+  tracking: 'bg-purple-700 hover:bg-purple-600 text-white',
+  info: 'bg-blue-700 hover:bg-blue-600 text-white',
+  dim: 'bg-gray-700 hover:bg-gray-600 text-white',
+};
+
+/// Sémaphore de santé — trio ok/dégradé/critique pour les métriques
+/// (fps, cpu, latence). Harmonise les yellow/orange/amber dispersés :
+/// UN seul orange pour « dégradé ». Retourne la classe texte.
+export function healthTone(level: 'ok' | 'degraded' | 'critical'): string {
+  return level === 'ok' ? 'text-green-400'
+    : level === 'degraded' ? 'text-orange-400'
+    : 'text-red-400';
+}

@@ -20,6 +20,9 @@ export default {
           danger: '#ef4444',
           tracking: '#a855f7',
           dim: '#6b7280',
+          // info = états système informationnels non-actionnables
+          // (compiled, document chargé) — ni live ni warning.
+          info: '#60a5fa',
           // target = visualisation de destination (ghosts pose, ancres,
           // projections) — distinct de tracking (QUI pilote) et d'osc
           // (liens réseau) : les cibles spatiales sont teal-vert.

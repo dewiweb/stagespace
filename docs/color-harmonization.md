@@ -140,6 +140,35 @@ Trois règles de câblage :
   system et placement coexistent rarement ; labels obligatoires.
 
 | **H1 — fondations** | tokens `target`/`derived` + module `uiColors.ts` · re-teintage CLIP_COLORS par familles · correction des collisions actives du score (positions/pose) · swatch review visuelle avec l'utilisateur | capture score avant/après, collisions teal résolues |
+### Décisions H2 actées (migration surfaces live)
+
+- **Architecture convergée sur `StatusChip`** — le composant existait
+  déjà avec le vocabulaire token+opacités ; `STATUS_TONES` exporté pour
+  les chips interactifs. Le `CHIP` map intermédiaire de uiColors a été
+  supprimé (duplication). uiColors ne garde que CHIP_SOLID et
+  healthTone (sémaphore ok/dégradé/critique — un seul orange pour
+  « dégradé », fini les yellow/amber/orange concurrents).
+- **Arm/DRY-RUN unifié** — TROIS implémentations contradictoires du
+  même contrôle (armed rouge/gris/inversé). Sémantique retenue :
+  armed = danger-rouge (« sortie chaude », convention record-arm),
+  dry-run = neutre pulsant (le vert pulsant lisait « tout va bien »
+  alors que la sortie est muette — pire lecture possible). DryRunChip
+  du cuelist supprimé au profit d'OscArmToggle.
+- **teal réconcilié** — le SETLIST GO teal pré-existait, documenté et
+  cross-surface (« jamais confondu avec le vert CUE GO »). Plutôt que
+  le casser, unification sous `target` : teal = transition vers un
+  état cible — spatial (poses/placement) ou scénique (avance setlist).
+  PLAY indigo (arbitraire) → vert live : « rendre live ».
+- **cuelist** — TRK badge cyan→tracking-purple (inversion corrigée) ;
+  NOW/ARMED purple→conduite-amber (états opérationnels, pas expert) ;
+  audition amber→derived (le token créé pour ça). Conservé purple pour
+  l'édition experte (store, focus) — split documenté du token.
+- **emerald éliminé des surfaces live** — réservé à rien, il était un
+  quasi-green arbitraire (tc-active, chase) → live-green partout.
+- **différé à H4** — chrome indigo des toggles (pads/3d, radar) :
+  question app-wide de la couleur d'accent chrome, pas des surfaces
+  live. Couleurs-décor de sections du SettingsModal.
+
 | **H2 — fichiers live ad-hoc** | migration StatusBar (52), SettingsModal (54), PerformView (30), CuelistPanel (29), RunView — les surfaces d'exploitation d'abord | compteur palette brute ÷2 dans ces fichiers, captures de non-régression |
 | **H3 — viz** | unification 3D/radar/ghosts/zones dans `uiColors` — hex three.js centralisés, dissolution des couleurs-entités (pose violet → `target`) | captures 3D/radar, ghosts toujours distincts des rest-ghosts |
 | **H4 — ratissage + enforcement** | migration du reste · règle lint interdisant classes palette brute et hex hors `uiColors` (allowlist) — même mécanique que z-index | 0 occurrence brute hors allowlist en CI |

@@ -188,7 +188,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   type="text"
                   value={oscAddress}
                   onChange={(e) => setOscAddress(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
                   placeholder="127.0.0.1"
                 />
               </div>
@@ -198,7 +198,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   type="number"
                   value={oscPort}
                   onChange={(e) => setOscPort(Number(e.target.value) || 0)}
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
                 />
               </div>
               <div className="col-span-2">
@@ -206,7 +206,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 <select
                   value={oscProfile}
                   onChange={(e) => setOscProfile(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
                 >
                   {OSC_PROFILES.map((p) => (
                     <option key={p.value} value={p.value}>{p.label}</option>
@@ -265,7 +265,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   type="number"
                   value={oscInPortStr}
                   onChange={(e) => setOscInPortStr(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
                 />
               </div>
               <button
@@ -309,7 +309,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   type="text"
                   value={remoteUiBind}
                   onChange={(e) => void setRemoteUi({ bind: e.target.value })}
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
                   placeholder="0.0.0.0:4173"
                   title="host:port — 127.0.0.1 = this machine only, 0.0.0.0 = all interfaces (LAN)"
                 />
@@ -362,7 +362,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   type="text"
                   value={psnGroupStr}
                   onChange={(e) => setPsnGroupStr(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
                 />
               </div>
               <div>
@@ -371,7 +371,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   type="number"
                   value={psnPortStr}
                   onChange={(e) => setPsnPortStr(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
                 />
               </div>
             </div>
@@ -383,7 +383,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 onChange={(e) => setPsnMapStr(e.target.value)}
                 onBlur={() => setPsnConfig({ map: psnMapStr })}
                 placeholder="1:7, 2:8, 3:9"
-                className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
               />
             </div>
             <div className="mt-2">
@@ -394,7 +394,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 onChange={(e) => setPsnAxesStr(e.target.value)}
                 onBlur={() => setPsnConfig({ axes: psnAxesStr })}
                 placeholder="x,y,z"
-                className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
               />
             </div>
           </section>
@@ -429,7 +429,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   onChange={(e) => setVenueScaleStr(e.target.value)}
                   onBlur={() => setVenueConfig({ scale: venueScaleStr })}
                   placeholder="0.7,0.65,0.5"
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
                 />
               </div>
               <div>
@@ -440,7 +440,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   onChange={(e) => setVenueOffsetStr(e.target.value)}
                   onBlur={() => setVenueConfig({ offset: venueOffsetStr })}
                   placeholder="0,0,0"
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
                 />
               </div>
               <div>
@@ -451,7 +451,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   onChange={(e) => setVenueYawStr(e.target.value)}
                   onBlur={() => setVenueConfig({ yaw: venueYawStr })}
                   placeholder="0"
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
                 />
               </div>
             </div>
@@ -498,14 +498,14 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 defaultValue={mediaSyncTarget}
                 onBlur={(e) => setMediaSync({ target: e.target.value })}
                 placeholder="ip:port"
-                className="flex-1 px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                className="flex-1 px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
               />
               <input
                 type="text"
                 defaultValue={mediaSyncPrefix}
                 onBlur={(e) => setMediaSync({ prefix: e.target.value })}
                 placeholder="/media"
-                className="w-24 px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                className="w-24 px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
               />
             </div>
           </section>
@@ -524,7 +524,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             <select
               value={mergeStrategy}
               onChange={(e) => setMergeStrategy(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
+              className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
             >
               {MERGE_STRATEGIES.map((s) => (
                 <option key={s.value} value={s.value} title={s.hint}>{s.label}</option>
@@ -544,7 +544,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               type="text"
               value={oscIdsStr}
               onChange={(e) => handleOscIdsChange(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+              className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
               placeholder="1,2,3..."
             />
             {oscIdsError && (
@@ -594,7 +594,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <select
                 value={selectedAudioDeviceId ?? ''}
                 onChange={(e) => setSelectedAudioDeviceId(e.target.value || null)}
-                className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
+                className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
               >
                 <option value="">System default</option>
                 {audioDevices.map((d) => (

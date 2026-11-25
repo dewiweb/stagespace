@@ -8,9 +8,9 @@ import { useGlobalGraphStore } from '../../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../../store/useSignalGraphStore';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import EmptyState from '../ui/EmptyState';
+import { OscArmToggle } from '../ui/OscArmToggle';
 import { Badge } from '../ui/Badge';
 import { toast } from '../../utils/toast-helpers';
-import { useOscArmed } from '../../hooks/useOscArmed';
 
 export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> = ({ readonly = false, canStore = true }) => {
   const cues = useCuelistStore((s) => s.cues);
@@ -206,9 +206,9 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                 key={cue.id + '-row'}
                 className={`px-3 py-2 flex items-center gap-2 cursor-pointer transition-colors ${
                   idx === currentCueIndex
-                    ? 'bg-purple-900/30 border-l-2 border-purple-500'
+                    ? 'bg-amber-900/30 border-l-2 border-amber-500'
                     : cue.id === armedCueId
-                      ? 'bg-purple-900/10 ring-1 ring-inset ring-purple-500/60'
+                      ? 'bg-amber-900/10 ring-1 ring-inset ring-amber-500/60'
                       : 'hover:bg-gray-800/50'
                 }`}
                 onClick={() => setArmedCueId(cue.id === armedCueId ? null : cue.id)}
@@ -279,10 +279,10 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                         stop > 0 && `−${stop}m`,
                         pos > 0 && `${pos}pos`,
                       ].filter(Boolean).join(' ');
-                      return parts ? <span className="text-[9px] text-amber-400 font-mono" title="audition : ce que la cue va toucher (scope-respecté)">{parts}</span> : null;
+                      return parts ? <span className="text-[9px] text-stagespace-derived font-mono" title="audition : ce que la cue va toucher (scope-respecté)">{parts}</span> : null;
                     })()}
                     {cue.mode === 'Tracking' && (
-                      <Badge className="bg-cyan-900/60 text-cyan-300">TRK</Badge>
+                      <Badge className="bg-purple-900/60 text-purple-300">TRK</Badge>
                     )}
                     {(cue.pre_wait ?? 0) > 0 && (
                       <Badge>w{cue.pre_wait}s</Badge>
@@ -534,20 +534,8 @@ function PendingCountdown({ deadline, kind }: { deadline: number; kind: 'pre_wai
   );
 }
 
-/// Dry-run : désarme l'OSC (le merge continue, rien ne part au renderer) —
-/// permet de répéter la conduite sans envoyer de positions.
-function DryRunChip() {
-  const [armed, setArmed] = useOscArmed();
-  return (
-    <button
-      onClick={() => setArmed(!armed)}
-      className={`px-1.5 py-0.5 rounded border ${armed ? 'border-gray-600 text-gray-500' : 'border-emerald-600 text-emerald-400'}`}
-      title={armed ? 'OSC LIVE — positions are sent. Click for DRY-RUN (rehearse without sending)' : 'DRY-RUN — OSC output muted, click to arm'}
-    >
-      {armed ? 'LIVE' : 'DRY-RUN'}
-    </button>
-  );
-}
+/// Dry-run — le contrôle partagé OscArmToggle (même sémantique que
+/// StatusBar/Perform : armed = rouge « sortie chaude », dry-run = neutre).
 
 /// Statut timecode : TC courant (HH:MM:SS:FF) ou "TC lost" si silence >1s.
 function TcStatus() {
@@ -578,10 +566,10 @@ function TcStatus() {
   const lost = tc == null || Date.now() - at > 1000;
   return (
     <span className="ml-auto flex items-center gap-1.5 text-[10px]">
-      <DryRunChip />
+      <OscArmToggle />
       <button
         onClick={() => setChase(!chaseOn)}
-        className={`px-1.5 py-0.5 rounded border ${chaseOn ? 'border-emerald-600 text-emerald-400' : 'border-gray-600 text-gray-500'}`}
+        className={`px-1.5 py-0.5 rounded border ${chaseOn ? 'border-stagespace-live/40 text-stagespace-live' : 'border-gray-600 text-gray-500'}`}
         title="TC chase"
       >
         TC chase
