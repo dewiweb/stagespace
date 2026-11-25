@@ -10,13 +10,14 @@ import { useShowStatusStore, startShowStatusPolling } from '../store/useShowStat
 import { cueLabel, tcStr } from '../utils/showFormat';
 import { useGraphStore } from '../store/useGraphStore';
 import { useCuelistStore } from '../store/useCuelistStore';
-import { doSolo, doStop, doUnsolo, getSoloRestoreIds, doAttention } from '../utils/liveActions';
+import { doSolo, doStop, doUnsolo, getSoloRestoreIds } from '../utils/liveActions';
 import { Radar2D } from './jeu/Radar2D';
 import type { RadarView } from './jeu/Radar2D';
 import { ScoreProgress } from './jeu/ScoreProgress';
 import { GestureStrip } from './jeu/GestureStrip';
 import { isDetachedWindow } from '../utils/safeStorage';
 import { detachWindow } from '../utils/detachWindow';
+import { STATUS_TONES } from './ui/StatusChip';
 import { PanicButton } from './ui/PanicButton';
 import { OscArmToggle } from './ui/OscArmToggle';
 
@@ -63,6 +64,9 @@ export const PerformView: React.FC = () => {
   const movements = useGraphStore((s) => s.movements);
   // Panneau central : pads (l'instrument, défaut) ou canvas 3D.
   const [centerView, setCenterView] = React.useState<'pads' | '3d'>('pads');
+  // Colonne gauche en tabs : setlist ET cues tenaient mal dans le même
+  // 40/60 — chacune prend toute la hauteur à la demande (audit ergo).
+  const [leftTab, setLeftTab] = React.useState<'setlist' | 'cues'>('cues');
   // Projection du radar — sélecteur dans le header du panneau radar.
   const [radarView, setRadarView] = React.useState<RadarView>('top');
   // Fenêtre détachée (?view=run) — l'édition pure est masquée : le
@@ -113,7 +117,9 @@ export const PerformView: React.FC = () => {
     .filter(Boolean) as typeof moveSlots;
   const layerSlots = moveSlots.filter((s) => !setlistOrder.includes(s.id));
 
-  // Pad jeu — SlotTile + badges source-de-contrôle (P/H/S) + attention ◎.
+  // Pad jeu — SlotTile + badges source-de-contrôle (P/H/S). L'attention
+  // est un geste OBJET (menu objet radar/3D/tracks) — pas pad : les
+  // couvertures se recoupent et « seul ce slot bouge » serait faux.
   // objectStates est keyed par obj_index : trackId → indexOf(manualOscIds).
   const srcOf = (trackId: number) => objectStates[manualOscIds.indexOf(trackId)];
   const soloId =
@@ -123,7 +129,6 @@ export const PerformView: React.FC = () => {
     const oscNum = slot.oscIndex || moveSlots.indexOf(slot) + 1;
     const parkedTracks = slot.trackIds.filter((t) => srcOf(t) === 'park');
     const heldTracks = slot.trackIds.filter((t) => srcOf(t) === 'hold');
-    const firstObj = manualOscIds.indexOf(slot.trackIds[0]);
     return (
       <SlotTile
         key={slot.id}
@@ -136,7 +141,6 @@ export const PerformView: React.FC = () => {
         canSolo={playingCount > 1}
         parkedTracks={parkedTracks}
         heldTracks={heldTracks}
-        onAttention={firstObj >= 0 ? () => doAttention(firstObj) : undefined}
         isSelected={editingSlotId === slot.id}
         onSelect={() => selectSlotForEditing(editingSlotId === slot.id ? null : slot.id)}
         onPlay={() => void playSlot(slot.id)}
@@ -200,7 +204,7 @@ export const PerformView: React.FC = () => {
         <div className="flex items-center gap-2.5">
           <div
             className={`w-4 h-4 rounded-full ${
-              playingCount > 0 ? 'bg-green-500 animate-pulse' : 'bg-gray-600'
+              playingCount > 0 ? 'bg-stagespace-live animate-pulse' : 'bg-stagespace-dim'
             }`}
           />
           <span className="text-white text-lg font-black tabular-nums tracking-wide">
@@ -208,7 +212,7 @@ export const PerformView: React.FC = () => {
           </span>
           {orphanCount > 0 && (
             <span
-              className="px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-300 text-[10px] font-bold"
+              className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${STATUS_TONES.warning}`}
               title={`${orphanCount} orphan movement(s) running — no slot controls them. STOP ALL clears.`}
             >
               +{orphanCount} ⚠
@@ -223,7 +227,7 @@ export const PerformView: React.FC = () => {
             endroit pour l'avancement, pas deux 'SETLIST' dans la barre. */}
         <div className="flex items-center gap-3 min-w-0 flex-1">
           {isRecalling && (
-            <span className="text-purple-400 text-xs font-bold animate-pulse flex-shrink-0">
+            <span className="text-stagespace-tracking text-xs font-bold animate-pulse flex-shrink-0">
               RECALLING…
             </span>
           )}
@@ -233,7 +237,7 @@ export const PerformView: React.FC = () => {
               title="Conduite — cue courante / cue suivante (armée)"
             >
               <span className="text-gray-500 uppercase">Cue </span>
-              <span className="text-amber-300 font-semibold truncate">{cueLabel(curCue, currentCueIndex)}</span>
+              <span className="text-stagespace-conduite font-semibold truncate">{cueLabel(curCue, currentCueIndex)}</span>
               <span className="text-gray-500 mx-1">→</span>
               <span className="text-gray-400 truncate">{nextCue ? cueLabel(nextCue, currentCueIndex + 1) : '—'}</span>
             </span>
@@ -242,7 +246,7 @@ export const PerformView: React.FC = () => {
           {goFeedback && (
             <span
               className={`text-sm font-bold animate-pulse truncate ${
-                goFeedback.ok ? 'text-green-400' : 'text-red-400'
+                goFeedback.ok ? 'text-stagespace-live' : 'text-stagespace-danger'
               }`}
             >
               {goFeedback.message}
@@ -261,10 +265,10 @@ export const PerformView: React.FC = () => {
             else playSlot(armedSlot.id);
           }}
           disabled={!armedSlot}
-          className={`px-6 py-2.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[140px] text-white ${
+          className={`px-6 py-2.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[140px] ${
             armedPlaying
-              ? 'bg-red-600 hover:bg-red-500'
-              : 'bg-indigo-600 hover:bg-indigo-500'
+              ? 'bg-stagespace-danger hover:opacity-90 text-white'
+              : 'bg-stagespace-live hover:opacity-90 text-gray-950'
           }`}
           title={armedSlot
             ? `${armedPlaying ? 'Stop' : 'Play'} "${armedSlot.name}" — layered, autres moves continuent (Space)`
@@ -273,7 +277,7 @@ export const PerformView: React.FC = () => {
           <div className="text-lg font-black leading-tight">
             {armedPlaying ? 'STOP ■' : 'PLAY ▶'}
           </div>
-          <div className={`text-xs font-medium truncate leading-tight ${armedPlaying ? 'text-red-100/80' : 'text-indigo-100/80'}`}>
+          <div className={`text-xs font-medium truncate leading-tight ${armedPlaying ? 'text-white/80' : 'text-gray-950/70'}`}>
             {armedSlot ? armedSlot.name : 'tap a move'}
           </div>
         </button>
@@ -285,18 +289,18 @@ export const PerformView: React.FC = () => {
         <button
           onClick={handleGO}
           disabled={!nextSetlistSlotId}
-          className="px-6 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[160px]"
+          className="px-6 py-2.5 bg-stagespace-target hover:opacity-90 text-gray-950 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 text-left min-w-[160px]"
           title="SETLIST GO — crossfade vers le prochain move, les layers continuent (Enter). Cue recall (tue la scène) = Shift+Enter ou Conduite"
         >
           <div className="text-lg font-black leading-tight">SETLIST ▶</div>
-          <div className="text-xs font-medium text-teal-100/80 truncate leading-tight">
+          <div className="text-xs font-medium text-gray-950/70 truncate leading-tight">
             {currentSetlistIndex + 1}/{setlistOrder.length} · {nextSetlistSlot ? nextSetlistSlot.name : 'end of setlist'}
           </div>
         </button>
         {tcChaseEnabled && (
           <span
             className={`font-mono text-xs px-1.5 py-0.5 rounded border flex-shrink-0 ${
-              tcActive ? 'border-emerald-600 text-emerald-400' : 'border-gray-600 text-gray-500'
+              tcActive ? 'border-stagespace-live/40 text-stagespace-live' : 'border-gray-600 text-gray-500'
             }`}
             title={tcActive ? 'Timecode actif (chase on)' : 'TC lost — pas de message depuis >1s'}
           >
@@ -327,7 +331,7 @@ export const PerformView: React.FC = () => {
         {getSoloRestoreIds().length > 0 && (
           <button
             onClick={() => doUnsolo()}
-            className="px-4 rounded-lg bg-orange-700/80 hover:bg-orange-600 text-orange-100 text-xs font-bold active:scale-95"
+            className="px-4 rounded-lg bg-stagespace-warning/70 hover:bg-stagespace-warning text-gray-950 text-xs font-bold active:scale-95"
             title={`UNSOLO — rejoue les ${getSoloRestoreIds().length} slots stoppés par le solo`}
           >
             UNSOLO
@@ -336,7 +340,7 @@ export const PerformView: React.FC = () => {
         {playingCount > 0 && (
           <button
             onClick={() => doStop()}
-            className="px-4 rounded-lg bg-red-800/70 hover:bg-red-700 text-red-100 text-xs font-bold active:scale-95"
+            className="px-4 rounded-lg bg-stagespace-danger/70 hover:bg-stagespace-danger text-white text-xs font-bold active:scale-95"
             title="Stop all moves en fondu — moins brutal que PANIC (le renderer reste armé)"
           >
             STOP ALL
@@ -346,10 +350,26 @@ export const PerformView: React.FC = () => {
 
       {/* ═══ Corps : setlist | canvas ═══ */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Colonne gauche : SETLIST (flux du show) + LAYERS (ad-hoc) + cues */}
+        {/* Colonne gauche : tabs SETLIST | CUES — chacune toute la hauteur */}
         <div className="w-80 flex-shrink-0 border-r border-stagespace-border flex flex-col bg-stagespace-panel min-h-0">
+          <div className="flex border-b border-stagespace-border flex-shrink-0">
+            {(['setlist', 'cues'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setLeftTab(t)}
+                className={`flex-1 px-3 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+                  leftTab === t
+                    ? 'text-white bg-stagespace-accent/15 border-b-2 border-stagespace-accent -mb-px'
+                    : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {t === 'setlist' ? `Setlist ${setlistSlots.length || ''}` : `Cues ${cues.length || ''}`}
+              </button>
+            ))}
+          </div>
+          {leftTab === 'setlist' && (
           <div className="flex-1 overflow-y-auto min-h-0">
-            <div className="px-3 py-2 text-gray-400 text-xs uppercase tracking-wider border-b border-stagespace-border bg-purple-950/20 flex items-center justify-between">
+            <div className="px-3 py-2 text-gray-400 text-xs uppercase tracking-wider border-b border-stagespace-border flex items-center justify-between">
               <span>Setlist — GO avance ici</span>
               {/* "+ Move" masqué en fenêtre détachée — créer un slot y
                   serait non persisté (read-only storage) et divergerait
@@ -361,7 +381,7 @@ export const PerformView: React.FC = () => {
                     const ms = useGraphStore.getState().moveSlots; const last = ms[ms.length - 1];
                     if (last) addToSetlist(last.id);
                   }}
-                  className="px-1.5 py-0.5 rounded text-[10px] text-indigo-300 hover:bg-indigo-600/30 hover:text-white transition-colors normal-case"
+                  className="px-1.5 py-0.5 rounded text-[10px] text-stagespace-tracking hover:bg-stagespace-tracking/30 hover:text-white transition-colors normal-case"
                   title="New move added to the setlist"
                 >
                   + Move
@@ -397,16 +417,18 @@ export const PerformView: React.FC = () => {
               </div>
             )}
           </div>
-          {/* Cues — arm + double-clic recall (déjà protégé). Partage
-              flexible de la colonne : la cue list est l'objet central du
-              show, elle ne tient pas en 224px (ex-h-56 confiné). */}
-          <div className="flex-1 min-h-0 basis-2/5 border-t border-stagespace-border flex flex-col">
-            {/* readonly masque les gestes dangereux (delete/recall-par-
-                erreur) ; canStore garde « ★ Store » : capturer une cue
-                ne mute pas la scène — sauf en fenêtre détachée où le
-                storage est read-only (store non persisté). */}
-            <CuelistPanel readonly canStore={!detached} />
-          </div>
+          )}
+          {/* Cues — arm + double-clic recall (déjà protégé). Tab propre :
+              la liste prend toute la colonne quand elle est active. */}
+          {leftTab === 'cues' && (
+            <div className="flex-1 min-h-0 flex flex-col">
+              {/* readonly masque les gestes dangereux (delete/recall-par-
+                  erreur) ; canStore garde « ★ Store » : capturer une cue
+                  ne mute pas la scène — sauf en fenêtre détachée où le
+                  storage est read-only (store non persisté). */}
+              <CuelistPanel readonly canStore={!detached} />
+            </div>
+          )}
         </div>
 
         {/* Centre — l'instrument : pads permanents (ex-busking, la
@@ -415,13 +437,13 @@ export const PerformView: React.FC = () => {
           <div className="flex items-center gap-2 px-3 py-1 border-b border-stagespace-border flex-shrink-0">
             <button
               onClick={() => setCenterView('pads')}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${centerView === 'pads' ? 'bg-indigo-700 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${centerView === 'pads' ? 'bg-stagespace-accent text-gray-950' : 'text-gray-500 hover:text-gray-300'}`}
             >
               Pads
             </button>
             <button
               onClick={() => setCenterView('3d')}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${centerView === '3d' ? 'bg-indigo-700 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${centerView === '3d' ? 'bg-stagespace-accent text-gray-950' : 'text-gray-500 hover:text-gray-300'}`}
             >
               3D
             </button>
@@ -460,7 +482,7 @@ export const PerformView: React.FC = () => {
                   onClick={() => setRadarView(v)}
                   className={`px-1.5 py-0.5 text-[9px] rounded normal-case tracking-normal transition-colors ${
                     radarView === v
-                      ? 'bg-cyan-700 text-white'
+                      ? 'bg-stagespace-accent text-gray-950'
                       : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
                   }`}
                 >

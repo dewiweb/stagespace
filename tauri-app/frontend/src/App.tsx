@@ -451,10 +451,10 @@ function AppMain() {
           {/* Splitter — poignée de redimensionnement */}
           <div
             onMouseDown={startLeftResize}
-            className="w-1.5 flex-shrink-0 bg-stagespace-border hover:bg-blue-500/50 cursor-col-resize transition-colors relative group"
+            className="w-1.5 flex-shrink-0 bg-stagespace-border hover:bg-stagespace-accent/50 cursor-col-resize transition-colors relative group"
             title="Drag to resize"
           >
-            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-stagespace-border group-hover:bg-blue-500" />
+            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-stagespace-border group-hover:bg-stagespace-accent" />
           </div>
           </>
         ))}
@@ -472,7 +472,7 @@ function AppMain() {
                 onClick={() => setEditorFocus(!editorFocus)}
                 className={`px-2 py-0.5 text-xs rounded font-medium flex items-center gap-1 transition-colors ${
                   editorFocus
-                    ? 'bg-purple-600 text-white'
+                    ? 'bg-stagespace-tracking text-gray-950'
                     : 'bg-gray-800 text-gray-400 hover:text-white'
                 }`}
                 title={editorFocus
@@ -493,7 +493,7 @@ function AppMain() {
                   useMoveEditorStore.getState().saveAnimation();
                   setShowExpert(false);
                 }}
-                className="px-2 py-0.5 text-xs bg-purple-700 hover:bg-purple-600 text-white rounded font-medium"
+                className="px-2 py-0.5 text-xs bg-stagespace-tracking/80 hover:bg-stagespace-tracking text-gray-950 rounded font-medium"
                 title="Save the graph as a Custom animation"
               >
                 ★ Save
@@ -511,7 +511,7 @@ function AppMain() {
           ) : (
             <div className="h-9 border-b border-stagespace-border flex items-center px-3 bg-stagespace-panel flex-shrink-0">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                <div className="w-4 h-4 rounded bg-gradient-to-br from-stagespace-accent to-stagespace-info flex items-center justify-center">
                   <span className="text-white text-xs font-bold">3D</span>
                 </div>
                 <span className="text-gray-300 text-xs font-medium">Canvas</span>
@@ -520,7 +520,7 @@ function AppMain() {
               {import.meta.env.DEV && (
                 <button
                   onClick={() => setDebugPerfVisible(!debugPerfVisible)}
-                  className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-cyan-400 bg-cyan-900/30' : 'text-gray-500 hover:text-gray-300'}`}
+                  className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-stagespace-accent bg-stagespace-accent/20' : 'text-gray-500 hover:text-gray-300'}`}
                   title="DEBUG PERF overlay (render/IPC fps, stutter) — dev tool"
                 >
                   <Activity size={12} />
@@ -536,7 +536,7 @@ function AppMain() {
                   // Focus direct (le split 50/50 écrase le canvas).
                   setEditorFocus(true);
                 }}
-                className="px-2 py-0.5 text-xs rounded font-bold bg-purple-600 text-white hover:bg-purple-500 transition-colors flex items-center gap-1"
+                className="px-2 py-0.5 text-xs rounded font-bold bg-stagespace-tracking text-gray-950 hover:opacity-80 transition-colors flex items-center gap-1"
                 title="Expert mode — advanced graph editor (nodes, connections, custom trajectories)"
               >
                 <Workflow size={11} />
@@ -561,10 +561,10 @@ function AppMain() {
               <div
                 onMouseDown={startExpertResize}
                 onDoubleClick={() => setExpertSplit(0.5)}
-                className="w-1.5 flex-shrink-0 bg-stagespace-border hover:bg-purple-500/50 cursor-col-resize transition-colors relative group"
+                className="w-1.5 flex-shrink-0 bg-stagespace-border hover:bg-stagespace-tracking/50 cursor-col-resize transition-colors relative group"
                 title="Drag to resize · double-click = 50/50"
               >
-                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-stagespace-border group-hover:bg-purple-500" />
+                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-stagespace-border group-hover:bg-stagespace-tracking" />
               </div>
             )}
             {/* Scene3D toujours rendu au même endroit — pas de unmount/remount.
@@ -579,7 +579,7 @@ function AppMain() {
                   {import.meta.env.DEV && (
                     <button
                       onClick={() => setDebugPerfVisible(!debugPerfVisible)}
-                      className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-cyan-400 bg-cyan-900/30' : 'text-gray-500 hover:text-gray-300'}`}
+                      className={`p-1 rounded transition-colors ${debugPerfVisible ? 'text-stagespace-accent bg-stagespace-accent/20' : 'text-gray-500 hover:text-gray-300'}`}
                       title="DEBUG PERF overlay — dev tool"
                     >
                       <Activity size={11} />
@@ -618,10 +618,10 @@ function AppMain() {
             {/* Splitter — poignée de redimensionnement */}
             <div
               onMouseDown={startRightResize}
-              className="w-1.5 flex-shrink-0 bg-stagespace-border hover:bg-blue-500/50 cursor-col-resize transition-colors relative group"
+              className="w-1.5 flex-shrink-0 bg-stagespace-border hover:bg-stagespace-accent/50 cursor-col-resize transition-colors relative group"
               title="Drag to resize"
             >
-              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-stagespace-border group-hover:bg-blue-500" />
+              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-stagespace-border group-hover:bg-stagespace-accent" />
             </div>
             <div style={{ width: rightWidth }} className="border-l border-stagespace-border flex-shrink-0 relative flex flex-col">
             <button

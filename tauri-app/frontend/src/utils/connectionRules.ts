@@ -26,9 +26,19 @@ export const NODE_SPECS: NodeSpec[] = SPECS_JSON as unknown as NodeSpec[];
 export const PORT_COLORS: Record<PortDef['port_type'], string> = {
   Positions: '!bg-gray-400',
   ObjectSet: '!bg-cyan-500',
-  Duration: '!bg-yellow-500',
-  Spline: '!bg-emerald-500',
-  Signal: '!bg-orange-400',
+  Duration: '!bg-yellow-400',
+  Spline: '!bg-violet-400',
+  Signal: '!bg-indigo-400',
+};
+
+/// Variante texte des couleurs de ports — labels de sections
+/// (Spline Library…) qui veulent la même identité que le handle.
+export const PORT_TEXT_COLORS: Record<PortDef['port_type'], string> = {
+  Positions: 'text-gray-400',
+  ObjectSet: 'text-cyan-400',
+  Duration: 'text-yellow-400',
+  Spline: 'text-violet-400',
+  Signal: 'text-indigo-300',
 };
 const SPEC_BY_TYPE = new Map<NodeType, NodeSpec>(NODE_SPECS.map((s) => [s.node_type, s]));
 

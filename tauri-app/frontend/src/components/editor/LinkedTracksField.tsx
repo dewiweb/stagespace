@@ -6,10 +6,10 @@ import React from 'react';
 /// node (React Flow drague depuis tout élément non marqué) et la molette
 /// zoomait le canvas en éditant.
 export const NODE_INPUT_CLS =
-  'nodrag nowheel w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none';
+  'nodrag nowheel w-full px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none';
 export const NODE_INPUT_MONO_CLS = `${NODE_INPUT_CLS} font-mono`;
 const TRACKS_CLS =
-  'nodrag nowheel w-full mt-0.5 px-2 py-1 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none';
+  'nodrag nowheel w-full mt-0.5 px-2 py-1 bg-gray-900 text-gray-300 text-xs font-mono rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none';
 
 /// Champ "Linked Tracks" des nodes Objects — deux copies identiques
 /// (expanded + collapsed) dans CustomNode, qui divergeaient sur le nombre
@@ -22,7 +22,7 @@ export const LinkedTracksField: React.FC<{
   maxShown: number;
 }> = ({ value, onChangeText, onCommit, ids, maxShown }) => (
   <div>
-    <label className="text-cyan-400 text-xs font-mono">Linked Tracks</label>
+    <label className="text-gray-400 text-xs font-mono">Linked Tracks</label>
     <input
       type="text"
       value={value}
@@ -35,7 +35,7 @@ export const LinkedTracksField: React.FC<{
     {ids.length > 0 && (
       <div className="flex flex-wrap gap-0.5 mt-1">
         {ids.slice(0, maxShown).map((id) => (
-          <span key={id} className="text-xs font-mono px-1 py-0.5 bg-cyan-900/40 text-cyan-400 rounded">
+          <span key={id} className="text-xs font-mono px-1 py-0.5 bg-stagespace-accent/10 text-stagespace-accent rounded">
             {id}
           </span>
         ))}

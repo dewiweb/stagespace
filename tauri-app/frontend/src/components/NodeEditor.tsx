@@ -557,6 +557,8 @@ export const NodeEditor: React.FC = () => {
   const PORT_EDGE_CLASS: Record<string, string> = {
     Duration: 'rf-edge-duration',
     Spline: 'rf-edge-spline',
+    ObjectSet: 'rf-edge-objectset',
+    Signal: 'rf-edge-signal',
   };
   const decoratedEdges = useMemo(
     () =>
@@ -593,7 +595,7 @@ export const NodeEditor: React.FC = () => {
         <button
           onClick={() => setActiveTab('sub')}
           className={`px-2 py-0.5 text-xs rounded font-medium transition-colors ${
-            activeTab === 'sub' ? 'bg-purple-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+            activeTab === 'sub' ? 'bg-stagespace-accent text-gray-950' : 'bg-gray-800 text-gray-400 hover:text-white'
           }`}
           title="Move graph — trajectory for the slot being edited"
         >
@@ -607,7 +609,7 @@ export const NodeEditor: React.FC = () => {
         <button
           onClick={() => setActiveTab('global')}
           className={`px-2 py-0.5 text-xs rounded font-medium transition-colors ${
-            activeTab === 'global' ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+            activeTab === 'global' ? 'bg-stagespace-accent text-gray-950' : 'bg-gray-800 text-gray-400 hover:text-white'
           }`}
           title="Global FX — post-processing graph applied to ALL live moves"
         >
@@ -625,7 +627,7 @@ export const NodeEditor: React.FC = () => {
             </button>
             <button
               onClick={() => pushGlobalGraph()}
-              className="px-2 py-0.5 text-xs bg-cyan-800 hover:bg-cyan-700 text-cyan-200 rounded"
+              className="px-2 py-0.5 text-xs bg-stagespace-modulation/80 hover:bg-stagespace-modulation text-gray-950 rounded"
               title="Compile and push to the backend"
             >
               ↑ Push
@@ -635,7 +637,7 @@ export const NodeEditor: React.FC = () => {
         <button
           onClick={() => setActiveTab('signal')}
           className={`px-2 py-0.5 text-xs rounded font-medium transition-colors ${
-            activeTab === 'signal' ? 'bg-amber-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+            activeTab === 'signal' ? 'bg-stagespace-modulation text-gray-950' : 'bg-gray-800 text-gray-400 hover:text-white'
           }`}
           title="Modulation — signal graph writing additive deltas into param/transform targets (LFO, audio, OSC…)"
         >
@@ -653,7 +655,7 @@ export const NodeEditor: React.FC = () => {
             </button>
             <button
               onClick={() => pushSignalGraph()}
-              className="px-2 py-0.5 text-xs bg-amber-800 hover:bg-amber-700 text-amber-200 rounded"
+              className="px-2 py-0.5 text-xs bg-stagespace-modulation/80 hover:bg-stagespace-modulation text-gray-950 rounded"
               title="Compile and push to the backend"
             >
               ↑ Push
@@ -776,7 +778,7 @@ export const NodeEditor: React.FC = () => {
                   <button
                     key={p.id}
                     onClick={() => openExampleFor(nodeMenu.nodeType, p.id, p.name)}
-                    className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-cyan-900/40 hover:text-white transition-colors"
+                    className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-stagespace-accent/10 hover:text-white transition-colors"
                     title={p.description}
                   >
                     {p.icon} {p.name}
@@ -801,7 +803,7 @@ export const NodeEditor: React.FC = () => {
                 <button
                   key={label}
                   onClick={() => { fn(); setNodeMenu(null); }}
-                  className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-cyan-900/40 hover:text-white transition-colors"
+                  className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-stagespace-accent/10 hover:text-white transition-colors"
                 >
                   {label}
                 </button>
@@ -809,7 +811,7 @@ export const NodeEditor: React.FC = () => {
             </div>
             <button
               onClick={() => { removeByIds(new Set([nodeMenu.nodeId]), new Set()); setNodeMenu(null); }}
-              className="w-full text-left px-3 py-1.5 text-xs text-red-300 hover:bg-red-900/40 border-t border-gray-800 transition-colors"
+              className="w-full text-left px-3 py-1.5 text-xs text-stagespace-danger hover:bg-stagespace-danger/15 border-t border-gray-800 transition-colors"
             >
               ✕ Delete node
             </button>
@@ -840,7 +842,7 @@ export const NodeEditor: React.FC = () => {
 
         {/* Connecting hint badge */}
         {connectingFrom && (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-popover px-3 py-1.5 bg-blue-900/80 border border-blue-600 rounded-lg text-blue-200 text-xs font-medium pointer-events-none">
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-popover px-3 py-1.5 bg-stagespace-accent/80 border border-stagespace-accent rounded-lg text-white text-xs font-medium pointer-events-none">
             Connecting from <span className="text-white font-bold">{connectingFrom.type}</span> — drag to a valid target or drop on the canvas to quick-add
           </div>
         )}

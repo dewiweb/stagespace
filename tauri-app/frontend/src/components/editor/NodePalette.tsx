@@ -2,12 +2,13 @@ import React from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import {
-  NODE_CATEGORIES, NODE_COLORS, NODE_DESCRIPTIONS, getCategoryColor,
+  NODE_CATEGORIES, NODE_DESCRIPTIONS,
   getValidTargetTypes, GLOBAL_ONLY_NODES, SUB_ONLY_NODES, SIGNAL_ONLY_NODES,
 } from '../nodeParamSchema';
 import type { NodeType } from '../../store/useGraphStore';
 import type { PluginManifest } from '../../types/generated/PluginManifest';
 import { PALETTE_DRAG_MIME, paletteDragRef, type PaletteDragPayload } from '../../hooks/useNodeInsertion';
+import { PORT_COLORS } from '../../utils/connectionRules';
 
 /// Palette de nodes — extraite de NodeEditor (P2.4). Gère le rail replié,
 /// les catégories filtrées par tab (sub/global/signal), les items natifs +
@@ -110,10 +111,6 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
                 className="w-full flex items-center gap-1 text-gray-500 text-xs font-semibold mb-1 px-1 uppercase tracking-wider hover:text-gray-300 transition-colors"
               >
                 <span className="text-xs">{isCollapsed ? '▸' : '▾'}</span>
-                <span
-                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  style={{ background: NODE_COLORS[cat.color] ?? '#4b5563' }}
-                />
                 {cat.label}
                 <span className="text-gray-500 ml-auto">{filteredTypes.length}</span>
               </button>
@@ -134,22 +131,18 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
                         className="w-full text-left px-2.5 py-1.5 text-white text-xs rounded transition-all hover:translate-x-0.5 flex items-center gap-2 group cursor-grab active:cursor-grabbing"
                         style={{ background: 'transparent' }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.background = getCategoryColor(type) + '20';
+                          e.currentTarget.style.background = 'rgba(55,65,81,0.5)';
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.background = 'transparent';
                         }}
                       >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                          style={{ background: getCategoryColor(type) }}
-                        />
                         {type}
                       </button>
                       {/* Tooltip description */}
                       {p.hovered === type && NODE_DESCRIPTIONS[type] && (
                         <div className="absolute left-full top-0 ml-2 z-popover w-64 p-2.5 bg-gray-900 border border-gray-700 rounded-lg shadow-xl text-gray-300 text-xs leading-relaxed pointer-events-none">
-                          <div className="text-white font-semibold text-xs mb-1" style={{ color: getCategoryColor(type) }}>{type}</div>
+                          <div className="text-white font-semibold text-xs mb-1">{type}</div>
                           {NODE_DESCRIPTIONS[type]}
                           {/* Show valid targets */}
                           {(() => {
@@ -193,20 +186,16 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
                         className="w-full text-left px-2.5 py-1.5 text-white text-xs rounded transition-all hover:translate-x-0.5 flex items-center gap-2 cursor-grab active:cursor-grabbing"
                         style={{ background: 'transparent' }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.background = (NODE_COLORS.yellow ?? '#ca8a04') + '20';
+                          e.currentTarget.style.background = 'rgba(55,65,81,0.5)';
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.background = 'transparent';
                         }}
                       >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                          style={{ background: NODE_COLORS.yellow }}
-                        />
                         <span className="truncate">{m.name}</span>
                         {m.kind !== 'engine' && (
                           <span
-                            className="text-[11px] font-bold tracking-wide flex-shrink-0 px-1 rounded bg-sky-900/60 text-sky-300"
+                            className="text-[11px] font-bold tracking-wide flex-shrink-0 px-1 rounded bg-stagespace-info/20 text-stagespace-info"
                             title={m.kind === 'modifier' ? 'Modifier: wraps one trajectory (input port)' : 'Composite: combines 2 trajectories (A/B ports)'}
                           >
                             {m.kind === 'modifier' ? 'MOD' : '2IN'}
@@ -216,7 +205,7 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
                       </button>
                       {p.hovered === `plugin:${m.id}` && (
                         <div className="absolute left-full top-0 ml-2 z-popover w-64 p-2.5 bg-gray-900 border border-gray-700 rounded-lg shadow-xl text-gray-300 text-xs leading-relaxed pointer-events-none">
-                          <div className="text-white font-semibold text-xs mb-1" style={{ color: NODE_COLORS.yellow }}>
+                          <div className="text-white font-semibold text-xs mb-1">
                             {m.name} <span className="text-gray-500 font-normal">v{m.version}</span>
                           </div>
                           {m.description ?? 'External WASM plugin'}
@@ -241,7 +230,7 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
                   {p.pluginErrors.map((e, i) => (
                     <div
                       key={i}
-                      className="px-2.5 text-red-400/80 text-[11px] font-mono truncate"
+                      className="px-2.5 text-stagespace-danger/80 text-[11px] font-mono truncate"
                       title={e}
                     >
                       ⚠ {e}
@@ -255,14 +244,14 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
                       });
                       if (typeof selected === 'string') void p.importPlugin(selected);
                     }}
-                    className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-yellow-400 text-xs rounded transition-colors"
+                    className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-stagespace-accent text-xs rounded transition-colors"
                     title="Import a .ssx bundle (copy + rescan)"
                   >
                     + Import .ssx…
                   </button>
                   <button
                     onClick={() => void p.reloadPlugins()}
-                    className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-yellow-400 text-xs rounded transition-colors"
+                    className="w-full text-left px-2.5 py-1 text-gray-500 hover:text-stagespace-accent text-xs rounded transition-colors"
                     title="Rescan the plugins folder"
                   >
                     ↻ Rescan plugins
@@ -278,7 +267,7 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
       <div className="p-3 border-t border-stagespace-border mt-2">
         <button
           onClick={p.onAddFrame}
-          className="w-full mb-2 px-2.5 py-1.5 rounded text-xs text-amber-300/80 border border-dashed border-amber-500/40 hover:border-amber-400/70 hover:text-amber-200 transition-colors"
+          className="w-full mb-2 px-2.5 py-1.5 rounded text-xs text-slate-300/80 border border-dashed border-slate-500/40 hover:border-slate-400/70 hover:text-slate-200 transition-colors"
           title="Add a resizable annotation frame — UI only, never sent to the engine"
         >
           ▭ + Frame
@@ -288,7 +277,11 @@ export const NodePalette: React.FC<NodePaletteProps> = (p) => {
           <div><span className="text-gray-400 font-semibold">Chain:</span> Engine → Modifier → Output</div>
           <div><span className="text-gray-400 font-semibold">Blend:</span> 2 Engines → Mix → Output</div>
           <div><span className="text-gray-400 font-semibold">Time:</span> 2 Engines → Sequence/Crossfade</div>
-          <div className="pt-1"><span className="text-gray-400 font-semibold">Edges:</span> <span className="text-gray-300">gray</span> trajectory · <span className="text-amber-500">amber dashes</span> duration · <span className="text-violet-400">violet</span> spline</div>
+          <div className="pt-1"><span className="text-gray-400 font-semibold">Edges:</span>{' '}
+            <span className={`inline-block w-2 h-2 rounded-full ${PORT_COLORS.Positions} align-middle`} /> trajectory ·{' '}
+            <span className={`inline-block w-2 h-2 rounded-full ${PORT_COLORS.Duration} align-middle`} /> duration ·{' '}
+            <span className={`inline-block w-2 h-2 rounded-full ${PORT_COLORS.Spline} align-middle`} /> spline
+          </div>
           <div className="pt-1 text-gray-500">Drag from a node's bottom handle to connect. Invalid connections are blocked.</div>
         </div>
       </div>

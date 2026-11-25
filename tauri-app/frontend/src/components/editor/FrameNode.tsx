@@ -37,22 +37,22 @@ const FrameNode: React.FC<NodeProps<Node<FrameData>>> = ({ id, data, selected })
     <div
       className="w-full h-full rounded-md border-2 border-dashed pointer-events-none"
       style={{
-        borderColor: selected ? 'rgba(251,191,36,0.7)' : 'rgba(251,191,36,0.25)',
-        background: 'rgba(251,191,36,0.03)',
+        borderColor: selected ? 'rgba(148,163,184,0.7)' : 'rgba(148,163,184,0.25)',
+        background: 'rgba(148,163,184,0.03)',
       }}
     >
       <NodeResizer
         isVisible={selected}
         minWidth={120}
         minHeight={70}
-        lineClassName="!border-amber-400/50"
-        handleClassName="!bg-amber-400/70 !rounded-sm"
+        lineClassName="!border-slate-400/50"
+        handleClassName="!bg-slate-400/70 !rounded-sm"
       />
       {editing ? (
         <input
           autoFocus
           defaultValue={label}
-          className="nodrag pointer-events-auto m-1 px-1.5 py-0.5 rounded bg-gray-900 border border-amber-500/60 text-amber-200 text-xs font-semibold outline-none"
+          className="nodrag pointer-events-auto m-1 px-1.5 py-0.5 rounded bg-gray-900 border border-slate-500/60 text-slate-200 text-xs font-semibold outline-none"
           onBlur={(e) => commit(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') commit((e.target as HTMLInputElement).value);
@@ -61,7 +61,7 @@ const FrameNode: React.FC<NodeProps<Node<FrameData>>> = ({ id, data, selected })
         />
       ) : (
         <div
-          className="pointer-events-auto inline-block px-2 py-1 text-amber-300/60 text-xs font-semibold select-none cursor-default"
+          className="pointer-events-auto inline-block px-2 py-1 text-slate-300/60 text-xs font-semibold select-none cursor-default"
           onDoubleClick={() => setEditing(true)}
           title="Frame — double-click to rename"
         >

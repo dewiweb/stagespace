@@ -10,6 +10,8 @@ import { ModChips } from './ModChips';
 import { SettingsModal } from './SettingsModal';
 import { ParkedChip, OverrideChip } from './perform/ParkedChip';
 import { doPanic } from '../utils/liveActions';
+import { CHIP_SOLID, healthTone } from '../utils/uiColors';
+import { STATUS_TONES } from './ui/StatusChip';
 
 /// StatusBar — bandeau persistant en bas de fenêtre, monté dans App pour
 /// TOUS les modes (Edit et Perform). C'est la console de monitoring moteur :
@@ -48,11 +50,11 @@ export const StatusBar: React.FC = () => {
   const errorText = compileError ? `Compile: ${compileError}` : `Play: ${playError}`;
 
   const statusColor =
-    activeCount > 0 ? 'bg-green-500' :
-    status === 'compiling' ? 'bg-yellow-500 animate-pulse' :
-    status === 'error' ? 'bg-red-500' :
-    status === 'compiled' ? 'bg-blue-500' :
-    'bg-gray-600';
+    activeCount > 0 ? 'bg-stagespace-live' :
+    status === 'compiling' ? 'bg-stagespace-warning animate-pulse' :
+    status === 'error' ? 'bg-stagespace-danger' :
+    status === 'compiled' ? 'bg-stagespace-info' :
+    'bg-stagespace-dim';
 
   const statusLabel =
     activeCount > 0 ? `${activeCount} live` :
@@ -75,7 +77,7 @@ export const StatusBar: React.FC = () => {
           jamais dépendre de la phase de travail). */}
       <button
         onClick={() => doPanic()}
-        className="px-3 py-0.5 rounded bg-red-700 hover:bg-red-600 text-white text-[10px] font-black tracking-wider flex-shrink-0"
+        className={`px-3 py-0.5 rounded ${CHIP_SOLID.danger} text-[10px] font-black tracking-wider flex-shrink-0`}
         title="PANIC — stop all + positions d'origine (Esc)"
       >
         PANIC
@@ -92,10 +94,10 @@ export const StatusBar: React.FC = () => {
           surfaces (la copie Toolbar a été retirée — doublon). */}
       <button
         onClick={() => setArmed(!armed)}
-        className={`px-1.5 py-0.5 rounded font-bold flex-shrink-0 transition-colors ${
+        className={`px-1.5 py-0.5 rounded font-bold flex-shrink-0 border transition-colors ${
           armed
-            ? 'text-red-300 bg-red-900/40 border border-red-700/40 hover:bg-red-800/50'
-            : 'text-emerald-400 bg-emerald-900/40 border border-emerald-700/40 animate-pulse hover:bg-emerald-800/50'
+            ? `${STATUS_TONES.danger} hover:bg-stagespace-danger/50`
+            : `${STATUS_TONES.dim} animate-pulse hover:bg-gray-700/50`
         }`}
         title={armed ? 'OSC LIVE — positions attempted; UDP cannot confirm delivery (a powered-off renderer host stays invisible). Click for DRY-RUN' : 'DRY-RUN — OSC muted, nothing is sent. Click to go LIVE'}
       >
@@ -107,7 +109,7 @@ export const StatusBar: React.FC = () => {
           sont avalées jusqu'à 120s ressemble à un bug. */}
       {isRecalling && (
         <span
-          className="px-1.5 py-0.5 rounded font-bold flex-shrink-0 text-purple-300 bg-purple-900/40 border border-purple-700/40 animate-pulse"
+          className={`px-1.5 py-0.5 rounded font-bold flex-shrink-0 border ${STATUS_TONES.conduite} animate-pulse`}
           title="Cue recall in progress — incoming show-control commands are suppressed (except panic)"
         >
           RECALL
@@ -131,8 +133,8 @@ export const StatusBar: React.FC = () => {
         <span
           className={`px-1.5 py-0.5 rounded font-bold flex-shrink-0 border ${
             flowHealth.psnAge != null && flowHealth.psnAge < 2000
-              ? 'text-purple-300 bg-purple-900/40 border-purple-700/40'
-              : 'text-amber-300 bg-amber-900/40 border-amber-700/40 animate-pulse'
+              ? STATUS_TONES.tracking
+              : `${STATUS_TONES.warning} animate-pulse`
           }`}
           title={flowHealth.psnAge != null ? `PSN tracking — dernière trame il y a ${flowHealth.psnAge}ms` : 'PSN actif, aucune trame reçue'}
         >
@@ -141,7 +143,7 @@ export const StatusBar: React.FC = () => {
       )}
       {flowHealth.showCmdAgeS != null && flowHealth.showCmdAgeS < 10 && (
         <span
-          className="px-1.5 py-0.5 rounded font-bold flex-shrink-0 text-cyan-300 bg-cyan-900/40 border border-cyan-700/40"
+          className={`px-1.5 py-0.5 rounded font-bold flex-shrink-0 border ${STATUS_TONES.osc}`}
           title={`Show-control OSC actif — dernière commande il y a ${flowHealth.showCmdAgeS.toFixed(1)}s (toute commande, pas spécifiquement le timecode)`}
         >
           OSC ●
@@ -164,8 +166,8 @@ export const StatusBar: React.FC = () => {
           <span
             className={`px-1.5 py-0.5 rounded font-mono flex-shrink-0 border ${
               parts.some((p) => p.warn)
-                ? 'text-amber-300 bg-amber-900/40 border-amber-700/40'
-                : 'text-gray-400 bg-gray-800/40 border-gray-700/40'
+                ? STATUS_TONES.warning
+                : STATUS_TONES.dim
             }`}
             title={parts.map((p) => p.tip).join(' · ')}
           >
@@ -179,7 +181,7 @@ export const StatusBar: React.FC = () => {
           Visible sur toutes les surfaces. */}
       {scorePlaying && (
         <span
-          className="px-1.5 py-0.5 rounded font-bold flex-shrink-0 text-violet-300 bg-violet-900/40 border border-violet-700/40"
+          className={`px-1.5 py-0.5 rounded font-bold flex-shrink-0 border ${STATUS_TONES.tracking}`}
           title="Le sequencer Score joue — ses clips spawnent des moves (sc-*) et ses courbes écrivent des paramètres en live"
         >
           SCORE ▶
@@ -195,7 +197,7 @@ export const StatusBar: React.FC = () => {
           backend = plus d'OSC, plus de recall, plus rien : visible partout. */}
       {backendDown && (
         <span
-          className="px-1.5 py-0.5 rounded font-bold flex-shrink-0 text-red-300 bg-red-950/60 border border-red-800 animate-pulse"
+          className={`px-1.5 py-0.5 rounded font-bold flex-shrink-0 border ${STATUS_TONES.danger} animate-pulse`}
           title="Une commande backend a échoué silencieusement — le moteur ne répond probablement plus"
         >
           BACKEND ✕
@@ -205,16 +207,16 @@ export const StatusBar: React.FC = () => {
       {/* Perf en direct — visible dès qu'un mouvement tourne */}
       {activeCount > 0 && perfStats && (
         <div className="flex items-center gap-2 font-mono flex-shrink-0">
-          <span className={perfStats.fps >= 55 ? 'text-green-400' : perfStats.fps >= 30 ? 'text-yellow-400' : 'text-red-400'}>
+          <span className={healthTone(perfStats.fps >= 55 ? 'ok' : perfStats.fps >= 30 ? 'degraded' : 'critical')}>
             {perfStats.fps.toFixed(0)} FPS
           </span>
           <span
-            className={perfStats.oscErrorRate > 0.05 ? 'text-red-400' : 'text-cyan-400'}
+            className={perfStats.oscErrorRate > 0.05 ? healthTone('critical') : 'text-stagespace-osc'}
             title="OSC packets attempted — send() succeeding does NOT prove delivery. Only a refused port (OSC SUSPENDED) is detectable; a dead/offline renderer host is invisible to UDP."
           >
             {perfStats.oscRate.toFixed(0)} osc/s
           </span>
-          <span className={perfStats.cpuPercent < 50 ? 'text-gray-400' : 'text-yellow-400'}>
+          <span className={perfStats.cpuPercent < 50 ? 'text-gray-400' : healthTone('degraded')}>
             {perfStats.cpuPercent.toFixed(0)}% cpu
           </span>
           {/* Télémétrie dev (merge/lock µs) — gatée derrière debugPerfVisible :
@@ -222,7 +224,7 @@ export const StatusBar: React.FC = () => {
           {debugPerfVisible && (
             <>
               <span
-                className={perfStats.mergeFrameUs < 2000 ? 'text-gray-400' : perfStats.mergeFrameUs < 8000 ? 'text-yellow-400' : 'text-red-400'}
+                className={perfStats.mergeFrameUs < 2000 ? 'text-gray-400' : perfStats.mergeFrameUs < 8000 ? healthTone('degraded') : healthTone('critical')}
                 title="Temps de travail réel de la frame merge (µs) — budget 16.6ms"
               >
                 {perfStats.mergeFrameUs < 1000
@@ -230,7 +232,7 @@ export const StatusBar: React.FC = () => {
                   : `${(perfStats.mergeFrameUs / 1000).toFixed(1)}ms`} merge
               </span>
               <span
-                className={perfStats.mergeLockUs < 100 ? 'text-gray-500' : perfStats.mergeLockUs < 500 ? 'text-yellow-400' : 'text-red-400'}
+                className={perfStats.mergeLockUs < 100 ? 'text-gray-500' : perfStats.mergeLockUs < 500 ? healthTone('degraded') : healthTone('critical')}
                 title="Temps d'attente cumulé en acquisition de locks pendant la frame merge (µs) — contention"
               >
                 {perfStats.mergeLockUs < 1000
@@ -240,10 +242,10 @@ export const StatusBar: React.FC = () => {
             </>
           )}
           {perfStats.oscSuspended && (
-            <span className="text-orange-400 font-bold animate-pulse">OSC SUSPENDED</span>
+            <span className={`${healthTone('degraded')} font-bold animate-pulse`}>OSC SUSPENDED</span>
           )}
           {perfStats.threadDied && (
-            <span className="text-red-400 font-bold animate-pulse">MERGE DEAD</span>
+            <span className={`${healthTone('critical')} font-bold animate-pulse`}>MERGE DEAD</span>
           )}
         </div>
       )}
@@ -253,7 +255,7 @@ export const StatusBar: React.FC = () => {
       {hasError && (
         <button
           onClick={() => { clearCompileError(); clearPlayError(); }}
-          className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/60 text-red-300 border border-red-700/50 hover:bg-red-900/80 transition-colors min-w-0"
+          className={`flex items-center gap-1 px-2 py-0.5 rounded border ${STATUS_TONES.danger} hover:bg-stagespace-danger/80 transition-colors min-w-0`}
           title={`${errorText} — click to dismiss`}
         >
           <TriangleAlert size={11} className="flex-shrink-0" />
@@ -266,7 +268,7 @@ export const StatusBar: React.FC = () => {
       {/* Salle chargée — ex-chip Toolbar : info document, à droite avec
           la destination et la version. */}
       {holProject && (
-        <span className="text-green-400 font-medium flex-shrink-0" title="Venue (.hol) loaded">
+        <span className="text-stagespace-info font-medium flex-shrink-0" title="Venue (.hol) loaded">
           {holProject.tracks.length} tracks
         </span>
       )}

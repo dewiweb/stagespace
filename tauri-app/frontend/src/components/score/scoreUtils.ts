@@ -52,30 +52,71 @@ export function rulerTicks(pxPerSec: number): { minorMs: number; majorMs: number
   return { minorMs: pick[0] / pick[1], majorMs: pick[0] };
 }
 
+/// Couleurs des types de clips — mapping par FAMILLES FONCTIONNELLES
+/// (design : docs/color-harmonization.md). Famille = teinte, intensité
+/// = sous-type. Les 24 types ne peuvent pas avoir 24 hues lisibles :
+///   conduite  (amber)   — transitions de show : cue/cueArm/cueGo
+///   danger    (red)     — stopAll/panic
+///   placement (teal)    — placer dans l'espace : pose/positions/throw/gesture
+///   objectCtl (fuchsia) — contrôle doux des objets : park/solo/attention…
+///   graphs    (indigo)  — pipelines de traitement, zones incluses
+///   system    (cyan)    — utilitaires : osc/soundcheck/view
+///   slot      (purple)  — le contenu (moves)
+/// Les projections de lanes (blast/spans) reprennent la teinte de la
+/// famille du clip parent — cf. ScoreTimeline.
 export const CLIP_COLORS: Record<string, string> = {
-  slot: 'bg-purple-600/80 border-purple-400',
-  cue: 'bg-amber-600/80 border-amber-400',
-  stopAll: 'bg-red-700/80 border-red-500',
-  panic: 'bg-red-900/80 border-red-400',
-  positions: 'bg-teal-700/80 border-teal-400',
-  modGraph: 'bg-indigo-700/80 border-indigo-400',
-  postGraph: 'bg-sky-700/80 border-sky-400',
-  chanMods: 'bg-violet-700/80 border-violet-400',
-  zones: 'bg-fuchsia-700/80 border-fuchsia-400',
-  gesture: 'bg-orange-600/80 border-orange-400',
-  throw: 'bg-orange-800/80 border-orange-500',
-  park: 'bg-cyan-800/80 border-cyan-500',
-  unpark: 'bg-cyan-700/80 border-cyan-400',
-  manualClear: 'bg-slate-700/80 border-slate-400',
-  attention: 'bg-rose-800/80 border-rose-500',
-  osc: 'bg-emerald-700/80 border-emerald-400',
-  soundcheck: 'bg-lime-700/80 border-lime-400',
-  solo: 'bg-lime-800/80 border-lime-500',
-  unsolo: 'bg-lime-800/80 border-lime-500',
-  view: 'bg-lime-900/80 border-lime-600',
-  cueArm: 'bg-amber-800/80 border-amber-500',
-  cueGo: 'bg-amber-700/80 border-amber-400',
-  pose: 'bg-teal-600/80 border-teal-300',
+  slot: 'bg-purple-600/80 border-purple-400 text-white',
+  cue: 'bg-amber-600/80 border-amber-400 text-gray-950',
+  cueArm: 'bg-amber-800/80 border-amber-500 text-white',
+  cueGo: 'bg-amber-700/80 border-amber-400 text-white',
+  stopAll: 'bg-red-700/80 border-red-500 text-white',
+  panic: 'bg-red-900/80 border-red-400 text-white',
+  pose: 'bg-teal-700/80 border-teal-400 text-white',
+  positions: 'bg-teal-700/80 border-teal-400 text-white',
+  throw: 'bg-teal-800/80 border-teal-500 text-white',
+  gesture: 'bg-teal-500/80 border-teal-300 text-gray-950',
+  park: 'bg-pink-800/80 border-pink-500 text-white',
+  unpark: 'bg-fuchsia-700/80 border-fuchsia-400 text-white',
+  solo: 'bg-fuchsia-600/80 border-fuchsia-400 text-white',
+  unsolo: 'bg-fuchsia-600/80 border-fuchsia-400 text-white',
+  attention: 'bg-pink-700/80 border-pink-400 text-white',
+  manualClear: 'bg-pink-900/80 border-pink-500 text-white',
+  modGraph: 'bg-indigo-700/80 border-indigo-400 text-white',
+  postGraph: 'bg-indigo-600/80 border-indigo-300 text-white',
+  chanMods: 'bg-indigo-600/80 border-indigo-300 text-white',
+  zones: 'bg-indigo-600/80 border-indigo-300 text-white',
+  osc: 'bg-cyan-700/80 border-cyan-400 text-white',
+  soundcheck: 'bg-cyan-500/80 border-cyan-300 text-gray-950',
+  view: 'bg-cyan-900/80 border-cyan-500 text-white',
+};
+
+/// Survol du picker — teinte de la FAMILLE du clip (miroir de
+/// CLIP_COLORS : re-teinter une famille = éditer les deux maps
+/// côte à côte). Consommé par ScoreClipPicker.
+export const CLIP_HOVER: Record<string, string> = {
+  slot: 'hover:bg-purple-700/40',
+  cue: 'hover:bg-amber-700/40',
+  cueArm: 'hover:bg-amber-700/40',
+  cueGo: 'hover:bg-amber-700/40',
+  stopAll: 'hover:bg-red-800/40',
+  panic: 'hover:bg-red-900/40',
+  pose: 'hover:bg-teal-700/40',
+  positions: 'hover:bg-teal-700/40',
+  throw: 'hover:bg-teal-800/40',
+  gesture: 'hover:bg-teal-700/40',
+  park: 'hover:bg-pink-700/40',
+  unpark: 'hover:bg-pink-700/40',
+  solo: 'hover:bg-fuchsia-700/40',
+  unsolo: 'hover:bg-fuchsia-700/40',
+  attention: 'hover:bg-pink-600/40',
+  manualClear: 'hover:bg-pink-700/40',
+  modGraph: 'hover:bg-indigo-700/40',
+  postGraph: 'hover:bg-indigo-700/40',
+  chanMods: 'hover:bg-indigo-700/40',
+  zones: 'hover:bg-indigo-700/40',
+  osc: 'hover:bg-cyan-700/40',
+  soundcheck: 'hover:bg-cyan-700/40',
+  view: 'hover:bg-cyan-700/40',
 };
 
 /// Label affiché d'un clip — nom du slot/cue ou marqueur.

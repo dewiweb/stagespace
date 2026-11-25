@@ -11,6 +11,7 @@ import { doThrow, doClearPosition } from '../../utils/liveActions';
 import ContextMenu from '../ui/ContextMenu';
 import { buildObjectMenuItems } from '../../utils/objectMenuItems';
 import { sourceHex, SOURCE_LABEL, SOURCE_HEX } from '../../utils/sourceColors';
+import { VIZ, UI_HEX } from '../../utils/uiColors';
 import { ObjectInspectBar } from '../viewer3d/ObjectInspectBar';
 import type { Zone } from '../../store/slices/spatialFxSlice';
 
@@ -48,7 +49,7 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
   const trackPositions = useGraphStore((s) => s.trackPositions);
   const restGhosts = useGraphStore((s) => s.viewerRestGhosts);
   // Fantômes de pose (P6) — cibles de la pose sélectionnée dans le
-  // panel, en pointillé violet (amber si la track n'est plus patchée).
+  // panel, en pointillé teal target (warning si la track n'est plus patchée).
   // Même pref « fantômes » que les origines — étendue aux poses.
   const selectedPoseName = usePoseStore((s) => s.selectedPoseName);
   const poses = usePoseStore((s) => s.poses);
@@ -224,19 +225,19 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
         if (best >= 0) setObjMenu({ x: e.clientX, y: e.clientY, obj: best });
       }}
     >
-      <circle cx="0" cy="0" r="105" fill="none" stroke="#1f2937" strokeWidth="1" />
-      <circle cx="0" cy="0" r="52" fill="none" stroke="#1f2937" strokeWidth="0.5" />
-      <line x1="0" y1="-105" x2="0" y2="105" stroke="#1f2937" strokeWidth="0.5" />
-      <line x1="-105" y1="0" x2="105" y2="0" stroke="#1f2937" strokeWidth="0.5" />
-      <text x="0" y="-99" fill="#4b5563" fontSize="8" textAnchor="middle">{axisLabel} · {maxR.toFixed(0)}m</text>
+      <circle cx="0" cy="0" r="105" fill="none" stroke={VIZ.radarGrid} strokeWidth="1" />
+      <circle cx="0" cy="0" r="52" fill="none" stroke={VIZ.radarGrid} strokeWidth="0.5" />
+      <line x1="0" y1="-105" x2="0" y2="105" stroke={VIZ.radarGrid} strokeWidth="0.5" />
+      <line x1="-105" y1="0" x2="105" y2="0" stroke={VIZ.radarGrid} strokeWidth="0.5" />
+      <text x="0" y="-99" fill={VIZ.faintLabel} fontSize="8" textAnchor="middle">{axisLabel} · {maxR.toFixed(0)}m</text>
       {/* Axes projetés — la vue ne dit rien si on ne sait pas quels
           axes on regarde. */}
-      <text x="103" y="107" fill="#374151" fontSize="7" textAnchor="end">
+      <text x="103" y="107" fill={VIZ.faintLabel} fontSize="7" textAnchor="end">
         {'XYZ'[va]}/{'XYZ'[vb]}
       </text>
       {/* En side : le FRONT (-y) est à gauche — repère au bord. */}
       {radarView === 'side' && (
-        <text x="-103" y="107" fill="#4b5563" fontSize="7" textAnchor="start">← FRONT</text>
+        <text x="-103" y="107" fill={VIZ.faintLabel} fontSize="7" textAnchor="start">← FRONT</text>
       )}
       {/* En front : repère LEFT/RIGHT implicite = ±x, rien à marquer. */}
       {/* Empreintes des zones — cyan manuelles, violet graph-déclarées.
@@ -244,8 +245,8 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
           Les zones à effet positionnel (repel/vortex…) reçoivent un
           contour renforcé — elles DÉPLACENT les objets maintenant. */}
       {[
-        ...graphZones.map((z) => ({ z, color: '#8b5cf6' })),
-        ...zones.map((z) => ({ z, color: '#22d3ee' })),
+        ...graphZones.map((z) => ({ z, color: VIZ.zoneGraph })),
+        ...zones.map((z) => ({ z, color: VIZ.zoneManual })),
       ].map(({ z, color }, zi) => {
         if (!z.enabled) return null;
         const strokeW = z.effect ? 1.6 : 0.7;
@@ -326,7 +327,7 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
             }}
           >
             {isSelected && (
-              <circle cx={cx} cy={cy} r={8} fill="none" stroke="#fff" strokeWidth="1.5" opacity="0.9" />
+              <circle cx={cx} cy={cy} r={8} fill="none" stroke={VIZ.selRing} strokeWidth="1.5" opacity="0.9" />
             )}
             {out ? (
               <>
@@ -351,7 +352,7 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
               <text
                 x={cx + 8}
                 y={cy - 6}
-                fill="#f97316"
+                fill={UI_HEX.warning}
                 fontSize="11"
                 fontWeight="bold"
                 style={{ cursor: 'pointer' }}
@@ -363,7 +364,7 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
                 ×
               </text>
             )}
-            <text x={cx} y={cy - 7} fill="#9ca3af" fontSize="7" textAnchor="middle">
+            <text x={cx} y={cy - 7} fill={VIZ.dimLabel} fontSize="7" textAnchor="middle">
               {/* track_id (même numérotation que les pads et la 3D) — pas obj_index */}
               {manualOscIds[t] ?? t + 1}
             </text>
@@ -377,19 +378,20 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
         const [cx, cy] = proj(p);
         return (
           <g key={`ghost${i}`} pointerEvents="none" opacity={0.45}>
-            <circle cx={cx} cy={cy} r="4" fill="none" stroke="#4b5563" strokeWidth="0.8" strokeDasharray="2 2" />
-            <text x={cx} y={cy - 7} fill="#4b5563" fontSize="7" textAnchor="middle">
+            <circle cx={cx} cy={cy} r="4" fill="none" stroke={VIZ.restGhost} strokeWidth="0.8" strokeDasharray="2 2" />
+            <text x={cx} y={cy - 7} fill={VIZ.restGhost} fontSize="7" textAnchor="middle">
               {manualOscIds[i] ?? i + 1}
             </text>
           </g>
         );
       })}
-      {/* Fantômes de pose — cibles de la pose sélectionnée. Violet
-          patché / amber non patché (serait skippée au recall), label
-          pose#track pour identifier la formation sans le panel. */}
+      {/* Fantômes de pose — cibles de la pose sélectionnée. Teal target
+          patché (vocabulaire destination) / warning non patché (serait
+          skippée au recall), label pose#track pour identifier la
+          formation sans le panel. */}
       {poseGhosts.map((g) => {
         const [cx, cy] = proj(g.position);
-        const color = g.patched ? '#a78bfa' : '#f59e0b';
+        const color = g.patched ? VIZ.target : VIZ.targetInvalid;
         return (
           <g key={`poseghost${g.trackId}`} pointerEvents="none" opacity={0.8}>
             <circle cx={cx} cy={cy} r="6" fill="none" stroke={color} strokeWidth="1" strokeDasharray="3 2.5" />
@@ -400,20 +402,21 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
         );
       })}
       {/* Flèche du lancer en cours — direction + longueur du flick.
-          Le geste était invisible : impossible de viser le lancer. */}
+          Le geste était invisible : impossible de viser le lancer.
+          Teal target : une prédiction de destination (doctrine viz). */}
       {throwCursor && throwDrag.current && positions[throwDrag.current.id] && (() => {
         const [x1, y1] = proj(positions[throwDrag.current!.id]);
         return (
           <line
             x1={x1} y1={y1} x2={throwCursor.x} y2={throwCursor.y}
-            stroke="#22d3ee" strokeWidth="1.5" strokeOpacity="0.8"
+            stroke={VIZ.target} strokeWidth="1.5" strokeOpacity="0.8"
             markerEnd="url(#throwArrow)" pointerEvents="none"
           />
         );
       })()}
       <defs>
         <marker id="throwArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#22d3ee" fillOpacity="0.8" />
+          <path d="M 0 0 L 10 5 L 0 10 z" fill={VIZ.target} fillOpacity="0.8" />
         </marker>
       </defs>
     </svg>

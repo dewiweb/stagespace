@@ -493,7 +493,7 @@ export const MenuBar: React.FC = () => {
                       (entry as Item).disabled
                         ? 'text-gray-600 cursor-default'
                         : (entry as Item).danger
-                          ? 'text-red-400 hover:bg-red-900/30'
+                          ? 'text-stagespace-danger hover:bg-stagespace-danger/15'
                           : 'text-gray-300 hover:bg-gray-700/60'
                     }`}
                   >

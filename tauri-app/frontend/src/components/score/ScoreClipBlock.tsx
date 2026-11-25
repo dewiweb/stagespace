@@ -58,7 +58,7 @@ export const ScoreClipBlock: React.FC<{
         </div>
       )}
       <div
-        className={`absolute rounded border text-[10px] font-bold px-1.5 flex items-center overflow-hidden cursor-grab ${CLIP_COLORS[c.ref.type]} ${selected ? 'ring-2 ring-white' : ''} ${orphan ? 'border-dashed opacity-50 saturate-50' : ''} ${instant ? 'whitespace-nowrap pr-2 border-l-2 border-l-white/70' : ''}`}
+        className={`absolute rounded border text-[10px] font-bold px-1.5 flex items-center overflow-hidden cursor-grab ${CLIP_COLORS[c.ref.type]} ${selected ? 'ring-2 ring-white' : ''} ${orphan ? 'border-dashed border-stagespace-warning opacity-60 saturate-50' : ''} ${instant ? 'whitespace-nowrap pr-2 border-l-2 border-l-white/70' : ''}`}
         style={{ left: ms2px(c.startMs), width: instant ? undefined : Math.max(14, w), minWidth: 14, top, height: h }}
         title={orphan ? `${label} — référence perdue` : label}
         onPointerDown={(e) => onPointerDown(e, c, 'move')}
@@ -94,7 +94,7 @@ export const ScoreClipBlock: React.FC<{
               style={{ left: ms2px(moveEndMs) }}
             />
             <div
-              className="absolute top-0 bottom-0 border-l border-dashed border-amber-300/60 pointer-events-none"
+              className="absolute top-0 bottom-0 border-l border-dashed border-stagespace-derived/60 pointer-events-none"
               style={{ left: ms2px(moveEndMs) }}
               title="fin naturelle du move — fenêtre muette au-delà"
             />

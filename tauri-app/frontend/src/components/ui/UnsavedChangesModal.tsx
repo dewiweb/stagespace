@@ -37,7 +37,7 @@ export const UnsavedChangesModal: React.FC = () => {
         </button>
         <button
           onClick={run}
-          className="px-3 py-1.5 text-xs rounded bg-red-900/60 text-red-200 hover:bg-red-800/70 transition-colors"
+          className="px-3 py-1.5 text-xs rounded bg-stagespace-danger/20 text-stagespace-danger hover:bg-stagespace-danger/30 transition-colors"
         >
           Discard changes
         </button>
@@ -51,7 +51,7 @@ export const UnsavedChangesModal: React.FC = () => {
               if (ok) { clearPendingUnsavedAction(); action(); }
             });
           }}
-          className="px-3 py-1.5 text-xs rounded bg-cyan-800 text-white hover:bg-cyan-700 transition-colors"
+          className="px-3 py-1.5 text-xs rounded bg-stagespace-accent text-gray-950 hover:opacity-90 transition-colors"
         >
           Save first
         </button>

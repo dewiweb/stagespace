@@ -1,5 +1,6 @@
 import React from 'react';
 import { doUnpark, doClearPosition, doClearAllPositions, doAttention } from '../../utils/liveActions';
+import { sourceText, SOURCE_STRONG, SOURCE_ROW } from '../../utils/sourceColors';
 
 /// États qui privent le moteur d'un objet — chacun avec son release :
 ///   manual/hold → clear_manual_position · park → unpark ·
@@ -28,7 +29,7 @@ export const StateChip: React.FC<{
   entries: HeldEntry[];
   label: string;
   header: string;
-  tone: 'cyan' | 'orange';
+  tone: 'orange' | 'pink';
   compact?: boolean;
   dropUp?: boolean;
   className?: string;
@@ -37,11 +38,23 @@ export const StateChip: React.FC<{
 }> = ({ entries, label, header, tone, compact, dropUp, className, onRelease, releaseAll }) => {
   const [open, setOpen] = React.useState(false);
   const release = onRelease ?? releaseFor;
-  const btn = tone === 'cyan'
-    ? 'bg-cyan-800/70 hover:bg-cyan-700 text-cyan-100'
-    : 'bg-orange-800/70 hover:bg-orange-700 text-orange-100';
-  const objTxt = tone === 'cyan' ? 'text-cyan-200' : 'text-orange-200';
-  const rowBtn = tone === 'cyan' ? 'bg-gray-700 hover:bg-cyan-700' : 'bg-gray-700 hover:bg-orange-700';
+  /// Tones statiques — pink = stase (park), orange = overrides moteur.
+  /// (cyan supprimé : teinte osc, code mort — aucun appelant.)
+  /// Les rows sont colorees par etat reel via sourceText — un chip
+  /// mixte ne ment plus sur la composition.
+  const TONES = {
+    orange: {
+      btn: 'bg-stagespace-warning/70 hover:bg-stagespace-warning text-gray-950',
+      rowBtn: 'bg-gray-700 hover:bg-stagespace-warning',
+    },
+    pink: {
+      btn: SOURCE_STRONG.park,
+      rowBtn: SOURCE_ROW.park,
+    },
+  } as const;
+  const t = TONES[tone];
+  const btn = t.btn;
+  const rowBtn = t.rowBtn;
   return (
     <div className="relative">
       <button
@@ -63,7 +76,7 @@ export const StateChip: React.FC<{
           </div>
           {entries.map((e) => (
             <div key={e.obj} className="flex items-center justify-between gap-2 px-1 py-1">
-              <span className={`${objTxt} font-mono text-sm`}>obj {e.obj} · {e.state}</span>
+              <span className={`${sourceText(e.state)} font-mono text-sm`}>obj {e.obj} · {e.state}</span>
               <button
                 onClick={() => release(e.obj, e.state)}
                 className={`px-2 py-0.5 rounded ${rowBtn} text-xs text-gray-200`}
@@ -99,7 +112,7 @@ export const ParkedChip: React.FC<{
     entries={parked.map((obj) => ({ obj, state: 'park' as const }))}
     label="PARKED"
     header="Parked — hors recalls"
-    tone="cyan"
+    tone="pink"
     onRelease={onUnpark ? (obj: number) => onUnpark(obj) : undefined}
     releaseAll={() => parked.forEach((obj) => (onUnpark ?? doUnpark)(obj))}
     {...rest}

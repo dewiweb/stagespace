@@ -18,7 +18,7 @@ import { tbAction, tbIcon, tbSep } from './toolbarStyles';
 /** Bouton carré de palette — même langage que tbBtn mais vertical. */
 const palBtn = (active: boolean) =>
   `w-7 h-7 flex items-center justify-center rounded transition-colors ${
-    active ? 'bg-orange-600 text-white' : 'text-gray-400 hover:bg-gray-700/70 hover:text-gray-200'
+    active ? 'bg-stagespace-accent text-gray-950' : 'text-gray-400 hover:bg-gray-700/70 hover:text-gray-200'
   }`;
 
 export const DrawPaletteTools: React.FC = () => {
@@ -121,7 +121,7 @@ export const DrawMenuBar: React.FC = () => {
         // Finalize AVANT de clearer — finalizeDrawing lit drawnPoints/CPs.
         // (finalizeDrawing sort déjà du drawMode en cas de succès)
         onClick={async () => { await finalizeDrawing(); clearDrawnPoints(); clearSpline(); setDrawMode(false); }}
-        className={`${tbAction} bg-orange-600 hover:bg-orange-700 text-white`}
+        className={`${tbAction} bg-stagespace-accent hover:opacity-90 text-gray-950`}
       >
         Done
       </button>

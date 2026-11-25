@@ -65,25 +65,24 @@ export const PARAM_SCHEMA: Record<NodeType, ParamDef[]> = Object.fromEntries(
 /// Labels orientés TÂCHE opérateur (« qu'est-ce que je veux faire ? ») plutôt
 /// que taxonomie interne (MathEngine/PhysicsEngine = distinction d'implémentation).
 /// `hint` = tooltip du header de catégorie dans la palette.
-const CATEGORY_META: { category: NodeCategory; label: string; hint: string; color: string }[] = [
-  { category: 'Structural', label: 'Flow', hint: 'Wire the pipeline — Objects → engine → Output', color: 'gray' },
-  { category: 'MathEngine', label: 'Motion · Geometric', hint: 'Deterministic trajectories — orbits, lines, waves, noise', color: 'blue' },
-  { category: 'PhysicsEngine', label: 'Motion · Simulated', hint: 'Physical & reactive behaviors — springs, bounce, follow, swarm', color: 'green' },
-  { category: 'Spline', label: 'Drawn Paths', hint: 'Draw a freehand trajectory, then evaluate/trim/offset it', color: 'cyan' },
-  { category: 'Modifier', label: 'Transform', hint: 'Reshape a trajectory — scale, rotate, offset, mirror, delay…', color: 'pink' },
-  { category: 'Composite', label: 'Combine', hint: 'Layer & arrange — mix, sequence, crossfade, switch', color: 'purple' },
-  { category: 'Envelope', label: 'Spatial Fades', hint: 'Fade by time, distance, direction or audio level', color: 'orange' },
-  { category: 'Source', label: 'Inputs', hint: 'External drives — audio amplitude/spectrum, OSC, BPM', color: 'yellow' },
-  { category: 'PostProcess', label: 'Stage FX', hint: 'Global processing on the whole field — zones, radius, velocity, barycenter', color: 'cyan' },
-  { category: 'Plugin', label: 'Plugins', hint: 'External .ssx bundles — drop the plugins folder content here', color: 'yellow' },
-  { category: 'Signal', label: 'Signals', hint: 'Modulation patch cables — only in the Mods tab', color: 'amber' },
+const CATEGORY_META: { category: NodeCategory; label: string; hint: string }[] = [
+  { category: 'Structural', label: 'Flow', hint: 'Wire the pipeline — Objects → engine → Output' },
+  { category: 'MathEngine', label: 'Motion · Geometric', hint: 'Deterministic trajectories — orbits, lines, waves, noise' },
+  { category: 'PhysicsEngine', label: 'Motion · Simulated', hint: 'Physical & reactive behaviors — springs, bounce, follow, swarm' },
+  { category: 'Spline', label: 'Drawn Paths', hint: 'Draw a freehand trajectory, then evaluate/trim/offset it' },
+  { category: 'Modifier', label: 'Transform', hint: 'Reshape a trajectory — scale, rotate, offset, mirror, delay…' },
+  { category: 'Composite', label: 'Combine', hint: 'Layer & arrange — mix, sequence, crossfade, switch' },
+  { category: 'Envelope', label: 'Spatial Fades', hint: 'Fade by time, distance, direction or audio level' },
+  { category: 'Source', label: 'Inputs', hint: 'External drives — audio amplitude/spectrum, OSC, BPM' },
+  { category: 'PostProcess', label: 'Stage FX', hint: 'Global processing on the whole field — zones, radius, velocity, barycenter' },
+  { category: 'Plugin', label: 'Plugins', hint: 'External .ssx bundles — drop the plugins folder content here' },
+  { category: 'Signal', label: 'Signals', hint: 'Modulation patch cables — only in the Mods tab' },
 ];
 
-export const NODE_CATEGORIES: { label: string; hint: string; color: string; types: NodeType[] }[] =
-  CATEGORY_META.map(({ category, label, hint, color }) => ({
+export const NODE_CATEGORIES: { label: string; hint: string; types: NodeType[] }[] =
+  CATEGORY_META.map(({ category, label, hint }) => ({
     label,
     hint,
-    color,
     types: NODE_SPECS.filter((s) => s.category === category).map((s) => s.node_type),
   })).filter((c) => c.types.length > 0);
 
@@ -102,26 +101,6 @@ export const SUB_ONLY_NODES: Set<NodeType> = new Set(
 export const SIGNAL_ONLY_NODES: Set<NodeType> = new Set(
   NODE_SPECS.filter((s) => s.scope === 'SignalOnly').map((s) => s.node_type),
 );
-
-export const NODE_COLORS: Record<string, string> = {
-  gray: '#4b5563',
-  blue: '#2563eb',
-  green: '#16a34a',
-  purple: '#9333ea',
-  yellow: '#ca8a04',
-  orange: '#ea580c',
-  cyan: '#0891b2',
-  pink: '#db2777',
-  amber: '#f59e0b',
-};
-
-const CATEGORY_COLOR: Record<NodeCategory, string> = Object.fromEntries(
-  CATEGORY_META.map((m) => [m.category, m.color]),
-) as Record<NodeCategory, string>;
-
-export function getCategoryColor(type: NodeType): string {
-  return NODE_COLORS[CATEGORY_COLOR[specOf(type).category]] ?? '#4b5563';
-}
 
 /// Défaut de création d'un param — `default_json` du spec (parsé), sinon
 /// fallback par type.

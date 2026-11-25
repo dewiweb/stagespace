@@ -31,7 +31,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
         </button>
         <button
           onClick={onConfirm}
-          className="flex-1 py-1.5 bg-red-700 hover:bg-red-600 text-white text-xs rounded font-bold"
+          className="flex-1 py-1.5 bg-stagespace-danger hover:opacity-90 text-white text-xs rounded font-bold"
         >
           {confirmLabel}
         </button>

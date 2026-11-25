@@ -20,7 +20,7 @@ export const ModChips: React.FC = () => {
 
   return (
     <span
-      className="px-1.5 py-0.5 rounded font-mono flex-shrink-0 border text-purple-300 bg-purple-900/40 border-purple-700/40"
+      className="px-1.5 py-0.5 rounded font-mono flex-shrink-0 border text-stagespace-modulation bg-stagespace-modulation/15 border-stagespace-modulation/40"
       title={`Modulation globale active — ${chips.map((c) => c.chainLabel).join(' · ')} (onglet signal de l'éditeur)`}
     >
       MOD {chips.map((c) => `${c.target}←${c.srcLabel}`).join(' ')}

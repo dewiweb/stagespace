@@ -51,7 +51,7 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
             step={0.5}
             value={gotoDuration}
             onChange={(e) => setGotoDuration(Math.max(0.2, Number(e.target.value) || 2.0))}
-            className="w-12 bg-gray-900 border border-gray-700 rounded px-1 py-0.5 text-[10px] text-gray-300 focus:border-cyan-600 focus:outline-none"
+            className="w-12 bg-gray-900 border border-gray-700 rounded px-1 py-0.5 text-[10px] text-gray-300 focus:border-stagespace-accent focus:outline-none"
           />
           <span className="text-gray-600">s</span>
         </label>
@@ -66,12 +66,12 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
             if (e.key === 'Enter') capture();
           }}
           placeholder="pose name…"
-          className="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:border-cyan-600 focus:outline-none"
+          className="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:border-stagespace-accent focus:outline-none"
         />
         <button
           onClick={capture}
           disabled={!newName.trim()}
-          className="px-2 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
+          className="px-2 py-1 rounded bg-stagespace-accent/20 hover:bg-stagespace-accent/30 text-stagespace-info text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
           title={
             selectedTrackIds.size > 0
               ? `Capture ${selectedTrackIds.size} selected track(s) at their current positions`
@@ -102,11 +102,11 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
                     : 'Show pose targets as ghosts in the 3D view'
                 }
               >
-                <div className={`truncate ${selectedPoseName === p.name ? 'text-violet-300 font-semibold' : ''}`}>
+                <div className={`truncate ${selectedPoseName === p.name ? 'text-stagespace-accent font-semibold' : ''}`}>
                   {selectedPoseName === p.name ? '◈ ' : ''}{p.name}
                 </div>
                 <div
-                  className={`text-[10px] ${patched < ntracks ? 'text-amber-500' : 'text-gray-600'}`}
+                  className={`text-[10px] ${patched < ntracks ? 'text-stagespace-warning' : 'text-gray-600'}`}
                   title={
                     patched < ntracks
                       ? `${ntracks - patched} track(s) not patched — skipped at recall`
@@ -120,8 +120,8 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
                 onClick={() => setMorphSource(morphSource === p.name ? null : p.name)}
                 className={`px-1.5 py-0.5 rounded text-xs font-bold ${
                   morphSource === p.name
-                    ? 'bg-violet-800/70 text-violet-100'
-                    : 'bg-gray-800 text-gray-500 hover:text-violet-300 opacity-70 group-hover:opacity-100'
+                    ? 'bg-stagespace-target/25 text-white'
+                    : 'bg-gray-800 text-gray-500 hover:text-stagespace-target opacity-70 group-hover:opacity-100'
                 }`}
                 title={
                   morphSource === p.name
@@ -134,7 +134,7 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
               {morphSource && morphSource !== p.name && (
                 <button
                   onClick={() => doPoseMorph(morphSource, p.name, gotoDuration)}
-                  className="px-1.5 py-0.5 rounded bg-violet-900/50 hover:bg-violet-800/60 text-violet-200 text-xs"
+                  className="px-1.5 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs"
                   title={`Morph '${morphSource}' → '${p.name}' in ${gotoDuration}s — objects absent from the source start from their live positions`}
                 >
                   A→B
@@ -142,21 +142,21 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
               )}
               <button
                 onClick={() => doPoseGoto(p.name, gotoDuration)}
-                className="px-2 py-0.5 rounded bg-gray-800 hover:bg-cyan-900/60 text-gray-400 hover:text-cyan-200 text-xs opacity-70 group-hover:opacity-100"
+                className="px-2 py-0.5 rounded bg-gray-800 hover:bg-stagespace-target/15 text-gray-400 hover:text-stagespace-target text-xs opacity-70 group-hover:opacity-100"
                 title={`Goto — ramp objects to this pose in ${gotoDuration}s (smooth, holds the target at the end)`}
               >
                 goto
               </button>
               <button
                 onClick={() => doPoseSnap(p.name)}
-                className="px-2 py-0.5 rounded bg-gray-800 hover:bg-emerald-900/60 text-gray-400 hover:text-emerald-200 text-xs opacity-70 group-hover:opacity-100"
+                className="px-2 py-0.5 rounded bg-gray-800 hover:bg-stagespace-target/15 text-gray-400 hover:text-stagespace-target text-xs opacity-70 group-hover:opacity-100"
                 title="Snap — instant recall (manual positions, partial: other tracks untouched)"
               >
                 snap
               </button>
               <button
                 onClick={() => void deletePose(p.name)}
-                className="px-1 py-0.5 rounded text-gray-600 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100"
+                className="px-1 py-0.5 rounded text-gray-600 hover:text-stagespace-danger text-xs opacity-0 group-hover:opacity-100"
                 title="Delete pose"
               >
                 ×

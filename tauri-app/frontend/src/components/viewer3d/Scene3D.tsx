@@ -285,7 +285,7 @@ const Scene3D: React.FC<Scene3DProps> = ({ width = '100%', height = '100%' }) =>
       >
       {webglFailed && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900/90 z-raised p-4">
-          <TriangleAlert size={32} className="text-amber-400" />
+          <TriangleAlert size={32} className="text-stagespace-warning" />
           <div className="text-white text-sm font-medium">WebGL unavailable</div>
           <div className="text-gray-400 text-xs text-center max-w-xs">
             GPU acceleration is blocked in this environment (sandboxed WebKit).

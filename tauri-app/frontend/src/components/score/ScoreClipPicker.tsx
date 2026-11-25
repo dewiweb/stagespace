@@ -10,6 +10,7 @@ import type { ScoreClipDoc } from '../../store/useScoreStore';
 import type { MoveSlot } from '../../store/slices/moveSlotsTypes';
 import type { Cue } from '../../types/generated/Cue';
 import { extractDuration } from '../../store/slices/moveSlotsTypes';
+import { CLIP_HOVER } from './scoreUtils';
 
 export interface ScorePickerState {
   laneId: string;
@@ -31,7 +32,7 @@ const PoseSection: React.FC<{ onPick: (ref: ScoreClipDoc['ref']) => void }> = ({
       {poses.map((p) => (
         <button
           key={p.name}
-          className="w-full text-left px-3 py-1 text-xs hover:bg-teal-700/40"
+          className={"w-full text-left px-3 py-1 text-xs " + CLIP_HOVER.pose}
           title={`Pose '${p.name}' (${Object.keys(p.positions).length} tracks) — crée un clip goto ; le mode (snap/goto/morph), la durée et l'easing s'éditent dans l'inspector`}
           onClick={() => onPick({ type: 'pose', name: p.name, mode: 'goto', duration: 2, easing: 'smooth' })}
         >◆ {p.name}</button>
@@ -60,17 +61,17 @@ export const ScoreClipPicker: React.FC<{
   >
     {picker.laneId === CONDUCTOR_LANE ? (
       <>
-        <button className="w-full text-left px-3 py-1 text-xs hover:bg-red-800/40" onClick={() => onPick({ type: 'stopAll' })}>
+        <button className={`w-full text-left px-3 py-1 text-xs ${CLIP_HOVER.stopAll}`} onClick={() => onPick({ type: 'stopAll' })}>
           ■ STOP ALL — coupe tous les moves
         </button>
-        <button className="w-full text-left px-3 py-1 text-xs hover:bg-red-900/40" onClick={() => onPick({ type: 'panic' })}>
+        <button className={`w-full text-left px-3 py-1 text-xs ${CLIP_HOVER.panic}`} onClick={() => onPick({ type: 'panic' })}>
           ■ PANIC — arrêt d'urgence (origines)
         </button>
         <div className="px-3 py-0.5 text-[9px] text-gray-600 uppercase mt-1">Gestes — impulsion globale</div>
         {(['explode', 'converge', 'orbit', 'front'] as const).map((g) => (
           <button
             key={g}
-            className="w-full text-left px-3 py-1 text-xs hover:bg-orange-700/40"
+            className={`w-full text-left px-3 py-1 text-xs ${CLIP_HOVER.gesture}`}
             title={`Geste balistique "${g}" sur tous les objets émis (/stagespace/gesture)`}
             onClick={() => onPick({ type: 'gesture', name: g, strength: 3 })}
           >
@@ -79,38 +80,38 @@ export const ScoreClipPicker: React.FC<{
         ))}
         <div className="px-3 py-0.5 text-[9px] text-gray-600 uppercase mt-1">Contrôle — cibles = couverture</div>
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-sky-700/40"
+          className={`w-full text-left px-3 py-1 text-xs ${CLIP_HOVER.park}`}
           title="Fige les objets couverts — exempts des recalls (/stagespace/park). Vide = tout le patch."
           onClick={() => onPick({ type: 'park' })}
         >◉ PARK — figer les objets couverts</button>
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-sky-700/40"
+          className={`w-full text-left px-3 py-1 text-xs ${CLIP_HOVER.unpark}`}
           title="Relâche les objets couverts ; couverture vide = relâche tout (/stagespace/unpark)"
           onClick={() => onPick({ type: 'unpark' })}
         >◯ UNPARK — relâcher</button>
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-sky-700/40"
+          className={`w-full text-left px-3 py-1 text-xs ${CLIP_HOVER.throw}`}
           title="Lance balistique (m/s) des objets couverts (/stagespace/throw) — vélocité éditable dans l'inspector"
           onClick={() => onPick({ type: 'throw', vel: [3, 0, 0] })}
         >↷ THROW — lancer</button>
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-sky-700/40"
+          className={`w-full text-left px-3 py-1 text-xs ${CLIP_HOVER.manualClear}`}
           title="Relâche les positions manuelles couvertes ; couverture vide = tout (/stagespace/position/clearall)"
           onClick={() => onPick({ type: 'manualClear' })}
         >◇ MANUEL OFF — rendre la main</button>
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-sky-700/40"
+          className={`w-full text-left px-3 py-1 text-xs ${CLIP_HOVER.attention}`}
           title="Stase : tout fige sauf le 1er objet couvert ; couverture vide = release (/stagespace/attention)"
           onClick={() => onPick({ type: 'attention' })}
         >◎ ATTENTION — stase</button>
         <div className="px-3 py-0.5 text-[9px] text-gray-600 uppercase mt-1">Actions live — le score appuie sur le bouton</div>
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40"
+          className={`w-full text-left px-3 py-1 text-xs ${CLIP_HOVER.soundcheck}`}
           title="Sonde cyclique par objet (/stagespace/soundcheck start) — ping de position tour à tour, identification spatiale"
           onClick={() => onPick({ type: 'soundcheck', action: 'start' })}
         >♪ SOUNDCHECK — start (sonde cyclique)</button>
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40"
+          className={`w-full text-left px-3 py-1 text-xs ${CLIP_HOVER.soundcheck}`}
           title="Arrête la sonde (/stagespace/soundcheck stop) — nettoie le ping courant"
           onClick={() => onPick({ type: 'soundcheck', action: 'stop' })}
         >♪ SOUNDCHECK — stop</button>
@@ -120,13 +121,13 @@ export const ScoreClipPicker: React.FC<{
         {moveSlots.map((s) => (
           <button
             key={`solo-${s.id}`}
-            className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40 truncate"
+            className={`w-full text-left px-3 py-1 text-xs ${CLIP_HOVER.solo} truncate`}
             title={`Solo slot « ${s.name} » (oscIndex ${s.oscIndex}) — fade-out les autres slots jouants puis le joue (/stagespace/solo)`}
             onClick={() => onPick({ type: 'solo', n: s.oscIndex })}
           >◈ SOLO {s.oscIndex} — {s.name}</button>
         ))}
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40"
+          className={`w-full text-left px-3 py-1 text-xs ${CLIP_HOVER.unsolo}`}
           title="Rejoue les slots stoppés par le dernier solo (/stagespace/unsolo)"
           onClick={() => onPick({ type: 'unsolo' })}
         >◈ UNSOLO — restaurer le mix</button>
@@ -134,13 +135,13 @@ export const ScoreClipPicker: React.FC<{
         {(['atelier', 'conduite', 'jeu', 'score'] as const).map((v) => (
           <button
             key={v}
-            className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40"
+            className={`w-full text-left px-3 py-1 text-xs ${CLIP_HOVER.view}`}
             title={`Bascule la surface opérateur → ${v} (/stagespace/view)`}
             onClick={() => onPick({ type: 'view', surface: v })}
           >▣ VIEW — {v.toUpperCase()}</button>
         ))}
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-lime-700/40"
+          className={`w-full text-left px-3 py-1 text-xs ${CLIP_HOVER.cueGo}`}
           title="GO — tire la cue armée (ou la suivante si rien d'armé) : modèle console (/stagespace/cue/go)"
           onClick={() => onPick({ type: 'cueGo' })}
         >▶ CUE GO — feu sur l'armée</button>
@@ -149,13 +150,13 @@ export const ScoreClipPicker: React.FC<{
         {cues.map((c, i) => (
           <div key={c.id} className="flex items-stretch">
             <button
-              className="flex-1 text-left px-3 py-1 text-xs hover:bg-amber-700/40 truncate"
+              className={`flex-1 text-left px-3 py-1 text-xs ${CLIP_HOVER.cue} truncate`}
               onClick={() => onPick({ type: 'cue', cueId: String(c.id) })}
             >
               ◆ CUE {c.cue_number ?? i + 1} {c.name}
             </button>
             <button
-              className="px-2 text-xs hover:bg-amber-700/40 text-amber-300"
+              className={`px-2 text-xs ${CLIP_HOVER.cueArm} text-stagespace-conduite`}
               title="Armer cette cue sans la tirer (/stagespace/cue/arm — modèle console, GO la tire ensuite)"
               onClick={() => onPick({ type: 'cueArm', cueId: String(c.id) })}
             >⇥</button>
@@ -169,7 +170,7 @@ export const ScoreClipPicker: React.FC<{
       <>
         <div className="px-3 py-0.5 text-[9px] text-gray-600 uppercase mt-1">OSC-out — message externe</div>
         <button
-          className="w-full text-left px-3 py-1 text-xs hover:bg-emerald-700/40"
+          className={`w-full text-left px-3 py-1 text-xs ${CLIP_HOVER.osc}`}
           title="Message OSC arbitraire émis au tir — adresse/args/cible éditables dans l'inspector (défaut = la sortie OSC du show)"
           onClick={() => onPick({ type: 'osc', addr: '/cue/go', args: '' })}
         >→OSC message — lumières/vidéo/consoles</button>
@@ -181,7 +182,7 @@ export const ScoreClipPicker: React.FC<{
           <button
             key={s.id}
             title={`Assignation : tracks ${s.trackIds.join(', ') || '—'}`}
-            className="w-full text-left px-3 py-1 text-xs hover:bg-purple-700/40 truncate"
+            className={`w-full text-left px-3 py-1 text-xs ${CLIP_HOVER.slot} truncate`}
             onClick={() => {
               const dur = s.graphJson ? extractDuration(s.graphJson.nodes) * 1000 : 30_000;
               onPick({ type: 'slot', slotId: s.id }, {

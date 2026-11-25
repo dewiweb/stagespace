@@ -59,7 +59,7 @@ export const CurveEditor: React.FC<{
       onPointerUp={() => { dragRef.current = null; }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <rect x={x(0)} y={0} width={x(end) - x(0)} height={H} className="fill-purple-500/5" />
+      <rect x={x(0)} y={0} width={x(end) - x(0)} height={H} className="fill-stagespace-modulation/5" />
       {/* ligne de la valeur par défaut */}
       <line x1={x(0)} y1={y(p.def)} x2={x(end)} y2={y(p.def)} stroke="#6b7280" strokeDasharray="4 4" strokeOpacity={0.5} />
       <text x={x(0) + 2} y={y(p.def) - 2} className="fill-gray-500" fontSize="8">
@@ -83,7 +83,7 @@ export const CurveEditor: React.FC<{
           {kfs.map((k, i) => (
             <circle
               key={i} cx={x(k.t)} cy={y(k.v)} r={5}
-              className="fill-cyan-300 stroke-gray-900 cursor-grab"
+              className="fill-stagespace-modulation stroke-gray-900 cursor-grab"
               strokeWidth={1.5}
               onPointerDown={(e) => {
                 if (e.button !== 0) return;
@@ -99,7 +99,7 @@ export const CurveEditor: React.FC<{
               }}
             />
           ))}
-          <text x={x(end) - 60} y={H - 6} className="fill-cyan-300" fontSize="9">
+          <text x={x(end) - 60} y={H - 6} className="fill-stagespace-modulation" fontSize="9">
             {kfs[kfs.length - 1]?.v ?? p.def}
           </text>
         </>

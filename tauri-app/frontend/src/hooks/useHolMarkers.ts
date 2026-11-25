@@ -4,6 +4,7 @@ import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { HolProject } from '../store/useGraphStore';
 import { toThree } from '../utils/coords';
 import { removeWithLabels } from '../utils/three';
+import { VIZ } from '../utils/uiColors';
 
 
 interface UseHolMarkersParams {
@@ -50,7 +51,7 @@ export function useHolMarkers({ sceneRef, cameraRef, holProject }: UseHolMarkers
     holProject.tracks.forEach((track) => {
       // Marker (small ring)
       const geo = new THREE.RingGeometry(0.08, 0.12, 24);
-      const color = new THREE.Color(track.color || '#888888');
+      const color = new THREE.Color(track.color || VIZ.trackFallback);
       const mat = new THREE.MeshBasicMaterial({
         color,
         side: THREE.DoubleSide,
@@ -70,7 +71,7 @@ export function useHolMarkers({ sceneRef, cameraRef, holProject }: UseHolMarkers
       const div = document.createElement('div');
       div.className = 'hol-track-label';
       div.textContent = `${track.name} (#${track.id})`;
-      div.style.cssText = 'color: #aaa; font-size: 10px; font-family: monospace; background: rgba(0,0,0,0.5); padding: 1px 4px; border-radius: 2px; white-space: nowrap;';
+      div.style.cssText = `color: ${VIZ.dimLabel}; font-size: 10px; font-family: monospace; background: rgba(0,0,0,0.5); padding: 1px 4px; border-radius: 2px; white-space: nowrap;`;
       const label = new CSS2DObject(div);
       label.position.set(0, 0.25, 0);
       ring.add(label);

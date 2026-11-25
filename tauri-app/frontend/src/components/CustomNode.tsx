@@ -4,11 +4,12 @@ import { Handle, Position, NodeProps, type Node } from '@xyflow/react';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
-import { PARAM_SCHEMA, getCategoryColor, pluginNodeSchema, pluginParamsOnSwitch, type ParamDef, type NodeParamValue, type GraphNode } from './nodeParamSchema';
+import { PARAM_SCHEMA, pluginNodeSchema, pluginParamsOnSwitch, type ParamDef, type NodeParamValue, type GraphNode } from './nodeParamSchema';
 import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts, getOutputPorts, PORT_COLORS } from '../utils/connectionRules';
 import { signalTargetOptions, modulatedParamKeys } from '../utils/signalTargets';
 import { LinkedTracksField, NODE_INPUT_CLS } from './editor/LinkedTracksField';
 import { ParamInput } from './ParamInput';
+import { PORT_TEXT_COLORS } from '../utils/connectionRules';
 
 const AUDIO_NODE_TYPES = new Set(['BPM', 'AudioAmplitude', 'AudioSpectrum', 'AudioAmplitudeFalloff']);
 
@@ -32,7 +33,6 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
   // tombaient dans le store move (id inconnu → drop silencieux).
   const isSignalNode = useSignalGraphStore((s) => s.nodes.some((n) => n.id === id));
   const updateSignalNodeData = useSignalGraphStore((s) => s.updateNodeData);
-  const color = getCategoryColor(data.type);
   // Plugin : le schema vient du manifeste (résolu via params.plugin_id) et
   // le label affiché est le nom déclaré — sinon les tables statiques.
   const isPluginNode = data.type === 'Plugin';
@@ -173,7 +173,13 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
     );
   };
 
-  const trackIdsValue = trackIdsText !== null ? trackIdsText : ((data.params?.track_ids as number[]) ?? []).join(', ');
+  // track_ids peut être une string (default du spec `""` avant commit)
+  // ou un array (après commit) — le cast naïf + `?? []` crashait le
+  // canvas à l'ajout d'un node Objects frais ("".join n'existe pas).
+  const rawTrackIds = data.params?.track_ids;
+  const trackIdsValue = trackIdsText !== null
+    ? trackIdsText
+    : Array.isArray(rawTrackIds) ? rawTrackIds.join(', ') : String(rawTrackIds ?? '');
   const commitTrackIds = () => {
     const ids = (trackIdsText ?? '')
       .split(',')
@@ -209,19 +215,18 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
 
   return (
     <div
-      className="bg-gray-800 border-2 rounded-lg shadow-lg min-w-[200px] transition-shadow hover:shadow-xl"
-      style={{ borderColor: color + '60' }}
+      className="bg-gray-800 border-2 border-gray-700 rounded-lg shadow-lg min-w-[200px] transition-shadow hover:shadow-xl"
       title={issueMessages.length > 0 ? issueMessages.join('\n') : undefined}
     >
       {renderInputHandles()}
 
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700" style={{ background: color + '20' }}>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700">
         <div className="flex items-center gap-1.5 min-w-0">
           {isAudioNode && audioRms !== null && (
             <span className="flex items-center gap-1 flex-shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-red-400 text-xs font-bold tracking-wider">LIVE</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-stagespace-live animate-pulse" />
+              <span className="text-stagespace-live text-xs font-bold tracking-wider">LIVE</span>
             </span>
           )}
           {editingLabel ? (
@@ -236,7 +241,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
                 if (e.key === 'Enter') commitLabel(e.currentTarget.value);
                 if (e.key === 'Escape') setEditingLabel(false);
               }}
-              className="nodrag nowheel bg-gray-900 text-white text-sm font-semibold rounded px-1 w-32 border border-cyan-600 focus:outline-none"
+              className="nodrag nowheel bg-gray-900 text-white text-sm font-semibold rounded px-1 w-32 border border-stagespace-accent/60 focus:outline-none"
               aria-label="Rename node"
             />
           ) : (
@@ -255,7 +260,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
           )}
           {pluginMissing && (
             <span
-              className="flex-shrink-0 px-1 py-px rounded bg-red-900/60 text-red-300 text-[11px] font-bold tracking-wide"
+              className="flex-shrink-0 px-1 py-px rounded bg-stagespace-danger/20 text-stagespace-danger text-[11px] font-bold tracking-wide"
               title={`Plugin '${pluginId ?? ''}' not loaded — .ssx missing from the plugins folder`}
             >
               MISSING
@@ -279,15 +284,15 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
           {data.type === 'BPM' && audioBpm !== null && (
             <div className="flex items-center justify-between text-xs">
               <span className="text-gray-500">BPM live</span>
-              <span className="text-cyan-400 font-mono font-bold">{audioBpm.toFixed(0)}</span>
+              <span className="text-stagespace-live font-mono font-bold">{audioBpm.toFixed(0)}</span>
             </div>
           )}
           {data.type === 'AudioAmplitude' && (
             <>
-              <MiniBar label="RMS" value={audioRms ?? 0} color="bg-blue-500" />
-              <MiniBar label="Bass" value={audioBass ?? 0} color="bg-red-500" />
-              <MiniBar label="Mid" value={audioMid ?? 0} color="bg-green-500" />
-              <MiniBar label="High" value={audioHigh ?? 0} color="bg-yellow-500" />
+              <MiniBar label="RMS" value={audioRms ?? 0} color="bg-stagespace-accent" />
+              <MiniBar label="Bass" value={audioBass ?? 0} color="bg-stagespace-accent" />
+              <MiniBar label="Mid" value={audioMid ?? 0} color="bg-stagespace-accent" />
+              <MiniBar label="High" value={audioHigh ?? 0} color="bg-stagespace-accent" />
             </>
           )}
           {data.type === 'AudioSpectrum' && audioState?.spectrum && (
@@ -295,14 +300,14 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
               {audioState.spectrum.spectrum.slice(0, 16).map((v, i) => (
                 <div
                   key={i}
-                  className="flex-1 bg-gradient-to-t from-cyan-600 to-cyan-400 rounded-sm transition-all duration-75"
+                  className="flex-1 bg-gradient-to-t from-stagespace-accent to-stagespace-info rounded-sm transition-all duration-75"
                   style={{ height: `${Math.max(2, Math.min(100, v * 100))}%` }}
                 />
               ))}
             </div>
           )}
           {data.type === 'AudioAmplitudeFalloff' && (
-            <MiniBar label="RMS" value={audioRms ?? 0} color="bg-orange-500" />
+            <MiniBar label="RMS" value={audioRms ?? 0} color="bg-stagespace-accent" />
           )}
         </div>
       )}
@@ -310,8 +315,8 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
       {/* Binary composite labels for A/B inputs */}
       {isBinary && hasInput && (
         <div className="flex justify-between px-1 py-0.5 text-xs text-gray-500 font-mono">
-          <span className="text-blue-400">A</span>
-          <span className="text-purple-400">B</span>
+          <span className="text-gray-400">A</span>
+          <span className="text-gray-400">B</span>
         </div>
       )}
 
@@ -334,7 +339,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
                 {def.label}
                 {modulated.has(def.key) && (
                   <span
-                    className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-amber-400 align-middle"
+                    className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-stagespace-modulation align-middle"
                     title="Modulated by this move's signal graph"
                   />
                 )}
@@ -384,7 +389,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
         <div className="px-3 py-1.5 border-t border-gray-700">
           {data.params?.track_range ? (
             <>
-              <label className="text-green-400 text-xs font-mono">Track Range: {data.params.track_range}</label>
+              <label className="text-gray-400 text-xs font-mono">Track Range: {data.params.track_range}</label>
               <div className="flex flex-wrap gap-0.5 mt-1">
                 {(() => {
                   const range = data.params.track_range as string;
@@ -400,7 +405,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
                   const ids: number[] = [];
                   for (let i = start; i <= end && i < start + 24; i++) ids.push(i);
                   return ids.map((id) => (
-                    <span key={id} className="text-xs font-mono px-1 py-0.5 bg-green-900/40 text-green-400 rounded">
+                    <span key={id} className="text-xs font-mono px-1 py-0.5 bg-stagespace-accent/10 text-stagespace-accent rounded">
                       {id}
                     </span>
                   ));
@@ -480,14 +485,14 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
 
   return (
     <div className="mt-2 pt-2 border-t border-gray-700 space-y-1.5">
-      <label className="text-cyan-400 text-xs font-mono">Spline Library</label>
+      <label className={`${PORT_TEXT_COLORS.Spline} text-xs font-mono`}>Spline Library</label>
 
       {/* Charger depuis la bibliothèque */}
       {savedSplines.length > 0 && (
         <select
           onChange={handleLoad}
           defaultValue=""
-          className="nodrag w-full px-2 py-1 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+          className="nodrag w-full px-2 py-1 bg-gray-900 text-gray-300 text-xs font-mono rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
         >
           <option value="" disabled>Load a spline...</option>
           {savedSplines.map((s) => (
@@ -504,7 +509,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
               <span className="text-gray-400 font-mono truncate flex-1">{s.name}</span>
               <button
                 onClick={() => handleDelete(s.id)}
-                className="nodrag text-red-500 hover:text-red-400 px-1"
+                className="nodrag text-stagespace-danger/70 hover:text-stagespace-danger px-1"
                 title="Delete"
               ><X size={10} /></button>
             </div>
@@ -522,11 +527,11 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
             onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setShowSave(false); }}
             placeholder="Nom de la spline..."
             autoFocus
-            className="nodrag flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+            className="nodrag flex-1 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
           />
           <button
             onClick={handleSave}
-            className="nodrag text-green-400 hover:text-green-300 text-xs px-2"
+            className="nodrag text-stagespace-accent hover:text-stagespace-info text-xs px-2"
             title="Confirmer"
           ><Check size={10} /></button>
           <button
@@ -538,7 +543,7 @@ const SplineLibraryControls: React.FC<{ nodeId: string; currentPoints: string }>
       ) : (
         <button
           onClick={() => setShowSave(true)}
-          className="nodrag w-full text-xs text-cyan-400 hover:text-cyan-300 border border-cyan-800 hover:border-cyan-600 rounded py-1"
+          className="nodrag w-full text-xs text-stagespace-accent hover:text-stagespace-info border border-stagespace-accent/40 hover:border-stagespace-accent rounded py-1"
         >
           + Save this spline
         </button>

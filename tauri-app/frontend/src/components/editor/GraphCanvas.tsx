@@ -6,8 +6,7 @@ import {
   type ReactFlowInstance, type OnConnectEnd,
 } from '@xyflow/react';
 import EmptyState from '../ui/EmptyState';
-import { getCategoryColor, type GraphNode } from '../nodeParamSchema';
-import type { NodeType } from '../../store/useGraphStore';
+import type { GraphNode } from '../nodeParamSchema';
 import { portTypesInGraph, PORT_COLORS } from '../../utils/connectionRules';
 import { safeGetItem, safeSetItem } from '../../utils/safeStorage';
 import { countIssues, type GraphIssue } from '../../utils/graphIssues';
@@ -158,8 +157,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = (p) => {
         <MiniMap
           nodeColor={(n) =>
             n.type === 'frame'
-              ? 'rgba(251,191,36,0.35)'
-              : getCategoryColor((n.data.type ?? '') as NodeType)
+              ? 'rgba(148,163,184,0.4)'
+              : '#4b5563'
           }
           maskColor="rgba(10,10,15,0.7)"
         />
@@ -226,11 +225,11 @@ function IssuesPanel({ issues, open, onToggle, nodes, onNodesChange }: {
         title="Graph diagnostics (backend) — click an issue to focus its node"
       >
         {counts.errors > 0 && (
-          <span className="text-red-400">{counts.errors} error{counts.errors > 1 ? 's' : ''}</span>
+          <span className="text-stagespace-danger">{counts.errors} error{counts.errors > 1 ? 's' : ''}</span>
         )}
         {counts.errors > 0 && counts.warnings > 0 && ' · '}
         {counts.warnings > 0 && (
-          <span className="text-amber-400">{counts.warnings} warning{counts.warnings > 1 ? 's' : ''}</span>
+          <span className="text-stagespace-warning">{counts.warnings} warning{counts.warnings > 1 ? 's' : ''}</span>
         )}
       </button>
       {open && (
@@ -241,7 +240,7 @@ function IssuesPanel({ issues, open, onToggle, nodes, onNodesChange }: {
               onClick={() => focusNodes(i.node_ids)}
               disabled={i.node_ids.length === 0}
               className={`w-full text-left rounded px-1 py-0.5 transition-colors ${
-                i.severity === 'Error' ? 'text-red-300' : 'text-amber-300'
+                i.severity === 'Error' ? 'text-stagespace-danger' : 'text-stagespace-warning'
               } ${i.node_ids.length > 0 ? 'hover:bg-gray-800 cursor-pointer' : 'cursor-default'}`}
               title={i.node_ids.length > 0 ? 'Focus the node(s) on the canvas' : undefined}
             >

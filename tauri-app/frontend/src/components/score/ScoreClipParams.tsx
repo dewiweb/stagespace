@@ -52,12 +52,12 @@ export const ScoreClipParams: React.FC<{
             key={o.v}
             onClick={() => onPick(o.v)}
             className={`px-1.5 py-0.5 rounded border ${cur === o.v
-              ? 'bg-blue-600/40 border-blue-600 text-blue-200'
+              ? 'bg-stagespace-accent/30 border-stagespace-accent text-stagespace-info'
               : 'bg-gray-800 border-gray-700 text-gray-500 hover:text-gray-300'}`}
           >{o.label}</button>
         ))}
       </span>
-      {warn && <span className="text-amber-400">{warn}</span>}
+      {warn && <span className="text-stagespace-warning">{warn}</span>}
     </div>
   );
   /// Champ numérique secondes → ms (vide = undefined).
@@ -141,7 +141,7 @@ export const ScoreClipParams: React.FC<{
                   {tid}
                   {coverEditable && !following && (
                     <button
-                      className="ml-0.5 text-gray-500 hover:text-red-400"
+                      className="ml-0.5 text-gray-500 hover:text-stagespace-danger"
                       title={`Retirer l'objet ${tid} de la couverture`}
                       onClick={() => onSetClipTrackIds(c.id, eff.filter((x) => x !== tid))}
                     >×</button>
@@ -150,13 +150,13 @@ export const ScoreClipParams: React.FC<{
               ))}
               {coverEditable && (following ? (
                 <button
-                  className="px-1 rounded text-cyan-400 hover:bg-gray-800"
+                  className="px-1 rounded text-stagespace-derived hover:bg-gray-800"
                   title="Couverture suivie (live) — cliquer pour geler en override explicite"
                   onClick={() => onSetClipTrackIds(c.id, eff)}
                 >⇄</button>
               ) : (
                 <button
-                  className="px-1 rounded text-orange-400 hover:bg-gray-800"
+                  className="px-1 rounded text-stagespace-warning hover:bg-gray-800"
                   title="Override explicite — cliquer pour repasser en suivi live"
                   onClick={() => onSetClipTrackIds(c.id, undefined)}
                 >⇄</button>
@@ -198,37 +198,37 @@ export const ScoreClipParams: React.FC<{
             déterministe ; hold = résidu) sont signalées en ambre. */}
         {c.ref.type === 'slot' && slot && (
           <div
-            className={`mt-1 border-t pt-1.5 flex flex-col gap-1 ${slotPending ? 'border-amber-700/50' : 'border-gray-800'}`}
+            className={`mt-1 border-t pt-1.5 flex flex-col gap-1 ${slotPending ? 'border-stagespace-derived/50' : 'border-gray-800'}`}
             title={playing
               ? "Params de lecture du slot — gelés pendant la lecture, édition reprend au stop"
               : "Params de lecture du slot — partagés avec Jeu/Atelier et tous les clips sur ce slot"}
           >
             {slotPending && (
               <div className="flex items-center gap-1">
-                <span className="w-20 text-amber-600">⏳</span>
-                <span className="text-amber-400">slot édité — s'appliquera au prochain play</span>
+                <span className="w-20 text-stagespace-derived/70">⏳</span>
+                <span className="text-stagespace-derived">slot édité — s'appliquera au prochain play</span>
               </div>
             )}
             {playing || !onSlotEdit ? (
               <>
                 <div className="flex items-center gap-1">
-                  <span className={`w-20 ${slotPending ? 'text-amber-600' : 'text-gray-600'}`}>lecture</span>
-                  <span className={slotPending ? 'text-amber-300' : 'text-gray-500'}>
+                  <span className={`w-20 ${slotPending ? 'text-stagespace-derived/70' : 'text-gray-600'}`}>lecture</span>
+                  <span className={slotPending ? 'text-stagespace-derived' : 'text-gray-500'}>
                     {slot.loopMode}
                     {' · '}{slot.direction === 'ping_pong' ? 'ping-pong' : slot.direction}
                     {' · '}{(slot.macros?.speed ?? 1).toFixed(2)}×
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className={`w-20 ${slotPending ? 'text-amber-600' : 'text-gray-600'}`}>fin</span>
-                  <span className={slot.endMode === 'hold' ? 'text-amber-400' : slotPending ? 'text-amber-300' : 'text-gray-500'}>
+                  <span className={`w-20 ${slotPending ? 'text-stagespace-derived/70' : 'text-gray-600'}`}>fin</span>
+                  <span className={slot.endMode === 'hold' ? 'text-stagespace-warning' : slotPending ? 'text-stagespace-derived' : 'text-gray-500'}>
                     {slot.endMode ?? 'revert'}
                     {slot.endMode === 'hold' && ' — la position reste tenue après la fenêtre'}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className={`w-20 ${slotPending ? 'text-amber-600' : 'text-gray-600'}`}>ancre</span>
-                  <span className={(slot.anchorMode ?? 'origin') !== 'origin' ? 'text-amber-400' : slotPending ? 'text-amber-300' : 'text-gray-500'}>
+                  <span className={`w-20 ${slotPending ? 'text-stagespace-derived/70' : 'text-gray-600'}`}>ancre</span>
+                  <span className={(slot.anchorMode ?? 'origin') !== 'origin' ? 'text-stagespace-warning' : slotPending ? 'text-stagespace-derived' : 'text-gray-500'}>
                     {slot.anchorMode ?? 'origin'}
                     {(slot.anchorMode ?? 'origin') !== 'origin' && " — capture la position à l'instant du tir (non déterministe)"}
                   </span>

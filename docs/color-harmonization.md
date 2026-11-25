@@ -122,17 +122,349 @@ Trois règles de câblage :
 
 | Phase | Contenu | Vérif |
 |---|---|---|
-| **H1 — fondations** | tokens `target`/`derived` + module `uiColors.ts` · re-teintage CLIP_COLORS par familles · correction des collisions actives du score (positions/pose) · swatch review visuelle avec l'utilisateur | capture score avant/après, collisions teal résolues |
-| **H2 — fichiers live ad-hoc** | migration StatusBar (52), SettingsModal (54), PerformView (30), CuelistPanel (29), RunView — les surfaces d'exploitation d'abord | compteur palette brute ÷2 dans ces fichiers, captures de non-régression |
-| **H3 — viz** | unification 3D/radar/ghosts/zones dans `uiColors` — hex three.js centralisés, dissolution des couleurs-entités (pose violet → `target`) | captures 3D/radar, ghosts toujours distincts des rest-ghosts |
-| **H4 — ratissage + enforcement** | migration du reste · règle lint interdisant classes palette brute et hex hors `uiColors` (allowlist) — même mécanique que z-index | 0 occurrence brute hors allowlist en CI |
+## État d'avancement (au commit e585ffb)
 
-### Explicitement hors scope
+| Phase | État |
+|---|---|
+| **H1 — fondations** | ✅ fait — tokens target/derived/info, `uiColors.ts`, CLIP_COLORS par familles (v2 validée au swatch : objectCtl fuchsia, zones→indigo) |
+| **H2 — surfaces live** | ✅ fait — StatusBar/PerformView/CuelistPanel migrés, convergé sur StatusChip/STATUS_TONES, arm unifié, sémaphores healthTone |
+| **H3 — viz 3D/radar** | ✅ fait — `VIZ` étendu (env/obj/draw/labels), violet pose-ghost → `target` vérifié end-to-end, hex three.js centralisés |
+| **H4 — ratissage + enforcement** | 🔶 en cours — P0a/P0b/P1a/P1b faits ; **P2 mécanique surfaces CONSOMMÉ** (inventaire ~590 occurrences traité, ~15 commits) ; reste P3 chrome/décor (brand gradients), règle lint anti-palette |
 
-- Thème clair / personnalisation utilisateur — le système de tokens le
-  permettra mais ce n'est pas l'objet.
-- Refonte des surfaces elles-mêmes (densité Jeu, NOW sémantique…) —
-  chantier UX séparé déjà documenté dans `ux-audit.md`.
+Branche : `feat/color-harmonization`. Reprise : lire les décisions
+H1/H2/H3 ci-dessous puis attaquer H4 — les points d'entrée sont les
+toggles chrome indigo (pads/3d, radar), le SettingsModal, puis la
+règle lint anti-palette (allowlist `uiColors`, même mécanique que
+z-index).
+
+### Décisions H3 actées (viz 3D/radar)
+
+- **`VIZ` structuré en sous-groupes** — `env` (décor structurel : fond,
+  lumières, grilles — centralisé sans être fonctionnel), `obj` (états
+  émissifs : drag/preview/selected/hot/assignMember/off), `draw`
+  (tracé utilisateur vs courbe fittée). Les valeurs préexistantes ont
+  été reprises telles quelles : H3 ne re-tinte que ce que la doctrine
+  exige.
+- **Violet pose dissous** — pose-ghost patché : `#a78bfa` → `target`
+  teal (vérifié end-to-end dans le radar : `#2dd4bf`). Non-patché :
+  amber `#f59e0b` → `targetInvalid` orange warning (`#f97316` rendu,
+  parité avec le badge ⚠ des panels). Labels : violet-300/amber-400 →
+  `targetLabel`/`targetInvalidLabel`. Le violet « pose » était une
+  couleur-entité — la cible d'une pose EST une destination, même
+  vocabulaire que les ancres.
+- **Flèche de lancer cyan → `target`** — une prédiction de destination
+  est une visualisation de cible (doctrine), pas un message osc.
+- **Identités track préservées** — `trackHue()` HSL procédural et
+  `track.color` hol restent des exceptions légitimes (la couleur EST
+  l'identité de l'objet, pas une fonction). Fallback neutre
+  `VIZ.trackFallback` pour les tracks sans couleur.
+- **Zones** — les duplications `0x22d3ee`/`0x8b5cf6` (useRenderLoop,
+  ZoneVisualization, Radar2D) pointent toutes vers `zoneManual`/
+  `zoneGraph` — une seule source.
+- **Vérif** — capture radar (bridge réel + pose seedée) : patchés
+  teal, non-patché orange, distinction nette. Tout hex du SVG radar
+  provient d'un token. 612/612 vitest, tsc propre.
+
+### Audit exhaustif H4 (4 passes par surface — live, score, atelier, chrome)
+
+Mesures : ~874 classes chromatiques brutes dans 69 fichiers, 54 hex
+hors modules légitimes (uiColors/sourceColors). Atelier et score :
+zéro token consommé. Trois générations de couleurs coexistent :
+chrome décoratif pré-tokens, couleurs fonctionnelles correctes non
+migrées, couleurs-entités contraires à la doctrine.
+
+**Bugs de lecture live (P0) — pas du cosmétique :**
+
+1. LIVE audio en ROUGE vs vert partout ailleurs (`CustomNode.tsx:223`)
+2. Cyan = 9 fonctions dont preview — la couleur-réseau pour l'état
+   « rien ne sort sur le réseau » (cohérent cross-surface, mais
+   collisionne osc/hold)
+3. Park cyan (ParkedChip, ObjectInspectBar) vs amber canonique
+   (radar/pads/sourceColors)
+4. Warning déguisé en amber/yellow — partagé, orphelin, non-patché,
+   stale-psn, dirty, toasts, `.rf-node-warning` — inversion complète
+   amber/orange (l'orange sert à du non-warning : solo, hot-swap)
+5. ConduiteView viole H2 — cue courante purple, DRY-RUN/TC emerald
+   (banni en H2) — CuelistPanel migré, pas ConduiteView
+6. Violet pose-entité persistant dans PosesPanel + ScorePoseEditor
+   (H3 dissous dans viz, pas dans les panels)
+7. Toggle booléen : 2 couleurs dans le même composant
+   (`ParamInput:94` blue vs `:105` cyan)
+8. Attention/freeze = 3 couleurs (amber GestureStrip / purple
+   SlotTile / indigo sourceColors)
+9. Modulation = 3 couleurs (cyan AudioModControls / amber NodeEditor
+   + dot CustomNode / purple ModChips)
+10. Omissions : orphelins seulement désaturés, delete/clear neutres
+    — la doctrine exige warning/danger (Score)
+
+**Arbitrages ACTÉS (revue utilisateur, 12/12 tranchés) :**
+
+1. **Recouvrement sourceColors voulu SAUF park** — manual==warning,
+   hold==osc, move==live, psn==tracking documentés comme recoupements
+   sémantiques réels. **Park re-teinté** pour libérer conduite=cues
+   (teinte exacte au swatch — contrainte : distinct de psn/tracking
+   purple et modulation indigo).
+2. **Projections = teinte du parent translucide** — une projection
+   montre VERS QUOI (blast radius cue → amber, snap/transit pose →
+   teal). `derived` gris réservé aux projections sans cible
+   identifiable : valeurs calculées, merge-effectif, audition,
+   preview (pas de cible spatiale).
+3. **Preview → `derived`** — migration coordonnée cross-surface +
+   `VIZ.obj.preview` dans le même commit.
+4. **Modulation = nouveau token `modulation`** indigo `#818cf8` —
+   les 3 teintes (cyan/amber/purple) convergent. Attention :
+   collision avec freeze `#818cf8` dans sourceColors — à résoudre à
+   l'implémentation (freeze/attention/park = stase, candidat à
+   unification sous une seule teinte stasis distincte).
+5. **Couleurs de catégories de nodes : SUPPRESSION pure** — headers/
+   bordures neutres, minimap monochrome, palette regroupée par
+   sections + icônes. Les 9 hex de NODE_COLORS disparaissent.
+6. **Ports/edges = tokens graphe à source unique** — `graph-object`
+   (=osc cyan, cohérent routage), `graph-time`, `graph-geometry`
+   (violet `#a78bfa` candidat — libéré par la dissolution pose),
+   `graph-signal` — teintes exactes au swatch, hex libres :
+   yellow/pink/emerald. Handles + edges + légende consomment la même
+   source, variables CSS `--stagespace-*` pour index.css.
+7. **Chrome accent unique bleu** — sélection/focus/CTA/toggles →
+   `stagespace.accent`, indigo éliminé du chrome, purple réservé
+   tracking/expert. Sélection unifiée sur cette base.
+8. **Solo = warning orange** — action à blast radius implicite.
+9. **Setlist NOW=live / NEXT=target, GO=target** — NOW joue
+   réellement, NEXT est une destination, GO déclenche la transition.
+10. **TC chase = live vert partout** — Score converge vers
+    Perform/Cuelist (H2). Le cyan reste au réseau.
+11. **CUE GO = vert live** — règle écrite : couleur de l'ACTION
+    (vert live) ≠ couleur de l'ÉTAT cue (amber conduite).
+12. **Sévérité stop = danger à opacités** — stop-fade danger/60 ou
+    outline, stop danger plein, stop-all/panic danger plein +
+    taille/label. Yellow éliminé du système.
+
+**Arbitrages ACTÉS — session 2 (4/4 tranchés) :**
+
+13. **Domaine spatial = PAS de teinte dédiée** — c'est un domaine de
+    paramètres, pas une fonction colorable (comme les macros). Panel →
+    chrome neutre/accent, previews → derived. Zones 3D gardent leurs
+    teintes H3 (zoneGraph violet / zoneManual cyan) : la couleur y code
+    la PROVENANCE (qui a créé la zone), vraie fonction.
+14. **Lanes score = teinte du token-domaine ou neutre** — CONDUCTOR
+    neutre (lane mixte, toute teinte collisionnerait), OSC=osc cyan,
+    MODULATION/GLOBALFX=modulation indigo, SPATIALFX=neutre.
+15. **Transport score** — playhead=accent (navigation), loop region +
+    handles=target (zone vers laquelle on boucle), TC chase=live (arb.
+    10), ruler/fonds neutres.
+16. **Dopesheet** — curves=modulation indigo (ce SONT des paramètres
+    modulés), events=teinte du clip parent (CLIP_COLORS) ou neutre.
+
+**Progression implémentation (commits sur feat/color-harmonization) :**
+
+- **P0a** `f8c9e78` — LIVE rouge→vert (CustomNode), park re-teinté pink
+  `#ec4899` stase (sourceColors source unique, StateChip tone pink +
+  rows par état), warnings amber/yellow→orange (toasts, shared,
+  rf-node-warning, graph diagnostics, spatialfx, no-auth), fade-stop
+  →danger/60, setlist décors neutralisés, ConduiteView conforme H2
+  (cue rows amber pattern CuelistPanel, DRY-RUN neutre, TC live/
+  warning, RECALLING+pending amber, orphelins orange), toggles
+  booléens →accent unique
+- **P0b** `3264eae` — preview cyan→derived slate cross-surface (7
+  badges DOM + VIZ.obj.preview/previewEmissive). VIZ.draw.preview
+  (spline) volontairement conservé
+- **P1a** `da6ebab` — token modulation indigo #818cf8, Slider prop
+  tone (accent|modulation) — 21 call sites aplatis, NODE_COLORS
+  supprimé (palette/QuickAdd/nodes/minimap neutres), FrameNode→slate,
+  variables CSS --stagespace-* dans index.css. Drive-by : fix crash
+  canvas à l'ajout node Objects (track_ids string vs array)
+- **P2a** — focus borders unifiés accent (20 en 11 fichiers), violet
+  pose dissous panels (PosesPanel sélection accent/morph target-teal,
+  ScorePoseEditor accent)
+- **P2b** — warnings score amber→orange, mini-radar audition
+  CuelistPanel sur tokens (destinations cue→target teal), orphelins
+  score bordure orange dashed
+- **P2c** `087a2d5` — picker score aligné CLIP_COLORS, TC chase
+  score→live green
+- **P2d** `be4c30f` — metering audio monochrome accent
+- **P2e** — lane MODULATION score amber→indigo
+- **P1b** `1223204` — tokens graphe unifiés handles/edges/légendes
+  (Duration yellow-400, Spline violet-400, Signal indigo=modulation,
+  ObjectSet cyan=osc ; edges objectset/signal ajoutées), modulation
+  convergée indigo (ModChips, tab signal, dot, AudioModControls),
+  freeze indigo→pink stase (libère indigo pour modulation),
+  attention GestureStrip/SlotTile→pink
+
+**Cartographie MovesTable.tsx (55 occ — auditée, à migrer) :**
+- :178 green playingCount → live ✓ · :189 indigo action btn · :199 green
+  btn · :207 red btn · :239 teal btn GO? · :246 feedback green/red ✓
+- :304 isEditing indigo (mode édition improvisé → accent ?)
+- :305 isPlaying green ✓ · :313 green · :333/:359 border-indigo
+  sélection rows → accent
+- :368 indigo row action · :380 cyan row action (domaine osc ?)
+- :446 cyan · :457/:462 red (delete-type → danger ✓) · :469/:470 green
+- :481 purple (tracking ?) · :487 orange · :503 red hover delete → danger
+- :549/:560/:620 indigo-700 primary actions → accent
+
+**MovesTable.tsx migré** (`6f76b7c`) — 55 occ tokenisées.
+
+**SpatialFxPanel.tsx (38 occ — cyan dominant = identité panel
+spatial, PAS encore migré) :** question doctrinale ouverte — le cyan
+est la teinte-entité du panneau alors que cyan=osc. Options : token
+domaine spatial dédié (cohérent avec lane SPATIALFX=violet score ?) ou
+accent chrome. Zones : :794/:805 bg-cyan-900/20 cartes ; :748-752
+hint cyan ; :435/:539/:559/:578/:661/:739 boutons cyan-600/700 ;
+:487 chip cyan ; :379 warning orange déjà ✓ ; :45/:492 delete
+red→danger.
+
+**Méthode pour le restant :** par fichier — une lecture + patch
+groupé + vérif. Priorité : panels/MovesTable (55), SpatialFxPanel
+(38), AnimationList (27), CuelistPanel (20), puis score/* (129) et
+perform/* (46). Ne PAS regex aveugle : chaque occurrence est
+classée sémantiquement d'abord.
+
+**HANDOFF — P2 mécanique CONSOMMÉ (session suivante, branche
+feat/color-harmonization) :**
+
+L'inventaire ~590 occurrences ci-dessous a été intégralement traité —
+~15 commits `colors:` ( SpatialFxPanel → queue longue). Chaque
+fichier lu, chaque occurrence classée, patch groupé, tsc+tests+build
+verts à chaque étape. Résidus = hues doctrine-correctes ou
+identités catégorielles assumées (PORT_COLORS, MiniBars audio,
+park/attention pink, hold cyan, badges P/H/S).
+
+**Arbitrages rendus (questions 1-4 tranchées) :**
+1. Domaine spatial → **pas de teinte dédiée** — SpatialFxPanel
+   neutralisé (accent interactif / derived previews) ; zones 3D
+   gardent teintes H3 (provenance=fonction) ; lane SPATIALFX neutre.
+2. Lanes score → teinte = token du domaine sinon neutre :
+   CONDUCTOR neutre (mixte), OSC=osc, MODULATION=modulation,
+   SPATIALFX neutre, lanes objets = couleurs-track (identité).
+3. Transport score → playhead=accent, loop+région=target, TC chase=
+   live, dope curves=modulation indigo, events=amber, playhead
+   dope=accent.
+4. Dopesheet → curves=modulation (domaine paramétré), events gardent
+   amber (événements clip).
+
+**Application effective :** sections SettingsModal → tokens domaine
+(OSC=osc, PSN=tracking, spatial=target, engine=modulation) + toggles
+ON unifiés accent ; Titlebar onglets → tokens domaine (atelier=
+modulation, jeu=live, score=accent, conduite=conduite) ; expert UI
+App.tsx → tracking ; toasts/IconButton/PanicButton/OscArmToggle →
+variants tokens ; CUE GO=live vs SETLIST GO=target partout ;
+sélections=accent, playing=live, danger=red-partout.
+
+**H4 — GARDE ACTIVE, CHANTIER VERT (session suivante) :**
+
+- **Garde vitest** `src/__tests__/colorTokens.test.ts` : scanne
+  `src/**` pour les classes palette chromatiques brutes
+  (`text|bg|border|fill|stroke|accent|ring|from|to|via|decoration-
+  {couleur}-{nuance}`), allowlist = les 4 modules de couleur
+  (`uiColors`, `sourceColors`, `connectionRules`, `scoreUtils`).
+  Toute nouvelle violation fait échouer `npm test` — mécanique
+  équivalente à l'échelle z-index, sans rule eslint (les className
+  sont des template literals).
+- **Balayage final** : ~230 occurrences résiduelles sur 36 fichiers
+  migrées — shades claires sur fond tokenisé → `text-white` ou
+  `/70→plein au hover` ; `accent-*` natifs → `accent-stagespace-*` ;
+  `to-blue-600` gradients logo → `to-stagespace-info` ; violet
+  drawMode/DrawToolbar → `accent` (mode interaction, siblings
+  manipulate/assign déjà accent, modes mutuellement exclusifs) ;
+  orphelin clip → `warning` ; events dope → `accent` (points
+  éditables) ; légende Edges NodePalette → dots `PORT_COLORS`.
+- **Modules enrichis** : `CLIP_HOVER` (scoreUtils, hovers du picker
+  = familles CLIP_COLORS), `SOURCE_STRONG/SOURCE_BADGE/SOURCE_OUTLINE/
+  SOURCE_ROW` (sourceColors), `PORT_TEXT_COLORS` (connectionRules),
+  `modulation/accent/info` ajoutés à `UI_HEX` (parité tokens).
+- **Q5 brand tranchée** : gradients logo unifiés
+  `from-stagespace-accent to-stagespace-info` (4 surfaces).
+- **État** : 613/613 tests, tsc/lint(0 err)/build verts.
+  **Zéro classe palette chromatique hors allowlist.**
+
+**P4 — CONTRASTE & CONVENTIONS CONSOLE (session suivante) :**
+
+Revue visuelle par captures (vite :5199 + puppeteer, état démo
+injecté `__live.score`/`__live.cues`) + audit computed WCAG des
+styles rendus. Constat : la doctrine sémantique tenait, mais le
+`text-white` uniforme sur fills mid-saturés échouait AA partout —
+pire cas SETLIST 1.86:1 (`target` teal-400), PLAY 2.28 (`live`
+green-500), clips cyan/teal/fuchsia 1.96-2.79.
+
+**Règle finale (convention console live — grandMA3, ETC Eos,
+Lawo mc², DiGiCo/dLive) :**
+- `text-gray-950` **uniquement** sur les fills intrinsèquement
+  claires (`live` #22c55e, `target` #2dd4bf, `conduite` amber,
+  `osc` cyan, `warning`, `info`, `accent`, `tracking`,
+  `modulation`, et les fills claires CLIP_COLORS) — le pattern
+  « étiquette jaune de desk » : sur ces teintes le noir est le
+  meilleur ratio *et* le bon look.
+- `text-white` **explicite** sur les fills profondes, dont la
+  nuance est assombrie d'un cran si nécessaire pour ≥4.5:1 — le
+  blanc sur saturé profond est le look pad/executor des desks ;
+  le noir y « vibre » (halation sur hue saturée) même quand son
+  ratio est supérieur.
+- `danger` garde `text-white` (convention sécurité, AA-large ✓).
+- Translucides `/NN` gardent le texte clair.
+
+**`CLIP_COLORS` ajusté (scoreUtils)** : pose teal-600→700,
+unpark fuchsia-600→700, solo/unsolo fuchsia-500→600, chanMods
+indigo-500→600, zones indigo-400→600 — toutes → `text-white`
+explicite (les chips héritaient `text-gray-200`, d'où des ratios
+3.6-4.4 juste sous AA). Restés clairs + noir : `cue` amber-600,
+`gesture` teal-500, `soundcheck` cyan-500.
+
+**Mesuré après** : pire clip 1.96→4.71 (SOLO fuchsia-600) ;
+SETLIST 1.86→10.82, PLAY 2.28→8.84 ; 18/18 labels ≥4.5:1.
+park/attention/manualClear migrés fuchsia→pink stase (aligné sur
+les vues live — cohérence `sourceColors`).
+
+**Références console intégrées à la doctrine :**
+- grandMA3 2.5 : éléments non-sélectionnés à intensité réduite —
+  piste future (dim les clips non-actifs en lecture), hors scope.
+- ETC Eos : texte coloré sur tombstone neutre pour la
+  provenance/état (manual=rouge, tracked=magenta…) — cohérent
+  avec notre doctrine tokens-texte vs fills-identité.
+- Lawo mc² : couleurs sémantiques de canal + button-glow basse
+  lumière — cohérent avec une couleur = un sens.
+
+**Correctifs connexes** : IDLE ConduiteView vert→gris quand idle
+(aligné sur PerformView — le vert `live` mentait).
+
+**Reste ouvert :** rien de bloquant — le chantier doctrine est
+acté et enforce. Améliorations possibles (non requises) : dim des
+éléments non-actifs façon grandMA3 ; arbitrage sur les teintes
+`track` procédurales (identité, hors scope).
+
+**Questions doctrinales OUVERTES (à trancher par l'utilisateur) :**
+1. **Domaine spatial** : SpatialFxPanel=cyan identité + lane
+   SPATIALFX=violet score + zones 3D. Token dédié ? quelle teinte ?
+   (violet=graph-geometry déjà pris ; candidates : rose ?)
+2. **Lanes score** : CONDUCTOR rose / OSC emerald / GLOBALFX cyan /
+   SPATIALFX violet — teintes-domaines à confirmer ou aplatir.
+3. **Transport score** : playhead/loop/cyan 34 occ — vocabulaire
+   dédié à inventer (dataviz, pas fonction live).
+4. **Dopesheet** : events amber vs curves cyan — sens à confirmer.
+5. **Brand** : gradients indigo→purple logos panels (P3 chrome).
+
+**Points d'attention connus :**
+- `text-stagespace-*` tokens = hex unique, `/alpha` OK pour bg/border.
+- Hover plus clair : pas de variant — utiliser `hover:opacity-80` ou
+  teinte Tailwind voisine de la même famille (ex: hover:text-blue-300
+  pour accent #3b82f6).
+- Preview = derived/slate PARTOUT (VIZ.obj.preview migré P0b ;
+  MovesTable toggle corrigé ; traque tout autre cyan-preview).
+- Park/freeze/attention = pink stase #ec4899 (sourceColors unique).
+- Modulation = indigo #818cf8 (Slider tone="modulation", ModChips,
+  CustomNode dot, AudioModControls, lane MODULATION).
+- Setlist : NOW=live, CURRENT=live, NEXT=target, GO=target teal
+  (MovesTable GO ▶ fait ; vérifier CuelistPanel/ConduiteView).
+- Cue GO = live green (arb. 11) ; cue states = amber/conduite.
+- Solo = warning orange ; stop sévérité = danger opacités.
+- Focus borders = accent (fait partout — ne plus en ajouter).
+- Catégories nodes = SANS couleur (NODE_COLORS supprimé P1a).
+- Ports graphe : Positions gray/ObjectSet cyan/Duration yellow/
+  Spline violet/Signal indigo — PORT_COLORS+edges+légende unifiés.
+- dev_bridge tourne peut-être sur :4173 (vieux binaire — rebuild si
+  poses testées) ; vite :5174 ; puppeteer scripts dans
+  .scratch/puppeteer-audit/.
+- `tauri-app/src-tauri/gen/schemas/*.json` se régénèrent — ne pas
+  committer.
+
 
 ## 5. Points de décision ouverts
 

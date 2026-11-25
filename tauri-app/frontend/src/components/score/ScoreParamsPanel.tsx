@@ -73,7 +73,7 @@ export const ScoreParamsPanel: React.FC<{
             onClick={() => onTab?.(t.id)}
             className={`flex-1 px-1 py-0.5 rounded-sm text-[9px] uppercase tracking-wide ${
               activeTab === t.id
-                ? 'bg-gray-700 text-cyan-300'
+                ? 'bg-gray-700 text-stagespace-accent'
                 : 'text-gray-500 hover:text-gray-300'
             }`}
           >
@@ -90,7 +90,7 @@ export const ScoreParamsPanel: React.FC<{
           <select
             value={mergeStrategy}
             onChange={(e) => onMergeStrategy?.(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[10px] text-cyan-300"
+            className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[10px] text-stagespace-accent"
           >
             <option value="override">override</option>
             <option value="crossfade">crossfade</option>
@@ -108,7 +108,7 @@ export const ScoreParamsPanel: React.FC<{
           if (e.key === 'Enter' && modName.trim()) onModNameCommit?.(modName.trim());
         }}
         placeholder="/score/energy — nom de la valeur"
-        className="w-full bg-gray-800/60 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-amber-200 placeholder:text-gray-600 outline-none focus:border-amber-500"
+        className="w-full bg-gray-800/60 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-stagespace-warning placeholder:text-gray-600 outline-none focus:border-stagespace-accent"
       />
     )}
     <div
@@ -144,7 +144,7 @@ export const ScoreParamsPanel: React.FC<{
               style={rowHeight ? { height: rowHeight } : undefined}
               className={`w-full text-left px-2 ${rowHeight ? 'py-0 flex items-center' : 'py-1'} text-[10px] font-bold rounded border ${r.dragPayload ? 'cursor-grab ' : ''}${
                 r.active
-                  ? 'border-cyan-500 text-cyan-300 bg-cyan-900/30'
+                  ? 'border-stagespace-accent text-stagespace-accent bg-stagespace-accent/15'
                   : 'border-gray-700/60 text-gray-400 hover:text-gray-200 hover:bg-gray-800/40'
               }`}
             >

@@ -85,8 +85,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose, 
             item.disabled
               ? 'text-gray-600 cursor-default'
               : item.danger
-                ? 'text-red-300 hover:bg-red-900/40'
-                : 'text-gray-300 hover:bg-cyan-900/40 hover:text-white'
+                ? 'text-stagespace-danger hover:bg-stagespace-danger/15'
+                : 'text-gray-300 hover:bg-stagespace-accent/10 hover:text-white'
           }`}
         >
           {item.label}

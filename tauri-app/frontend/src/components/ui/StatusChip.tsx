@@ -1,8 +1,12 @@
 import React from 'react';
 
-type ChipVariant = 'live' | 'conduite' | 'osc' | 'warning' | 'danger' | 'tracking' | 'dim';
+type ChipVariant = 'live' | 'conduite' | 'osc' | 'warning' | 'danger' | 'tracking' | 'dim' | 'info';
 
-const VARIANTS: Record<ChipVariant, string> = {
+/// Tones exportés — le vocabulaire chip unique des surfaces live
+/// (design : docs/color-harmonization.md). Les chips non interactifs
+/// utilisent le composant StatusChip ; les chips INTERACTIFS (boutons
+/// arm/disarm, pills cliquables) composent ces mêmes tones en className.
+export const STATUS_TONES: Record<ChipVariant, string> = {
   live: 'text-stagespace-live bg-stagespace-live/10 border-stagespace-live/40',
   conduite: 'text-stagespace-conduite bg-stagespace-conduite/10 border-stagespace-conduite/40',
   osc: 'text-stagespace-osc bg-stagespace-osc/10 border-stagespace-osc/40',
@@ -10,6 +14,7 @@ const VARIANTS: Record<ChipVariant, string> = {
   danger: 'text-stagespace-danger bg-stagespace-danger/10 border-stagespace-danger/40 animate-pulse',
   tracking: 'text-stagespace-tracking bg-stagespace-tracking/10 border-stagespace-tracking/40',
   dim: 'text-stagespace-dim bg-gray-800/40 border-gray-700',
+  info: 'text-stagespace-info bg-stagespace-info/10 border-stagespace-info/40',
 };
 
 /// Chip d'état live — un seul vocabulaire visuel pour PARKED / CONSOLE / TC /
@@ -23,7 +28,7 @@ export const StatusChip: React.FC<{
   className?: string;
 }> = ({ variant, children, pulse, title, className = '' }) => (
   <span
-    className={`px-1.5 py-0.5 rounded border text-xs font-bold flex items-center gap-1 ${VARIANTS[variant]} ${pulse ? 'animate-pulse' : ''} ${className}`}
+    className={`px-1.5 py-0.5 rounded border text-xs font-bold flex items-center gap-1 ${STATUS_TONES[variant]} ${pulse ? 'animate-pulse' : ''} ${className}`}
     title={title}
   >
     {children}

@@ -49,7 +49,7 @@ export const ViewerToolPalette: React.FC = () => {
       disabled={disabled}
       onClick={onClick}
       className={`w-7 h-7 flex items-center justify-center rounded transition-colors disabled:opacity-30 ${
-        active ? `${accent} text-white` : 'text-gray-400 hover:bg-gray-700/70 hover:text-gray-200'
+        active ? `${accent}` : 'text-gray-400 hover:bg-gray-700/70 hover:text-gray-200'
       }`}
     >
       {icon}
@@ -63,14 +63,14 @@ export const ViewerToolPalette: React.FC = () => {
       {/* Outil Select = retour au neutre (équivaut Esc) */}
       {modeBtn(
         noneActive,
-        'bg-gray-600',
+        'bg-gray-600 text-white',
         'Select — neutral mode (Esc)',
         <MousePointer size={13} />,
         () => cancelInteractionModes(),
       )}
       {modeBtn(
         manipulateMode,
-        'bg-blue-600',
+        'bg-stagespace-accent text-gray-950',
         'Manipulate — drag objects, Shift+click = multi-select, handle = move all, wheel = scale',
         <Move3d size={13} />,
         () => setManipulateMode(!manipulateMode),
@@ -78,7 +78,7 @@ export const ViewerToolPalette: React.FC = () => {
       {!detached &&
         modeBtn(
           assignMode,
-          'bg-green-600',
+          'bg-stagespace-accent text-gray-950',
           'Assign — click objects to toggle their track for this move',
           <Link2 size={13} />,
           () => setAssignMode(!assignMode),
@@ -86,7 +86,7 @@ export const ViewerToolPalette: React.FC = () => {
       {!detached &&
         modeBtn(
           drawMode,
-          'bg-orange-600',
+          'bg-stagespace-accent text-gray-950',
           hasDrawableNode
             ? 'Draw — spline studio (freehand, place, edit)'
             : 'No drawable node — add a DrawSpline / EvaluateSpline / VectorField(drawn) node first',

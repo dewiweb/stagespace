@@ -16,7 +16,7 @@ export const AboutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   return (
     <Modal title="About STAGESPACE" onClose={onClose} widthClass="max-w-sm">
       <div className="p-5 flex flex-col items-center text-center gap-3">
-        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-stagespace-accent to-stagespace-info flex items-center justify-center shadow-lg">
           <span className="text-white font-bold text-xl">S</span>
         </div>
         <div>

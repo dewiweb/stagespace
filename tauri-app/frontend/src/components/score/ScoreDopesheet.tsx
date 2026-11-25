@@ -149,7 +149,7 @@ export const ScoreDopesheet: React.FC<{
           <div className="relative" style={{ width: '100%', height: Math.max(contentH, 1), minHeight: '100%' }}>
             {/* Région de boucle */}
             {loopStartMs != null && loopEndMs != null && loopEndMs > loopStartMs && (
-              <div className="absolute top-0 bottom-0 bg-cyan-500/5 border-x border-cyan-500/20 pointer-events-none"
+              <div className="absolute top-0 bottom-0 bg-stagespace-target/5 border-x border-stagespace-target/20 pointer-events-none"
                 style={{ left: ms2px(loopStartMs), width: ms2px(loopEndMs - loopStartMs) }} />
             )}
             {/* Rangées — top calculé depuis la structure des groupes
@@ -165,8 +165,8 @@ export const ScoreDopesheet: React.FC<{
                         key={i}
                         className={`absolute w-2 h-2 rotate-45 cursor-ew-resize border ${
                           r.kind === 'events'
-                            ? 'bg-amber-500/80 border-amber-300'
-                            : 'bg-cyan-500/80 border-cyan-300'
+                            ? 'bg-stagespace-accent/80 border-stagespace-accent'
+                            : 'bg-stagespace-modulation/80 border-stagespace-modulation'
                         }`}
                         style={{ left, top }}
                         title={
@@ -190,7 +190,7 @@ export const ScoreDopesheet: React.FC<{
               </div>
             )}
             {/* Playhead — même curseur que la timeline */}
-            <div className="absolute top-0 bottom-0 w-px bg-cyan-400 pointer-events-none"
+            <div className="absolute top-0 bottom-0 w-px bg-stagespace-accent pointer-events-none"
               style={{ left: ms2px(displayCursor) }} />
           </div>
         </div>

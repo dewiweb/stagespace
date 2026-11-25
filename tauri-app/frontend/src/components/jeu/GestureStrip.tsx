@@ -4,6 +4,7 @@
 import React from 'react';
 import { doAttention, doGesture, doSpatial } from '../../utils/liveActions';
 import { useGraphStore } from '../../store/useGraphStore';
+import { SOURCE_STRONG } from '../../utils/sourceColors';
 
 // Gestes composés backend (per-object ballistic velocity, damped to
 // rest) — même sémantique que `/stagespace/gesture <name> [strength]`,
@@ -37,7 +38,7 @@ export const GestureStrip: React.FC = () => {
             setSpatialK(k);
             doSpatial(k);
           }}
-          className="flex-1 accent-indigo-500"
+          className="flex-1 accent-stagespace-modulation"
           title="Compresseur spatial — k<1 resserre le champ, k>1 l'étend"
         />
         <span className="text-[10px] text-gray-600 w-14 text-right">×{spatialK.toFixed(2)}</span>
@@ -50,7 +51,7 @@ export const GestureStrip: React.FC = () => {
             disabled={!objectsLive}
             className={`px-3 rounded-lg text-[11px] font-bold transition-colors ${
               objectsLive
-                ? 'bg-indigo-900/70 hover:bg-indigo-700 text-indigo-100'
+                ? 'bg-stagespace-accent/20 hover:bg-stagespace-accent/30 text-white'
                 : 'bg-gray-800 text-gray-600 cursor-not-allowed'
             }`}
             title={objectsLive ? `${g.hint} (force 3 m/s — amorti jusqu'au repos)` : 'Aucun objet émis — lance un move d’abord'}
@@ -63,7 +64,7 @@ export const GestureStrip: React.FC = () => {
         onClick={() => doAttention(null)}
         className={`px-4 rounded-lg text-xs font-bold ${
           attnActive
-            ? 'bg-amber-800 hover:bg-amber-700 text-amber-100 animate-pulse'
+            ? SOURCE_STRONG.freeze + ' animate-pulse'
             : 'bg-gray-800 text-gray-600'
         }`}
         title={

@@ -24,10 +24,10 @@ const PerfStrip: React.FC = () => {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const fpsCls = debugPerf.renderStutter > 0 ? 'text-red-400' : 'text-green-400';
-  const ipcCls = debugPerf.ipcMaxGap > 25 ? 'text-red-400' : 'text-green-400';
-  const glCls = debugPerf.glMs > 15 ? 'text-red-400' : 'text-green-400';
-  const animCls = debugPerf.animateMs > 15 ? 'text-red-400' : 'text-green-400';
+  const fpsCls = debugPerf.renderStutter > 0 ? 'text-stagespace-danger' : 'text-stagespace-live';
+  const ipcCls = debugPerf.ipcMaxGap > 25 ? 'text-stagespace-danger' : 'text-stagespace-live';
+  const glCls = debugPerf.glMs > 15 ? 'text-stagespace-danger' : 'text-stagespace-live';
+  const animCls = debugPerf.animateMs > 15 ? 'text-stagespace-danger' : 'text-stagespace-live';
 
   return (
     <span
@@ -37,7 +37,7 @@ const PerfStrip: React.FC = () => {
       <span className="text-gray-600">PERF</span>
       <span className={fpsCls}>{debugPerf.renderFps.toFixed(0)}fps</span>
       <span className={ipcCls} title="IPC position rate / max gap">ipc{debugPerf.ipcFps.toFixed(0)}·{debugPerf.ipcMaxGap.toFixed(0)}ms</span>
-      <span className="text-cyan-400" title="positions / movements">p{debugPerf.posLen}·m{debugPerf.mvts}</span>
+      <span className="text-stagespace-dim" title="positions / movements">p{debugPerf.posLen}·m{debugPerf.mvts}</span>
       <span className={glCls} title="GL frame / labels ms">gl{debugPerf.glMs.toFixed(1)}·lb{debugPerf.labelMs.toFixed(1)}</span>
       <span className={animCls} title="Animate ms">an{debugPerf.animateMs.toFixed(1)}</span>
     </span>
@@ -81,12 +81,12 @@ export const ViewerStatusBar: React.FC<ViewerStatusBarProps> = ({ cursorReadoutR
 
   return (
     <div className="flex-shrink-0 flex items-center gap-2.5 px-1.5 py-0.5 bg-gray-900/95 border-t border-gray-700/60 min-h-[24px]">
-      <span className="text-orange-400/90 text-[10px] font-medium truncate min-w-0 max-w-[38%]" title={hint}>
+      <span className="text-stagespace-warning/90 text-[10px] font-medium truncate min-w-0 max-w-[38%]" title={hint}>
         {hint}
       </span>
       {drawMode && controlPoints.length > 0 && (
         <span className="text-gray-500 text-[10px] font-mono whitespace-nowrap">
-          {controlPoints.length} cp{cpSelection.size > 0 && <span className="text-orange-400"> · {cpSelection.size} sel</span>}
+          {controlPoints.length} cp{cpSelection.size > 0 && <span className="text-stagespace-accent"> · {cpSelection.size} sel</span>}
         </span>
       )}
       {movements.length > 0 && (
@@ -96,7 +96,7 @@ export const ViewerStatusBar: React.FC<ViewerStatusBarProps> = ({ cursorReadoutR
             <span
               key={mv.id}
               className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                mv.is_preview ? 'bg-cyan-900 text-cyan-400' : 'bg-green-900 text-green-400'
+                mv.is_preview ? 'bg-slate-800 text-slate-300' : 'bg-stagespace-live/15 text-stagespace-live'
               }`}
               title={`${mv.name} — ${mv.track_count} tracks`}
             >

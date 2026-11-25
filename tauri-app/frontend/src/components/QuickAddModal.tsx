@@ -1,7 +1,7 @@
 import React from 'react';
 import Modal from './ui/Modal';
 import type { NodeType } from '../store/useGraphStore';
-import { NODE_DESCRIPTIONS, getCategoryColor } from './nodeParamSchema';
+import { NODE_DESCRIPTIONS } from './nodeParamSchema';
 import type { PluginManifest } from '../types/generated/PluginManifest';
 
 /// Quick-add (pattern plugdata/Ctrl+K) : palette searchable flottante —
@@ -87,14 +87,14 @@ export const QuickAddModal: React.FC<{
     <Modal title="Add node" onClose={onClose} widthClass="max-w-sm">
       <div className="px-4 py-3" onKeyDown={onKeyDown}>
         {contextHint && (
-          <div className="text-cyan-400 text-[11px] font-mono mb-2">{contextHint}</div>
+          <div className="text-stagespace-info text-[11px] font-mono mb-2">{contextHint}</div>
         )}
         <input
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search a node or plugin…"
-          className="w-full px-3 py-1.5 mb-2 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+          className="w-full px-3 py-1.5 mb-2 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
         />
         <div ref={listRef} className="max-h-64 overflow-y-auto space-y-0.5">
           {items.length === 0 && (
@@ -109,19 +109,12 @@ export const QuickAddModal: React.FC<{
               onClick={() => pick(it)}
               onMouseEnter={() => setSelIdx(i)}
               className={`w-full text-left px-2.5 py-1.5 rounded text-xs flex items-center gap-2 transition-colors ${
-                i === selIdx ? 'bg-cyan-900/50 text-white' : 'text-gray-300 hover:bg-gray-800'
+                i === selIdx ? 'bg-stagespace-accent/20 text-white' : 'text-gray-300 hover:bg-gray-800'
               }`}
             >
-              <span
-                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                style={{
-                  background:
-                    it.kind === 'type' ? getCategoryColor(it.type) : '#a855f7',
-                }}
-              />
               <span className="font-medium">{it.label}</span>
               {it.kind === 'plugin' && (
-                <span className="text-[11px] px-1 rounded bg-purple-900/60 text-purple-300 font-mono">
+                <span className="text-[11px] px-1 rounded bg-stagespace-info/20 text-stagespace-info font-mono">
                   {KIND_BADGE[it.manifest.kind] ?? it.manifest.kind}
                 </span>
               )}

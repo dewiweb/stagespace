@@ -55,15 +55,15 @@ export default function AudioPanel() {
         className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-800/40 transition-colors text-left"
         title={collapsed ? 'Show audio input controls' : 'Hide audio input controls'}
       >
-        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isListening ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`} />
+        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isListening ? 'bg-stagespace-live animate-pulse' : 'bg-gray-600'}`} />
         <h3 className="text-gray-300 font-semibold text-xs flex-1">Audio Input</h3>
         {isListening && amp && (
           <div className="w-16 h-1.5 bg-gray-900 rounded-full overflow-hidden">
-            <div className="h-full bg-cyan-500 transition-all duration-100" style={{ width: `${Math.min(100, amp.rms * 100)}%` }} />
+            <div className="h-full bg-stagespace-accent transition-all duration-100" style={{ width: `${Math.min(100, amp.rms * 100)}%` }} />
           </div>
         )}
         {isListening && audioState.bpm && (
-          <span className="text-cyan-400 text-xs font-mono">{audioState.bpm.bpm.toFixed(0)} BPM</span>
+          <span className="text-stagespace-accent text-xs font-mono">{audioState.bpm.bpm.toFixed(0)} BPM</span>
         )}
         <span className="text-gray-400 text-xs">{collapsed ? '▸' : '▾'}</span>
       </button>
@@ -72,7 +72,7 @@ export default function AudioPanel() {
       <div className="px-3 pb-3 flex flex-col gap-2">
 
       {error && (
-        <div className="p-2 bg-red-950/40 border border-red-800/50 rounded text-red-400 text-xs">
+        <div className="p-2 bg-stagespace-danger/15 border border-stagespace-danger/50 rounded text-stagespace-danger text-xs">
           {error}
         </div>
       )}
@@ -82,7 +82,7 @@ export default function AudioPanel() {
         value={selectedAudioDeviceId ?? ''}
         onChange={(e) => setSelectedAudioDeviceId(e.target.value || null)}
         disabled={isListening || audioDevices.length === 0}
-        className="w-full text-xs bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-gray-300 focus:outline-none focus:border-blue-500"
+        className="w-full text-xs bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-gray-300 focus:outline-none focus:border-stagespace-accent"
       >
         <option value="">{audioDevices.length === 0 ? 'No devices' : 'Default device'}</option>
         {audioDevices.map((d) => (
@@ -97,8 +97,8 @@ export default function AudioPanel() {
         <div className="flex items-center justify-between mb-2">
           <span className="text-gray-400 text-xs">Status</span>
           <div className="flex items-center gap-1.5">
-            <div className={`w-1.5 h-1.5 rounded-full ${isListening ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`} />
-            <span className={`text-xs font-medium ${isListening ? 'text-green-400' : 'text-gray-500'}`}>
+            <div className={`w-1.5 h-1.5 rounded-full ${isListening ? 'bg-stagespace-live animate-pulse' : 'bg-gray-600'}`} />
+            <span className={`text-xs font-medium ${isListening ? 'text-stagespace-live' : 'text-gray-500'}`}>
               {isListening ? 'Active' : 'Inactive'}
             </span>
           </div>
@@ -109,10 +109,10 @@ export default function AudioPanel() {
       {isListening && amp && (
         <div className="space-y-2">
           <div className="text-gray-400 text-xs font-medium uppercase tracking-wide">Amplitude</div>
-          <Bar label="RMS" value={amp.rms} color="bg-blue-500" />
-          <Bar label="Bass" value={amp.bass} color="bg-red-500" />
-          <Bar label="Mid" value={amp.mid} color="bg-green-500" />
-          <Bar label="High" value={amp.high} color="bg-yellow-500" />
+          <Bar label="RMS" value={amp.rms} color="bg-stagespace-accent" />
+          <Bar label="Bass" value={amp.bass} color="bg-stagespace-accent" />
+          <Bar label="Mid" value={amp.mid} color="bg-stagespace-accent" />
+          <Bar label="High" value={amp.high} color="bg-stagespace-accent" />
         </div>
       )}
 
@@ -127,7 +127,7 @@ export default function AudioPanel() {
           </div>
           <div className="mt-1 h-1 bg-gray-900 rounded-full overflow-hidden">
             <div
-              className="h-full bg-cyan-500 transition-all"
+              className="h-full bg-stagespace-accent transition-all"
               style={{ width: `${audioState.bpm.confidence * 100}%` }}
             />
           </div>
@@ -149,10 +149,10 @@ export default function AudioPanel() {
           disabled={audioDevices.length === 0}
           className={`w-full py-2 px-3 rounded-lg font-medium text-xs transition-all ${
             isListening
-              ? 'bg-red-600 hover:bg-red-700 text-white'
+              ? 'bg-stagespace-danger hover:opacity-90 text-white'
               : audioDevices.length === 0
               ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 text-white'
+              : 'bg-stagespace-accent hover:opacity-90 text-gray-950'
           }`}
         >
           {isListening ? 'Stop' : 'Start'}

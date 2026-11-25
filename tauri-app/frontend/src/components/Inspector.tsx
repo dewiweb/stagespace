@@ -2,7 +2,7 @@ import React from 'react';
 import { useMoveEditorStore, Move } from '../store/useMoveEditorStore';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { TrackGrid } from './TrackGrid';
-import { PARAM_SCHEMA, NODE_DESCRIPTIONS, getCategoryColor, type ParamDef, type NodeParamValue, type GraphNodeData } from './nodeParamSchema';
+import { PARAM_SCHEMA, NODE_DESCRIPTIONS, type ParamDef, type NodeParamValue, type GraphNodeData } from './nodeParamSchema';
 import { NodeParamsPanel } from './panels/NodeParamsPanel';
 import { ParamInput } from './ParamInput';
 import type { MacrosState } from '../store/slices/macrosSlice';
@@ -14,7 +14,7 @@ function Section({ title, icon, defaultOpen = true, badge, badgeColor = 'gray', 
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
   const badgeCls = badgeColor === 'orange'
-    ? 'text-orange-400 bg-orange-900/40 px-1.5 py-0.5 rounded text-xs font-mono animate-pulse'
+    ? 'text-stagespace-warning bg-stagespace-warning/15 px-1.5 py-0.5 rounded text-xs font-mono animate-pulse'
     : 'text-gray-500 text-xs font-mono';
   return (
     <div className="border-b border-gray-700/40">
@@ -33,6 +33,7 @@ import Slider from './ui/Slider';
 import { GlobalTransformSurface } from './show/GlobalTransformSurface';
 import { AudioModList } from './AudioModControls';
 import { Zap, AudioLines, Hexagon, SlidersHorizontal, Play, CircleDot, X, Square, ChevronRight, TriangleAlert, Check } from 'lucide-react';
+import { PORT_TEXT_COLORS } from '../utils/connectionRules';
 
 export default function Inspector() {
   const showExpert = useMoveEditorStore((s) => s.showExpert);
@@ -75,7 +76,7 @@ export default function Inspector() {
   const [flashClass, setFlashClass] = React.useState('');
   React.useEffect(() => {
     if (launchFlash > 0) {
-      setFlashClass('ring-2 ring-green-400 scale-105');
+      setFlashClass('ring-2 ring-stagespace-accent scale-105');
       const t = setTimeout(() => setFlashClass(''), 600);
       return () => clearTimeout(t);
     }
@@ -98,7 +99,6 @@ export default function Inspector() {
   const selectedNodeType = (selectedNode?.data as GraphNodeData | undefined)?.type as NodeType | undefined;
   const selectedNodeSchema = selectedNodeType ? PARAM_SCHEMA[selectedNodeType] ?? [] : [];
   const selectedNodeParams: Record<string, NodeParamValue> = (selectedNode?.data as GraphNodeData | undefined)?.params ?? {};
-  const nodeColor = selectedNodeType ? getCategoryColor(selectedNodeType) : '#4b5563';
 
   // ── Audio mod UI ──
 
@@ -175,7 +175,7 @@ export default function Inspector() {
           <select
             value={editingSlotId ?? ''}
             onChange={(e) => selectSlotForEditing(e.target.value === '' ? null : e.target.value)}
-            className="flex-1 min-w-0 bg-gray-800 text-white text-xs font-semibold px-2 py-1.5 rounded border border-gray-700 focus:border-indigo-500 focus:outline-none cursor-pointer"
+            className="flex-1 min-w-0 bg-gray-800 text-white text-xs font-semibold px-2 py-1.5 rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none cursor-pointer"
             title="Move inspecté — Global = vue transform global/audio, aucun move en édition"
           >
             <option value="">◆ Global — no move</option>
@@ -190,14 +190,14 @@ export default function Inspector() {
             <span
               className={`flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold ${
                 editingSlot?.isPreview
-                  ? 'bg-cyan-900/60 text-cyan-300 border border-cyan-700/50'
-                  : 'bg-green-900/60 text-green-300 border border-green-700/50 animate-pulse'
+                  ? 'bg-slate-800/60 text-slate-300 border border-slate-600/50'
+                  : 'bg-stagespace-live/20 text-stagespace-live border border-stagespace-live/50 animate-pulse'
               }`}
               title={editingSlot?.isPreview
                 ? 'This move runs in preview — edits apply live (no OSC out)'
                 : 'ON AIR — les edits de ce panneau partent au renderer en direct'}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${editingSlot?.isPreview ? 'bg-cyan-400' : 'bg-green-400'}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${editingSlot?.isPreview ? 'bg-slate-400' : 'bg-stagespace-live'}`} />
               {editingSlot?.isPreview ? 'PREVIEW' : 'LIVE'}
             </span>
           )}
@@ -207,7 +207,7 @@ export default function Inspector() {
             type="text"
             value={current.name}
             onChange={(e) => updateCurrent({ name: e.target.value, id: current.id })}
-            className="mt-1.5 w-full bg-transparent text-white text-sm font-semibold focus:outline-none focus:text-blue-400"
+            className="mt-1.5 w-full bg-transparent text-white text-sm font-semibold focus:outline-none focus:text-stagespace-accent"
             title="Rename the move"
           />
         )}
@@ -244,8 +244,7 @@ export default function Inspector() {
               {selectedNode && selectedNodeType ? (
                 <>
                   <div className="flex items-center gap-2 px-1 pb-2">
-                    <span className="w-2 h-2 rounded-full" style={{ background: nodeColor }} />
-                    <span className="text-white text-xs font-semibold">{selectedNodeType}</span>
+                                        <span className="text-white text-xs font-semibold">{selectedNodeType}</span>
                     {NODE_DESCRIPTIONS[selectedNodeType] && (
                       <span className="text-gray-400 text-xs ml-auto truncate" title={NODE_DESCRIPTIONS[selectedNodeType]}>
                         {NODE_DESCRIPTIONS[selectedNodeType]?.split('—')[0]}
@@ -318,7 +317,7 @@ export default function Inspector() {
                 {(['forward', 'backward', 'ping_pong'] as const).map((d) => (
                   <button key={d} onClick={() => updateCurrent({ direction: d })}
                     title={d === 'forward' ? 'Direction — la trajectoire joue dans le sens du dessin' : d === 'backward' ? 'Direction — la trajectoire joue à rebours' : 'Direction — la trajectoire alterne aller/retour'}
-                    className={`flex-1 py-1 text-xs rounded ${current.direction === d ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-500'}`}>
+                    className={`flex-1 py-1 text-xs rounded ${current.direction === d ? 'bg-stagespace-accent text-gray-950' : 'bg-gray-800 text-gray-500'}`}>
                     {d === 'forward' ? '→ Fwd' : d === 'backward' ? '← Bwd' : '↔ Ping'}
                   </button>
                 ))}
@@ -327,7 +326,7 @@ export default function Inspector() {
                 {(['loop', 'one_shot'] as const).map((l) => (
                   <button key={l} onClick={() => updateCurrent({ loop_mode: l })}
                     title={l === 'loop' ? 'Loop — la trajectoire recommence en boucle' : 'One-shot — joue une fois puis termine (voir End : revert/hold)'}
-                    className={`flex-1 py-1 text-xs rounded ${current.loop_mode === l ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-500'}`}>
+                    className={`flex-1 py-1 text-xs rounded ${current.loop_mode === l ? 'bg-stagespace-accent text-gray-950' : 'bg-gray-800 text-gray-500'}`}>
                     {l === 'loop' ? '↻ Loop' : '▶ One-shot'}
                   </button>
                 ))}
@@ -341,17 +340,17 @@ export default function Inspector() {
                 Radius/Height en sous-groupe « global » : ils n'existent pas
                 sur Animation — scope merge (Global transform). */}
             <Section title="Transform" icon={<Zap size={12} />}>
-              <Slider label="Speed" value={current.speed} min={0} max={4} step={0.05} onChange={(v) => handleTransform('speed', v)} unit="x" accent="purple" />
-              <Slider label="Scale" value={current.scale} min={0} max={4} step={0.05} onChange={(v) => handleTransform('scale', v)} accent="purple" />
-              <Slider label="Shift X" value={current.offset_x} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_x', v)} accent="purple" />
-              <Slider label="Shift Y" value={current.offset_y} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_y', v)} accent="purple" />
-              <Slider label="Shift Z" value={current.offset_z} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_z', v)} accent="purple" />
-              <Slider label="Yaw" value={current.yaw} min={-180} max={180} step={1} onChange={(v) => handleTransform('yaw', v)} unit="°" accent="purple" />
-              <Slider label="Pitch" value={current.pitch} min={-90} max={90} step={1} onChange={(v) => handleTransform('pitch', v)} unit="°" accent="purple" />
-              <Slider label="Roll" value={current.roll} min={-180} max={180} step={1} onChange={(v) => handleTransform('roll', v)} unit="°" accent="purple" />
+              <Slider label="Speed" value={current.speed} min={0} max={4} step={0.05} onChange={(v) => handleTransform('speed', v)} unit="x" />
+              <Slider label="Scale" value={current.scale} min={0} max={4} step={0.05} onChange={(v) => handleTransform('scale', v)} />
+              <Slider label="Shift X" value={current.offset_x} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_x', v)} />
+              <Slider label="Shift Y" value={current.offset_y} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_y', v)} />
+              <Slider label="Shift Z" value={current.offset_z} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_z', v)} />
+              <Slider label="Yaw" value={current.yaw} min={-180} max={180} step={1} onChange={(v) => handleTransform('yaw', v)} unit="°" />
+              <Slider label="Pitch" value={current.pitch} min={-90} max={90} step={1} onChange={(v) => handleTransform('pitch', v)} unit="°" />
+              <Slider label="Roll" value={current.roll} min={-180} max={180} step={1} onChange={(v) => handleTransform('roll', v)} unit="°" />
               <div className="pt-1 mt-1 border-t border-gray-800 text-[10px] uppercase tracking-wider text-gray-600" title="Scope merge — tous les moves (Global transform)">— global —</div>
-              <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05} onChange={(v) => handleMacro('radius_scale', v)} unit="x" accent="cyan" />
-              <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1} onChange={(v) => handleMacro('height_offset', v)} unit="m" accent="cyan" />
+              <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05} onChange={(v) => handleMacro('radius_scale', v)} unit="x" />
+              <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1} onChange={(v) => handleMacro('height_offset', v)} unit="m" />
             </Section>
           </>
         )}
@@ -401,12 +400,12 @@ export default function Inspector() {
           {!showExpert && (
             <>
               <Slider label="Spread" value={current.phase_spread} min={0} max={1} step={0.05}
-                onChange={(v) => updateCurrent({ phase_spread: v })} accent="cyan" />
+                onChange={(v) => updateCurrent({ phase_spread: v })} />
               <div className="text-gray-400 text-xs -mt-1">Phase offset between tracks (chasing effect)</div>
             </>
           )}
           {centroid && (
-            <div className="text-cyan-400 text-xs font-mono pt-1">
+            <div className="text-stagespace-derived text-xs font-mono pt-1">
               centre: ({centroid[0].toFixed(1)}, {centroid[1].toFixed(1)}, {centroid[2].toFixed(1)})
             </div>
           )}
@@ -430,18 +429,18 @@ export default function Inspector() {
                   }`}
                 >
                   <span className={`text-xs font-mono w-4 h-4 rounded flex items-center justify-center flex-shrink-0 ${
-                    mv.is_preview ? 'bg-cyan-800 text-cyan-300' : 'bg-green-800 text-green-300'
+                    mv.is_preview ? 'bg-slate-700 text-slate-300' : 'bg-stagespace-live/25 text-stagespace-live'
                   }`}>{idx + 1}</span>
                   <span className="text-white text-xs font-medium truncate flex-1">{mv.name}</span>
                   <span className="text-gray-500 text-xs font-mono flex-shrink-0">{trackCount}tr</span>
                   <button
                     onClick={(e) => { e.stopPropagation(); stopMovementWithFade(mv.id, useGraphStore.getState().moveSlots.find((sl) => sl.movementId === mv.id)?.fadeOut ?? 0.5); }}
-                    className="text-yellow-400 hover:text-yellow-300 text-xs px-1 flex-shrink-0"
+                    className="text-stagespace-danger/60 hover:text-stagespace-danger text-xs px-1 flex-shrink-0"
                     title="Stop avec fade (fade_out du slot, 0.5s par défaut)"
                   ><Square size={10} /></button>
                   <button
                     onClick={(e) => { e.stopPropagation(); stopMovement(mv.id); }}
-                    className="text-red-400 hover:text-red-300 text-xs px-1 flex-shrink-0"
+                    className="text-stagespace-danger/70 hover:text-stagespace-danger text-xs px-1 flex-shrink-0"
                     title="Immediate stop"
                   ><Square size={10} fill="currentColor" /></button>
                 </div>
@@ -449,7 +448,7 @@ export default function Inspector() {
             })}
             <button
               onClick={() => stopAllMovements().catch(silentCatch)}
-              className="w-full py-1 bg-red-900/50 hover:bg-red-900/70 text-red-400 text-xs rounded font-medium transition-colors"
+              className="w-full py-1 bg-stagespace-danger/15 hover:bg-stagespace-danger/25 text-stagespace-danger text-xs rounded font-medium transition-colors"
             >
               ■ Stop All
             </button>
@@ -461,9 +460,9 @@ export default function Inspector() {
             disabled={!hasEditingSlot}
             className={`flex-1 py-2 text-xs rounded-lg font-bold transition-colors flex items-center justify-center gap-1.5 border ${
               editingIsLive
-                ? 'bg-red-900/60 hover:bg-red-800/70 text-red-100 border-red-700/50'
+                ? 'bg-stagespace-danger/60 hover:bg-stagespace-danger text-white border-stagespace-danger/60'
                 : hasEditingSlot
-                  ? 'bg-indigo-700 hover:bg-indigo-600 text-white border-indigo-500/50'
+                  ? 'bg-stagespace-live hover:opacity-90 text-gray-950 border-stagespace-live/50'
                   : 'bg-gray-800/40 text-gray-500 border-gray-700/30 cursor-not-allowed'
             }`}
             title={hasEditingSlot ? `${editingIsLive ? 'Stop' : 'Play'} "${editingSlot?.name}" (Space)` : 'Select a slot in Moves first'}
@@ -473,7 +472,7 @@ export default function Inspector() {
           </button>
           <button
             onClick={() => panic()}
-            className="px-2 py-2.5 bg-red-800 hover:bg-red-700 text-white text-xs rounded-lg font-bold border border-red-500/50 transition-colors"
+            className="px-2 py-2.5 bg-stagespace-danger hover:opacity-90 text-white text-xs rounded-lg font-bold border border-stagespace-danger/50 transition-colors"
             title="PANIC (Esc) — Stop all + return to origin"
           >
             <TriangleAlert size={14} />
@@ -518,7 +517,7 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
   return (
     <div className="mt-3 pt-2 border-t border-gray-700/50 space-y-2">
       <div className="flex items-center gap-2">
-        <span className="text-cyan-400 text-xs font-mono font-semibold">SPLINE LIBRARY</span>
+        <span className={`${PORT_TEXT_COLORS.Spline} text-xs font-mono font-semibold`}>SPLINE LIBRARY</span>
         <span className="text-gray-400 text-xs">{savedSplines.length} saved</span>
       </div>
 
@@ -527,7 +526,7 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
         <select
           onChange={handleLoad}
           defaultValue=""
-          className="w-full px-2 py-1.5 bg-gray-900 text-cyan-300 text-xs font-mono rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+          className="w-full px-2 py-1.5 bg-gray-900 text-gray-300 text-xs font-mono rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
         >
           <option value="" disabled>↳ Load a spline...</option>
           {savedSplines.map((s) => (
@@ -543,12 +542,12 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
             <div key={s.id} className="flex items-center justify-between text-xs py-0.5">
               <button
                 onClick={() => onUpdate(s.points)}
-                className="text-gray-400 hover:text-cyan-300 font-mono truncate flex-1 text-left"
+                className="text-gray-400 hover:text-gray-200 font-mono truncate flex-1 text-left"
                 title="Load this spline"
               >{s.name}</button>
               <button
                 onClick={() => deleteSpline(s.id)}
-                className="text-red-500 hover:text-red-400 px-1 flex-shrink-0"
+                className="text-stagespace-danger/70 hover:text-stagespace-danger px-1 flex-shrink-0"
                 title="Delete"
               ><X size={11} /></button>
             </div>
@@ -566,17 +565,17 @@ function InspectorSplineLibrary({ drawSplineNode, onUpdate }: {
             onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setShowSave(false); }}
             placeholder="Nom de la spline..."
             autoFocus
-            className="flex-1 px-2 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none"
+            className="flex-1 px-2 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
           />
           <button onClick={handleSave}
-            className="text-green-400 hover:text-green-300 text-xs px-2" title="Confirm"><Check size={12} /></button>
+            className="text-stagespace-accent hover:text-stagespace-info text-xs px-2" title="Confirm"><Check size={12} /></button>
           <button onClick={() => setShowSave(false)}
             className="text-gray-500 hover:text-gray-400 text-xs px-2" title="Cancel"><X size={12} /></button>
         </div>
       ) : (
         <button
           onClick={() => setShowSave(true)}
-          className="w-full text-xs text-cyan-400 hover:text-cyan-300 border border-cyan-800/60 hover:border-cyan-600 rounded py-1.5 transition-colors"
+          className="w-full text-xs text-stagespace-accent hover:text-stagespace-info border border-stagespace-accent/40 hover:border-stagespace-accent rounded py-1.5 transition-colors"
         >
           + Save this spline
         </button>

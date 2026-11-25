@@ -10,7 +10,7 @@ import type { ParamDef, NodeParamValue } from './nodeParamSchema';
 import { NODE_INPUT_CLS, NODE_INPUT_MONO_CLS } from './editor/LinkedTracksField';
 
 const FIELD_CLS =
-  'nodrag flex-1 min-w-0 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-cyan-500 focus:outline-none';
+  'nodrag flex-1 min-w-0 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none';
 const FIELD_MONO_CLS = `${FIELD_CLS} font-mono`;
 
 const blurOnEnter = (e: React.KeyboardEvent<HTMLElement>) => {
@@ -51,7 +51,6 @@ export const ParamInput: React.FC<{
             min={def.min}
             max={def.max}
             step={def.step ?? 0.1}
-            accent="cyan"
             layout="stack"
             live={compact ? undefined : live}
             onChange={onChange}
@@ -91,7 +90,7 @@ export const ParamInput: React.FC<{
         return (
           <button
             onClick={() => onChange(value !== true)}
-            className={`nodrag relative w-9 h-5 rounded-full transition-colors ${value === true ? 'bg-blue-600' : 'bg-gray-700'}`}
+            className={`nodrag relative w-9 h-5 rounded-full transition-colors ${value === true ? 'bg-stagespace-accent' : 'bg-gray-700'}`}
             aria-label={def.label}
           >
             <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value === true ? 'translate-x-4' : ''}`} />
@@ -102,7 +101,7 @@ export const ParamInput: React.FC<{
         <FieldRow def={def}>
           <button
             onClick={() => onChange(value !== true)}
-            className={`nodrag relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${value === true ? 'bg-cyan-600' : 'bg-gray-700'}`}
+            className={`nodrag relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${value === true ? 'bg-stagespace-accent' : 'bg-gray-700'}`}
             aria-label={def.label}
           >
             <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value === true ? 'translate-x-4' : ''}`} />

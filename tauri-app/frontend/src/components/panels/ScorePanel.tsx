@@ -7,9 +7,9 @@ import React from 'react';
 import { doRehearsal, doTape, tapeImport } from '../../utils/liveActions';
 
 const btn = 'px-1.5 py-0.5 text-[10px] rounded';
-const rec = `${btn} bg-red-900/50 hover:bg-red-800/70 text-red-300`;
+const rec = `${btn} bg-stagespace-danger/15 hover:bg-stagespace-danger/25 text-stagespace-danger`;
 const stp = `${btn} bg-gray-800 hover:bg-gray-700 text-gray-400`;
-const ply = `${btn} bg-green-900/50 hover:bg-green-800/70 text-green-300`;
+const ply = `${btn} bg-stagespace-live/15 hover:bg-stagespace-live/25 text-stagespace-live`;
 
 export const ScorePanel: React.FC = () => {
   return (

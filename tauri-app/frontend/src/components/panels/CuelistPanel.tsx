@@ -3,14 +3,15 @@ import { X, Copy } from 'lucide-react';
 import ContextMenu from '../ui/ContextMenu';
 import { useCuelistStore, type CueData } from '../../store/useCuelistStore';
 import { useGraphStore } from '../../store/useGraphStore';
+import { UI_HEX, VIZ } from '../../utils/uiColors';
 import { doCuePrev, doCueNext, doCueRecallById } from '../../utils/liveActions';
 import { useGlobalGraphStore } from '../../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../../store/useSignalGraphStore';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import EmptyState from '../ui/EmptyState';
+import { OscArmToggle } from '../ui/OscArmToggle';
 import { Badge } from '../ui/Badge';
 import { toast } from '../../utils/toast-helpers';
-import { useOscArmed } from '../../hooks/useOscArmed';
 
 export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> = ({ readonly = false, canStore = true }) => {
   const cues = useCuelistStore((s) => s.cues);
@@ -142,7 +143,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
         <button
           onClick={() => doCueNext('cuelist')}
           disabled={currentCueIndex + 1 >= cues.length || isRecalling}
-          className="px-1.5 py-0.5 text-xs bg-amber-800/80 hover:bg-amber-700 text-amber-100 rounded disabled:opacity-30"
+          className="px-1.5 py-0.5 text-xs bg-stagespace-conduite/70 hover:bg-stagespace-conduite text-gray-950 rounded disabled:opacity-30"
           title="Next cue — RECALL replaces the whole scene (kill + respawn). Setlist GO = Enter."
         >
           RECALL ▶
@@ -161,7 +162,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
           onChange={(e) => setNewCueName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleStoreCue()}
           placeholder="Cue name..."
-          className="flex-1 min-w-0 px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
+          className="flex-1 min-w-0 px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-white placeholder-gray-600 focus:outline-none focus:border-stagespace-accent"
         />
         <input
           type="number"
@@ -170,18 +171,18 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
           value={newCueFade}
           onChange={(e) => setNewCueFade(Math.max(0, Number(e.target.value) || 0))}
           title="Crossfade duration on recall (s)"
-          className="w-14 flex-shrink-0 px-1.5 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-white text-right font-mono focus:outline-none focus:border-purple-500"
+          className="w-14 flex-shrink-0 px-1.5 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-white text-right font-mono focus:outline-none focus:border-stagespace-accent"
         />
         <button
           onClick={() => handleStoreCue()}
           disabled={!newCueName.trim()}
-          className="flex-shrink-0 px-2 py-1 text-xs bg-purple-700 hover:bg-purple-600 text-white rounded disabled:opacity-30 font-medium"
+          className="flex-shrink-0 px-2 py-1 text-xs bg-stagespace-tracking hover:opacity-90 text-gray-950 rounded disabled:opacity-30 font-medium"
         >
           ★ Store
         </button>
         <button
           onClick={() => handleStoreCue(`Cue ${cues.length + 1}`)}
-          className="flex-shrink-0 px-2 py-1 text-xs bg-purple-900/70 hover:bg-purple-700 text-purple-200 rounded font-medium active:scale-95"
+          className="flex-shrink-0 px-2 py-1 text-xs bg-stagespace-tracking/25 hover:bg-stagespace-tracking/40 text-stagespace-tracking rounded font-medium active:scale-95"
           title={`Capture instantanée — stocke l'état en « Cue ${cues.length + 1} » (renommable après)`}
         >
           ⚡
@@ -206,9 +207,9 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                 key={cue.id + '-row'}
                 className={`px-3 py-2 flex items-center gap-2 cursor-pointer transition-colors ${
                   idx === currentCueIndex
-                    ? 'bg-purple-900/30 border-l-2 border-purple-500'
+                    ? 'bg-stagespace-conduite/15 border-l-2 border-stagespace-conduite'
                     : cue.id === armedCueId
-                      ? 'bg-purple-900/10 ring-1 ring-inset ring-purple-500/60'
+                      ? 'bg-stagespace-conduite/10 ring-1 ring-inset ring-stagespace-conduite/60'
                       : 'hover:bg-gray-800/50'
                 }`}
                 onClick={() => setArmedCueId(cue.id === armedCueId ? null : cue.id)}
@@ -243,7 +244,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                           onDoubleClick={(e) => e.stopPropagation()}
                           onBlur={(e) => e.target.value.trim() && updateCue({ ...cue, name: e.target.value.trim() })}
                           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-                          className="w-24 px-1 py-0 bg-gray-900 border border-gray-700 rounded text-white text-xs focus:outline-none focus:border-purple-500"
+                          className="w-24 px-1 py-0 bg-gray-900 border border-gray-700 rounded text-white text-xs focus:outline-none focus:border-stagespace-accent"
                           title="Rename cue"
                         />
                         <input
@@ -254,7 +255,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                           placeholder="n°"
                           onBlur={(e) => updateCue({ ...cue, cue_number: e.target.value.trim() || null })}
                           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-                          className="w-10 px-1 py-0 bg-gray-900 border border-gray-700 rounded text-amber-300 text-right text-xs font-mono focus:outline-none"
+                          className="w-10 px-1 py-0 bg-gray-900 border border-gray-700 rounded text-stagespace-conduite text-right text-xs font-mono focus:outline-none"
                           title="cue_number — le label que /stagespace/cue/recall matche"
                         />
                       </>
@@ -279,10 +280,10 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                         stop > 0 && `−${stop}m`,
                         pos > 0 && `${pos}pos`,
                       ].filter(Boolean).join(' ');
-                      return parts ? <span className="text-[9px] text-amber-400 font-mono" title="audition : ce que la cue va toucher (scope-respecté)">{parts}</span> : null;
+                      return parts ? <span className="text-[9px] text-stagespace-derived font-mono" title="audition : ce que la cue va toucher (scope-respecté)">{parts}</span> : null;
                     })()}
                     {cue.mode === 'Tracking' && (
-                      <Badge className="bg-cyan-900/60 text-cyan-300">TRK</Badge>
+                      <Badge className="bg-stagespace-tracking/25 text-stagespace-tracking">TRK</Badge>
                     )}
                     {(cue.pre_wait ?? 0) > 0 && (
                       <Badge>w{cue.pre_wait}s</Badge>
@@ -307,12 +308,19 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                     )}
                   </div>
                   <div className="text-gray-400 text-xs truncate flex items-center gap-1.5">
-                    {(cue.active_move_ids?.length ?? 0) > 0 && (
+                    {(cue.moves?.length ?? 0) > 0 ? (
+                      // Snapshot contents — names rather than a bare count:
+                      // a cue is a scene, "Move1+Move3" says WHICH pads it
+                      // froze (truncate + title pour les longues listes).
+                      <span title={cue.moves!.map((m) => m.name).join(' + ')}>
+                        {cue.moves!.length}▸ {cue.moves!.map((m) => m.name).join('+')}
+                      </span>
+                    ) : (cue.active_move_ids?.length ?? 0) > 0 && (
                       <span>{cue.active_move_ids?.length} move(s)</span>
                     )}
                     {!readonly && cue.id === armedCueId ? (
                       <label
-                        className="flex items-center gap-1 text-amber-400"
+                        className="flex items-center gap-1 text-stagespace-conduite"
                         onClick={(e) => e.stopPropagation()}
                         onDoubleClick={(e) => e.stopPropagation()}
                       >
@@ -327,7 +335,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                             const v = Math.max(0, Number(e.target.value));
                             if (!isNaN(v)) updateCue({ ...cue, fade_duration: v });
                           }}
-                          className="w-12 px-1 py-0 bg-gray-900 border border-amber-700/60 rounded text-amber-300 text-right font-mono focus:outline-none"
+                          className="w-12 px-1 py-0 bg-gray-900 border border-stagespace-conduite/60 rounded text-stagespace-conduite text-right font-mono focus:outline-none"
                         />
                         s
                       </label>
@@ -416,7 +424,7 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                       e.stopPropagation();
                       setPendingDelete({ id: cue.id, name: cue.name });
                     }}
-                    className="text-gray-400 hover:text-red-400 text-xs px-1"
+                    className="text-gray-400 hover:text-stagespace-danger text-xs px-1"
                     title="Delete"
                   >
                     <X size={11} />
@@ -448,11 +456,11 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                 return (
                   <div className="mx-3 mb-1 bg-gray-900/60 rounded p-1.5">
                     <svg viewBox="-70 -70 140 140" className="w-full h-28">
-                      <circle cx="0" cy="0" r="65" fill="none" stroke="#1f2937" strokeWidth="1" />
-                      <line x1="0" y1="-65" x2="0" y2="65" stroke="#1f2937" strokeWidth="0.5" />
-                      <line x1="-65" y1="0" x2="65" y2="0" stroke="#1f2937" strokeWidth="0.5" />
+                      <circle cx="0" cy="0" r="65" fill="none" stroke={VIZ.radarGrid} strokeWidth="1" />
+                      <line x1="0" y1="-65" x2="0" y2="65" stroke={VIZ.radarGrid} strokeWidth="0.5" />
+                      <line x1="-65" y1="0" x2="65" y2="0" stroke={VIZ.radarGrid} strokeWidth="0.5" />
                       {Object.entries(emitted).map(([id, [x, y]]) => (
-                        <circle key={'e' + id} cx={x * k} cy={-y * k} r="2.5" fill="#4b5563" />
+                        <circle key={'e' + id} cx={x * k} cy={-y * k} r="2.5" fill={UI_HEX.dim} />
                       ))}
                       {ghosts.map((g, i) => (
                         <circle
@@ -460,14 +468,14 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
                           cx={g.x * k}
                           cy={-g.y * k}
                           r={g.kind === 'pos' ? 4 : 3}
-                          fill={g.kind === 'pos' ? '#f59e0b' : 'none'}
-                          stroke={g.kind === 'pos' ? 'none' : '#22d3ee'}
+                          fill={g.kind === 'pos' ? UI_HEX.target : 'none'}
+                          stroke={g.kind === 'pos' ? 'none' : UI_HEX.target}
                           strokeWidth="1.5"
                         />
                       ))}
                     </svg>
                     <div className="text-[8px] text-gray-500 text-center">
-                      ○ actuel · ● cue pos · ○ cyan cue origins — audition, rien n'est émis
+                      ○ actuel · ● cue pos · ○ cue origins — audition, rien n'est émis
                     </div>
                   </div>
                 );
@@ -528,26 +536,14 @@ function PendingCountdown({ deadline, kind }: { deadline: number; kind: 'pre_wai
   }, []);
   const left = Math.max(0, (deadline - Date.now()) / 1000);
   return (
-    <Badge className="bg-amber-800/80 text-amber-200" title={kind}>
+    <Badge className="bg-stagespace-conduite/70 text-white" title={kind}>
       {kind === 'pre_wait' ? 'in' : 'follow'} {left.toFixed(1)}s
     </Badge>
   );
 }
 
-/// Dry-run : désarme l'OSC (le merge continue, rien ne part au renderer) —
-/// permet de répéter la conduite sans envoyer de positions.
-function DryRunChip() {
-  const [armed, setArmed] = useOscArmed();
-  return (
-    <button
-      onClick={() => setArmed(!armed)}
-      className={`px-1.5 py-0.5 rounded border ${armed ? 'border-gray-600 text-gray-500' : 'border-emerald-600 text-emerald-400'}`}
-      title={armed ? 'OSC LIVE — positions are sent. Click for DRY-RUN (rehearse without sending)' : 'DRY-RUN — OSC output muted, click to arm'}
-    >
-      {armed ? 'LIVE' : 'DRY-RUN'}
-    </button>
-  );
-}
+/// Dry-run — le contrôle partagé OscArmToggle (même sémantique que
+/// StatusBar/Perform : armed = rouge « sortie chaude », dry-run = neutre).
 
 /// Statut timecode : TC courant (HH:MM:SS:FF) ou "TC lost" si silence >1s.
 function TcStatus() {
@@ -578,10 +574,10 @@ function TcStatus() {
   const lost = tc == null || Date.now() - at > 1000;
   return (
     <span className="ml-auto flex items-center gap-1.5 text-[10px]">
-      <DryRunChip />
+      <OscArmToggle />
       <button
         onClick={() => setChase(!chaseOn)}
-        className={`px-1.5 py-0.5 rounded border ${chaseOn ? 'border-emerald-600 text-emerald-400' : 'border-gray-600 text-gray-500'}`}
+        className={`px-1.5 py-0.5 rounded border ${chaseOn ? 'border-stagespace-live/40 text-stagespace-live' : 'border-gray-600 text-gray-500'}`}
         title="TC chase"
       >
         TC chase

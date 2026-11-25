@@ -162,7 +162,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               onClick={() => setTab(id)}
               className={`px-3 py-1.5 text-xs font-semibold rounded-t transition-colors ${
                 tab === id
-                  ? 'bg-stagespace-panel text-white border-b-2 border-indigo-500'
+                  ? 'bg-stagespace-panel text-white border-b-2 border-stagespace-accent'
                   : 'text-gray-500 hover:text-gray-300'
               }`}
             >
@@ -176,7 +176,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           {tab === 'reseau' && (
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <span className="text-blue-400">→</span> OSC Output
+              <span className="text-stagespace-osc">→</span> OSC Output
             </h3>
             <p className="text-gray-400 text-xs mb-3">
               Where to send positions (Holophonix, SPAT, IEM, etc.)
@@ -188,7 +188,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   type="text"
                   value={oscAddress}
                   onChange={(e) => setOscAddress(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
                   placeholder="127.0.0.1"
                 />
               </div>
@@ -198,7 +198,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   type="number"
                   value={oscPort}
                   onChange={(e) => setOscPort(Number(e.target.value) || 0)}
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
                 />
               </div>
               <div className="col-span-2">
@@ -206,7 +206,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 <select
                   value={oscProfile}
                   onChange={(e) => setOscProfile(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
                 >
                   {OSC_PROFILES.map((p) => (
                     <option key={p.value} value={p.value}>{p.label}</option>
@@ -221,7 +221,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <button
                 onClick={handleDiscover}
                 disabled={discovering}
-                className="px-3 py-1.5 text-xs font-medium rounded bg-cyan-700 hover:bg-cyan-600 text-white transition-colors disabled:opacity-40"
+                className="px-3 py-1.5 text-xs font-medium rounded bg-stagespace-osc/80 hover:bg-stagespace-osc text-gray-950 transition-colors disabled:opacity-40"
               >
                 {discovering ? 'Scanning…' : 'Discover renderers'}
               </button>
@@ -235,9 +235,9 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   }}
                   className={`px-2 py-1 text-xs rounded border transition-colors ${
                     t.source === 'mdns'
-                      ? 'bg-green-900/40 border-green-700/50 text-green-400 hover:bg-green-900/60'
+                      ? 'bg-stagespace-live/15 border-stagespace-live/50 text-stagespace-live hover:bg-stagespace-live/25'
                       : t.source === 'scan'
-                        ? 'bg-blue-900/40 border-blue-700/50 text-blue-400 hover:bg-blue-900/60'
+                        ? 'bg-stagespace-info/15 border-stagespace-info/50 text-stagespace-info hover:bg-stagespace-info/25'
                         : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
                   }`}
                   title={`${t.source}: ${t.host}:${t.port}`}
@@ -253,7 +253,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           {tab === 'reseau' && (
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <span className="text-green-400">←</span> OSC Input
+              <span className="text-stagespace-osc">←</span> OSC Input
             </h3>
             <p className="text-gray-400 text-xs mb-3">
               Port to listen for incoming OSC messages (triggers, parameter overrides)
@@ -265,18 +265,18 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   type="number"
                   value={oscInPortStr}
                   onChange={(e) => setOscInPortStr(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
                 />
               </div>
               <button
                 onClick={handleOscInPortApply}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded transition-colors"
+                className="px-3 py-1.5 bg-stagespace-accent hover:opacity-90 text-gray-950 text-xs font-medium rounded transition-colors"
               >
                 Apply
               </button>
             </div>
             {oscInStatus && (
-              <p className={`text-xs mt-1.5 ${oscInStatus.startsWith('Error') ? 'text-red-400' : 'text-green-400'}`}>
+              <p className={`text-xs mt-1.5 ${oscInStatus.startsWith('Error') ? 'text-stagespace-danger' : 'text-stagespace-live'}`}>
                 {oscInStatus}
               </p>
             )}
@@ -287,7 +287,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           {tab === 'reseau' && (
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <span className="text-cyan-400">⇄</span> Remote UI
+              <span className="text-stagespace-osc">⇄</span> Remote UI
             </h3>
             <p className="text-gray-400 text-xs mb-3">
               Serve the bridge to remote browsers — same live backend, desktop UI keeps running.
@@ -298,7 +298,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 onClick={() => void setRemoteUi({ enabled: !remoteUiEnabled })}
                 className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
                   remoteUiEnabled
-                    ? 'bg-cyan-700 hover:bg-cyan-600 text-white'
+                    ? 'bg-stagespace-accent text-gray-950'
                     : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
                 }`}
               >
@@ -309,7 +309,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   type="text"
                   value={remoteUiBind}
                   onChange={(e) => void setRemoteUi({ bind: e.target.value })}
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
                   placeholder="0.0.0.0:4173"
                   title="host:port — 127.0.0.1 = this machine only, 0.0.0.0 = all interfaces (LAN)"
                 />
@@ -317,12 +317,12 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             </div>
             <p className="text-xs text-gray-400">
               {remoteUiRunning
-                ? <>Listening on <span className="font-mono text-cyan-300">{remoteUiActiveBind}</span> — browsers at <span className="font-mono">http://&lt;ip&gt;:{remoteUiActiveBind?.split(':').pop()}</span></>
+                ? <>Listening on <span className="font-mono text-stagespace-osc">{remoteUiActiveBind}</span> — browsers at <span className="font-mono">http://&lt;ip&gt;:{remoteUiActiveBind?.split(':').pop()}</span></>
                 : remoteUiEnabled
                   ? 'Stopped — enabling will bind on launch.'
                   : 'Bridge off. STAGESPACE_BRIDGE_BIND env var can also force-start it.'}
             </p>
-            <p className="text-xs text-yellow-500/80 mt-1.5">
+            <p className="text-xs text-stagespace-warning/80 mt-1.5">
               No authentication — use 127.0.0.1 or a trusted network only (SSH tunnel otherwise).
             </p>
           </section>
@@ -332,7 +332,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           {tab === 'tracking' && (
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <span className="text-purple-400">◎</span> PSN / RTTrP Tracking
+              <span className="text-stagespace-tracking">◎</span> PSN / RTTrP Tracking
             </h3>
             <p className="text-gray-400 text-xs mb-3">
               PosiStageNet tracking (BlackTrax, Zactrack, Follow-Me) — tracker positions
@@ -342,12 +342,12 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <button
                 onClick={() => setPsnConfig({ enabled: !psnEnabled, group: psnGroupStr, port: parseInt(psnPortStr) || 56565, map: psnMapStr })}
                 className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
-                  psnEnabled ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                  psnEnabled ? 'bg-stagespace-accent text-gray-950' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
                 }`}
               >
                 {psnEnabled ? 'ON' : 'OFF'}
               </button>
-              <span className={`text-xs ${psnRunning ? 'text-green-400' : 'text-gray-500'}`}>
+              <span className={`text-xs ${psnRunning ? 'text-stagespace-live' : 'text-gray-500'}`}>
                 {psnRunning
                   ? psnLastPacketAge != null
                     ? `flux ${psnLastPacketAge < 2000 ? 'vivant' : `stale (${Math.round(psnLastPacketAge / 1000)}s)`}`
@@ -362,7 +362,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   type="text"
                   value={psnGroupStr}
                   onChange={(e) => setPsnGroupStr(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
                 />
               </div>
               <div>
@@ -371,7 +371,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   type="number"
                   value={psnPortStr}
                   onChange={(e) => setPsnPortStr(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
                 />
               </div>
             </div>
@@ -383,7 +383,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 onChange={(e) => setPsnMapStr(e.target.value)}
                 onBlur={() => setPsnConfig({ map: psnMapStr })}
                 placeholder="1:7, 2:8, 3:9"
-                className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
               />
             </div>
             <div className="mt-2">
@@ -394,7 +394,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 onChange={(e) => setPsnAxesStr(e.target.value)}
                 onBlur={() => setPsnConfig({ axes: psnAxesStr })}
                 placeholder="x,y,z"
-                className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
               />
             </div>
           </section>
@@ -404,7 +404,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           {tab === 'salle' && (
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <span className="text-amber-400">⌖</span> Venue adaptation
+              <span className="text-stagespace-target">⌖</span> Venue adaptation
             </h3>
             <p className="text-gray-400 text-xs mb-3">
               Map the show's canonical space to this room — scale+offset applied
@@ -414,7 +414,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <button
                 onClick={() => setVenueConfig({ enabled: !venueEnabled, scale: venueScaleStr, offset: venueOffsetStr })}
                 className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
-                  venueEnabled ? 'bg-amber-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                  venueEnabled ? 'bg-stagespace-accent text-gray-950' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
                 }`}
               >
                 {venueEnabled ? 'ON' : 'OFF'}
@@ -429,7 +429,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   onChange={(e) => setVenueScaleStr(e.target.value)}
                   onBlur={() => setVenueConfig({ scale: venueScaleStr })}
                   placeholder="0.7,0.65,0.5"
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
                 />
               </div>
               <div>
@@ -440,7 +440,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   onChange={(e) => setVenueOffsetStr(e.target.value)}
                   onBlur={() => setVenueConfig({ offset: venueOffsetStr })}
                   placeholder="0,0,0"
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
                 />
               </div>
               <div>
@@ -451,7 +451,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   onChange={(e) => setVenueYawStr(e.target.value)}
                   onBlur={() => setVenueConfig({ yaw: venueYawStr })}
                   placeholder="0"
-                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                  className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
                 />
               </div>
             </div>
@@ -468,7 +468,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 step={0.05}
                 value={realityStrength}
                 onChange={(e) => setRealityStrength(parseFloat(e.target.value))}
-                className="w-full accent-amber-500"
+                className="w-full accent-stagespace-accent"
               />
             </div>
           </section>
@@ -478,7 +478,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           {tab === 'reseau' && (
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <span className="text-pink-400">📺</span> Media sync out
+              <span className="text-stagespace-osc">📺</span> Media sync out
             </h3>
             <p className="text-gray-400 text-xs mb-3">
               Sends <code className="text-gray-300">{'{prefix}'}/cue &lt;num&gt; &lt;name&gt;</code> to a
@@ -488,7 +488,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <button
                 onClick={() => setMediaSync({ enabled: !mediaSyncEnabled })}
                 className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
-                  mediaSyncEnabled ? 'bg-pink-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                  mediaSyncEnabled ? 'bg-stagespace-accent text-gray-950' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
                 }`}
               >
                 {mediaSyncEnabled ? 'ON' : 'OFF'}
@@ -498,14 +498,14 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 defaultValue={mediaSyncTarget}
                 onBlur={(e) => setMediaSync({ target: e.target.value })}
                 placeholder="ip:port"
-                className="flex-1 px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                className="flex-1 px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
               />
               <input
                 type="text"
                 defaultValue={mediaSyncPrefix}
                 onBlur={(e) => setMediaSync({ prefix: e.target.value })}
                 placeholder="/media"
-                className="w-24 px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+                className="w-24 px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
               />
             </div>
           </section>
@@ -515,7 +515,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           {tab === 'show' && (<>
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <span className="text-amber-400">⇄</span> Merge
+              <span className="text-stagespace-modulation">⇄</span> Merge
             </h3>
             <p className="text-gray-400 text-xs mb-3">
               How contested tracks resolve when several playing moves target the same track.
@@ -524,7 +524,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             <select
               value={mergeStrategy}
               onChange={(e) => setMergeStrategy(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
+              className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
             >
               {MERGE_STRATEGIES.map((s) => (
                 <option key={s.value} value={s.value} title={s.hint}>{s.label}</option>
@@ -535,7 +535,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           {/* ─── Track IDs ─── */}
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <ListOrdered size={11} className="text-purple-400" /> Track IDs
+              <ListOrdered size={11} className="text-stagespace-dim" /> Track IDs
             </h3>
             <p className="text-gray-400 text-xs mb-3">
               Virtual track IDs when no .hol project is loaded
@@ -544,18 +544,18 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               type="text"
               value={oscIdsStr}
               onChange={(e) => handleOscIdsChange(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none font-mono"
+              className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none font-mono"
               placeholder="1,2,3..."
             />
             {oscIdsError && (
-              <p className="text-red-400 text-xs mt-1.5">{oscIdsError}</p>
+              <p className="text-stagespace-danger text-xs mt-1.5">{oscIdsError}</p>
             )}
           </section>
 
           {/* ─── Visualiseurs ─── */}
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <span className="text-amber-400">◉</span> Visualiseurs
+              <span className="text-stagespace-target">◉</span> Visualiseurs
             </h3>
             <p className="text-gray-400 text-xs mb-3">
               Affichage des objets hors de la sélection courante (3D + radar).
@@ -565,7 +565,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 type="checkbox"
                 checked={viewerDimUnfocused}
                 onChange={(e) => setViewerDimUnfocused(e.target.checked)}
-                className="accent-amber-500"
+                className="accent-stagespace-accent"
               />
               Focus — estomper les objets hors du move édité (au lieu de les cacher)
             </label>
@@ -574,7 +574,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 type="checkbox"
                 checked={viewerRestGhosts}
                 onChange={(e) => setViewerRestGhosts(e.target.checked)}
-                className="accent-amber-500"
+                className="accent-stagespace-accent"
               />
               Fantômes — objets au repos à leur origine, cibles de la pose sélectionnée
             </label>
@@ -585,7 +585,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           {tab === 'audio' && (
           <section>
             <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <span className="text-cyan-400">♪</span> Audio Input
+              <span className="text-stagespace-modulation">♪</span> Audio Input
             </h3>
             <p className="text-gray-400 text-xs mb-3">
               Microphone / audio interface for audio-reactive trajectories
@@ -594,7 +594,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <select
                 value={selectedAudioDeviceId ?? ''}
                 onChange={(e) => setSelectedAudioDeviceId(e.target.value || null)}
-                className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-blue-500 focus:outline-none"
+                className="w-full px-2.5 py-1.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
               >
                 <option value="">System default</option>
                 {audioDevices.map((d) => (

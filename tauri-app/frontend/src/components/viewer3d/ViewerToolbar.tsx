@@ -50,13 +50,13 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({ isPlaying }) => {
     <div className="flex-shrink-0 relative bg-gray-900/95 border-b border-gray-700/60">
       <div className="flex items-center gap-2 px-1.5 py-1 flex-nowrap overflow-hidden">
         <div className={tbGroup}>
-          <span className="h-6 px-1.5 flex items-center text-cyan-400" title="View — Free = orbit, Top/Front/Side = fixed ortho (rotate locked)"><Box size={11} /></span>
+          <span className="h-6 px-1.5 flex items-center text-stagespace-accent" title="View — Free = orbit, Top/Front/Side = fixed ortho (rotate locked)"><Box size={11} /></span>
           {(['free', 'top', 'front', 'side'] as DrawView[]).map((v) => (
             <button
               key={v}
               title={`${v[0].toUpperCase() + v.slice(1)} view — snap camera${v === 'free' ? ', free orbit' : ', rotation locked'}`}
               onClick={() => setDrawView(v)}
-              className={`${tbBtn} ${drawView === v ? 'bg-cyan-600 text-white' : tbIdle}`}
+              className={`${tbBtn} ${drawView === v ? 'bg-stagespace-accent text-white' : tbIdle}`}
             >
               {v[0].toUpperCase() + v.slice(1)}
             </button>
@@ -71,7 +71,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({ isPlaying }) => {
               title="Global transform — merge scope (speed, scale, shift, rotation, radius, height)"
               className={`${tbAction} border ${
                 macrosOpen
-                  ? 'bg-purple-700/80 border-purple-500/60 text-white'
+                  ? 'bg-stagespace-accent/80 border-stagespace-accent/60 text-white'
                   : 'bg-gray-800/70 border-gray-700/70 text-gray-300 hover:bg-gray-700'
               }`}
             >

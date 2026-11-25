@@ -47,7 +47,7 @@ export const ScoreTransport: React.FC<{
     >⏮</button>
     <button
       onClick={onPlayStop}
-      className={`px-3 py-1 text-xs font-bold rounded ${playing ? 'bg-red-700 hover:bg-red-600' : 'bg-green-700 hover:bg-green-600'}`}
+      className={`px-3 py-1 text-xs font-bold rounded ${playing ? 'bg-stagespace-danger hover:opacity-90 text-white' : 'bg-stagespace-live hover:opacity-90 text-gray-950'}`}
     >
       {playing ? '■ STOP' : '⏵ PLAY'}
     </button>
@@ -58,10 +58,10 @@ export const ScoreTransport: React.FC<{
     >⏭</button>
     <button
       onClick={onFollow}
-      className={`px-1.5 py-1 text-[10px] font-bold rounded ${follow ? 'bg-cyan-800 text-cyan-200' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
+      className={`px-1.5 py-1 text-[10px] font-bold rounded ${follow ? 'bg-stagespace-accent/80 text-white' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
       title="Suivi — auto-scroll : le playhead reste visible pendant la lecture"
     >⇉</button>
-    <span className="font-mono text-sm text-cyan-300 w-28" title={tcChase ? 'Position — affichage timecode (chase actif)' : 'Position'}>
+    <span className={`font-mono text-sm w-28 ${tcChase ? 'text-stagespace-live' : 'text-gray-300'}`} title={tcChase ? 'Position — affichage timecode (chase actif)' : 'Position'}>
       {tcChase ? fmtTc(displayCursor) : fmtMs(displayCursor)}
     </span>
     <span className="text-[10px] text-gray-500">/ {fmtMs(durationMs)}</span>
@@ -95,7 +95,7 @@ export const ScoreTransport: React.FC<{
           <button
             onClick={() => onSetLoop(loopOn ? undefined : 0, loopOn ? undefined : durationMs)}
             title="Region de boucle — le transport reboucle (hard-wrap)"
-            className={`px-2 py-0.5 text-[10px] font-bold rounded ${loopOn ? 'bg-cyan-800 text-cyan-200' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
+            className={`px-2 py-0.5 text-[10px] font-bold rounded ${loopOn ? 'bg-stagespace-target/80 text-white' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
           >
             ⟲ LOOP
           </button>
@@ -110,7 +110,7 @@ export const ScoreTransport: React.FC<{
     })()}
     <button
       onClick={onCaptureCue}
-      className="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-800/70 text-amber-200 hover:bg-amber-700"
+      className="px-2 py-0.5 text-[10px] font-bold rounded bg-stagespace-accent/20 text-stagespace-accent hover:bg-stagespace-accent/30"
       title="Re-capture : matérialise l'état de la partition AU CURSEUR en nouvelle cue — clips → moves, courbes → valeurs, inverse du flatten"
     >
       ★ cue
@@ -124,7 +124,7 @@ export const ScoreTransport: React.FC<{
     </button>
     <button
       onClick={onTcChase}
-      className={`px-2 py-0.5 text-[10px] font-bold rounded ${tcChase ? 'bg-cyan-800 text-cyan-200' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
+      className={`px-2 py-0.5 text-[10px] font-bold rounded ${tcChase ? 'bg-stagespace-live/25 text-stagespace-live' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}
       title="Chase timecode — le transport suit le TC entrant (/stagespace/timecode) : locate à l'arrêt, rebase en lecture, démarrage quand le TC roule"
     >
       TC
@@ -155,7 +155,7 @@ export const ScoreTransport: React.FC<{
       <input
         type="range" min={24} max={96} step={4} value={laneH}
         onChange={(e) => onLaneH(Number(e.target.value))}
-        className="w-16 accent-cyan-500"
+        className="w-16 accent-stagespace-accent"
       />
     </label>
   </div>
