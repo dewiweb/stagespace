@@ -302,90 +302,68 @@ groupé + vérif. Priorité : panels/MovesTable (55), SpatialFxPanel
 perform/* (46). Ne PAS regex aveugle : chaque occurrence est
 classée sémantiquement d'abord.
 
-**Reste à faire (P2/P3) :** score (sélection unifiée — 4
-conventions ring-white/cyan/bleu/violet ; transport cyan→vocabulaire
-dédié playhead/loop/courbes/fades #67e8f9 ; lanes CONDUCTOR rose /
-OSC emerald / GLOBALFX cyan / SPATIALFX violet à arbitrer ;
-delete/clear→danger ; dope amber events vs cyan curves), live
-surfaces (verts/rouges corrects→tokens), hex résiduels
-ScoreCurvePane/CurveEditor (#a78bfa/#c4b5fd/#67e8f9), CHIP_SOLID
-PLAY/STOP/PANIC, badges source dupliqués SlotTile (SOURCE_CHIP),
-SettingsModal arc-en-ciel entity/décor, data-viz palette, puis
-règle lint H4. Arbitrages ouverts restants : teintes exactes
-lanes score + vocabulaire transport. Note : ports OSC 8001 peut être tenu par dev_bridge au
-lieu de tauri dev (warning sans impact).
+**HANDOFF — état au 2025 (branche feat/color-harmonization, tout poussé) :**
 
-**Bloqueurs structurels avant la règle lint :**
+Commits session : `1223204` P1b · `6f76b7c` MovesTable · `d951c6c`/`6ef5172` docs.
 
-- `Slider.tsx` — ACCENTS expose la palette brute : le composant
-  partagé institue la violation (15+ consommateurs)
-- `index.css` — 25 hex overrides React Flow, pas tokenisables sans
-  variables CSS `--stagespace-*` à créer
-- `CHIP_SOLID` existe mais n'est consommé nulle part
-- `SOURCE_CHIP` dupliqué par badges hardcodés (SlotTile P/H)
-- 20 `focus:border-*` en 7 teintes (SettingsModal déjà migré accent)
+**Méthode validée (OBLIGATOIRE) :** par fichier — lire les zones
+d'occurrences, classifier CHAQUE occurrence sémantiquement, un patch
+python groupé, `npx tsc -b` + `npm test` (612), commit par fichier.
+NE PAS regex aveugle. Tokens dispo : stagespace-{live,warning,danger,
+conduite,osc,target,derived,modulation,accent} + CHIP_SOLID +
+SOURCE_TEXT/SOURCE_CHIP + UI_HEX/VIZ (hex pour SVG/three).
 
-**Séquençage proposé :** P0 sécurité live (~75 occ) → P1 arbitrages
-+ architecture (~120) → P2 migrations mécaniques (~200) → P3 chrome/
-décor (~450) → règle lint (sinon CI rouge massive).
+**Inventaire restant par fichier (occurrences chromatiques brutes,
+tri desc) — ~590 après MovesTable :**
+```
+41 SpatialFxPanel   36 SlotTile        35 ScoreTimeline
+27 AnimationList    26 LiveDrawer      23 ConduiteView
+21 CuelistPanel     20 ScoreClipPicker 18 ScoreClipParams
+14 ScoreTransport   12 ScoreCurvePane  12 ParkedChip
+12 AudioPanel       12 PosesPanel       9 MovesTable(résidu:logo)
+ 8 OscMappingsPanel  7 ScoreDopesheet   7 NodePalette
+ 6 ScoreParamsPanel  6 ScorePanel       6 NodeParamsPanel
+ 6 GestureStrip      5 ScoreView        4 ScoreToolbar
+ 4 LinkedTracksField 3 ScorePoseEditor  3 CurveEditor
+ 3 ScoreProgress     3 GraphCanvas      2 ScoreClipBlock
+ ~15 fichiers ≤2 occ (voir grep)
+```
 
-### Décisions H1 actées (swatch review)
+**Questions doctrinales OUVERTES (à trancher par l'utilisateur) :**
+1. **Domaine spatial** : SpatialFxPanel=cyan identité + lane
+   SPATIALFX=violet score + zones 3D. Token dédié ? quelle teinte ?
+   (violet=graph-geometry déjà pris ; candidates : rose ?)
+2. **Lanes score** : CONDUCTOR rose / OSC emerald / GLOBALFX cyan /
+   SPATIALFX violet — teintes-domaines à confirmer ou aplatir.
+3. **Transport score** : playhead/loop/cyan 34 occ — vocabulaire
+   dédié à inventer (dataviz, pas fonction live).
+4. **Dopesheet** : events amber vs curves cyan — sens à confirmer.
+5. **Brand** : gradients indigo→purple logos panels (P3 chrome).
 
-- **objectCtl = fuchsia, pas emerald** — la première passe (emerald)
-  échouait au swatch : l'axe vert-cyan concentrait trois familles
-  (teal/emerald/cyan) dans ~35° de hue, indiscernables à taille de
-  clip. Fuchsia libère l'axe et ne collisionne que modérément avec
-  le purple des slots (magenta vs violet-bleu — tranché par les
-  labels, slots omniprésents donc vite appris).
-- **zones réintégrées dans graphs (indigo-400)** — la rupture fuchsia
-  n'avait pas de justification fonctionnelle : un clip zones EST une
-  opération de pipeline. C'est ce qui libère fuchsia pour objectCtl.
-- **green/emerald réservés** — green = token `live` cross-surface,
-  interdit aux familles de clips pour ne pas créer de faux sens
-  (« ce clip est en train de jouer »).
-- Point faible accepté : `view` cyan-900 vs teal à petite taille —
-  system et placement coexistent rarement ; labels obligatoires.
+**Points d'attention connus :**
+- `text-stagespace-*` tokens = hex unique, `/alpha` OK pour bg/border.
+- Hover plus clair : pas de variant — utiliser `hover:opacity-80` ou
+  teinte Tailwind voisine de la même famille (ex: hover:text-blue-300
+  pour accent #3b82f6).
+- Preview = derived/slate PARTOUT (VIZ.obj.preview migré P0b ;
+  MovesTable toggle corrigé ; traque tout autre cyan-preview).
+- Park/freeze/attention = pink stase #ec4899 (sourceColors unique).
+- Modulation = indigo #818cf8 (Slider tone="modulation", ModChips,
+  CustomNode dot, AudioModControls, lane MODULATION).
+- Setlist : NOW=live, CURRENT=live, NEXT=target, GO=target teal
+  (MovesTable GO ▶ fait ; vérifier CuelistPanel/ConduiteView).
+- Cue GO = live green (arb. 11) ; cue states = amber/conduite.
+- Solo = warning orange ; stop sévérité = danger opacités.
+- Focus borders = accent (fait partout — ne plus en ajouter).
+- Catégories nodes = SANS couleur (NODE_COLORS supprimé P1a).
+- Ports graphe : Positions gray/ObjectSet cyan/Duration yellow/
+  Spline violet/Signal indigo — PORT_COLORS+edges+légende unifiés.
+- dev_bridge tourne peut-être sur :4173 (vieux binaire — rebuild si
+  poses testées) ; vite :5174 ; puppeteer scripts dans
+  .scratch/puppeteer-audit/.
+- `tauri-app/src-tauri/gen/schemas/*.json` se régénèrent — ne pas
+  committer.
 
-| **H1 — fondations** | tokens `target`/`derived` + module `uiColors.ts` · re-teintage CLIP_COLORS par familles · correction des collisions actives du score (positions/pose) · swatch review visuelle avec l'utilisateur | capture score avant/après, collisions teal résolues |
-### Décisions H2 actées (migration surfaces live)
-
-- **Architecture convergée sur `StatusChip`** — le composant existait
-  déjà avec le vocabulaire token+opacités ; `STATUS_TONES` exporté pour
-  les chips interactifs. Le `CHIP` map intermédiaire de uiColors a été
-  supprimé (duplication). uiColors ne garde que CHIP_SOLID et
-  healthTone (sémaphore ok/dégradé/critique — un seul orange pour
-  « dégradé », fini les yellow/amber/orange concurrents).
-- **Arm/DRY-RUN unifié** — TROIS implémentations contradictoires du
-  même contrôle (armed rouge/gris/inversé). Sémantique retenue :
-  armed = danger-rouge (« sortie chaude », convention record-arm),
-  dry-run = neutre pulsant (le vert pulsant lisait « tout va bien »
-  alors que la sortie est muette — pire lecture possible). DryRunChip
-  du cuelist supprimé au profit d'OscArmToggle.
-- **teal réconcilié** — le SETLIST GO teal pré-existait, documenté et
-  cross-surface (« jamais confondu avec le vert CUE GO »). Plutôt que
-  le casser, unification sous `target` : teal = transition vers un
-  état cible — spatial (poses/placement) ou scénique (avance setlist).
-  PLAY indigo (arbitraire) → vert live : « rendre live ».
-- **cuelist** — TRK badge cyan→tracking-purple (inversion corrigée) ;
-  NOW/ARMED purple→conduite-amber (états opérationnels, pas expert) ;
-  audition amber→derived (le token créé pour ça). Conservé purple pour
-  l'édition experte (store, focus) — split documenté du token.
-- **emerald éliminé des surfaces live** — réservé à rien, il était un
-  quasi-green arbitraire (tc-active, chase) → live-green partout.
-- **différé à H4** — chrome indigo des toggles (pads/3d, radar) :
-  question app-wide de la couleur d'accent chrome, pas des surfaces
-  live. Couleurs-décor de sections du SettingsModal.
-
-| **H2 — fichiers live ad-hoc** | migration StatusBar (52), SettingsModal (54), PerformView (30), CuelistPanel (29), RunView — les surfaces d'exploitation d'abord | compteur palette brute ÷2 dans ces fichiers, captures de non-régression |
-| **H3 — viz** | unification 3D/radar/ghosts/zones dans `uiColors` — hex three.js centralisés, dissolution des couleurs-entités (pose violet → `target`) | captures 3D/radar, ghosts toujours distincts des rest-ghosts |
-| **H4 — ratissage + enforcement** | migration du reste · règle lint interdisant classes palette brute et hex hors `uiColors` (allowlist) — même mécanique que z-index | 0 occurrence brute hors allowlist en CI |
-
-### Explicitement hors scope
-
-- Thème clair / personnalisation utilisateur — le système de tokens le
-  permettra mais ce n'est pas l'objet.
-- Refonte des surfaces elles-mêmes (densité Jeu, NOW sémantique…) —
-  chantier UX séparé déjà documenté dans `ux-audit.md`.
 
 ## 5. Points de décision ouverts
 
