@@ -129,7 +129,7 @@ Trois règles de câblage :
 | **H1 — fondations** | ✅ fait — tokens target/derived/info, `uiColors.ts`, CLIP_COLORS par familles (v2 validée au swatch : objectCtl fuchsia, zones→indigo) |
 | **H2 — surfaces live** | ✅ fait — StatusBar/PerformView/CuelistPanel migrés, convergé sur StatusChip/STATUS_TONES, arm unifié, sémaphores healthTone |
 | **H3 — viz 3D/radar** | ✅ fait — `VIZ` étendu (env/obj/draw/labels), violet pose-ghost → `target` vérifié end-to-end, hex three.js centralisés |
-| **H4 — ratissage + enforcement** | 🔶 en cours — P0a/P0b/P1a/P1b faits (voir ci-dessous) ; reste P2 mécanique surfaces, P3 chrome/décor, règle lint |
+| **H4 — ratissage + enforcement** | 🔶 en cours — P0a/P0b/P1a/P1b faits ; **P2 mécanique surfaces CONSOMMÉ** (inventaire ~590 occurrences traité, ~15 commits) ; reste P3 chrome/décor (brand gradients), règle lint anti-palette |
 
 Branche : `feat/color-harmonization`. Reprise : lire les décisions
 H1/H2/H3 ci-dessous puis attaquer H4 — les points d'entrée sont les
@@ -318,32 +318,41 @@ groupé + vérif. Priorité : panels/MovesTable (55), SpatialFxPanel
 perform/* (46). Ne PAS regex aveugle : chaque occurrence est
 classée sémantiquement d'abord.
 
-**HANDOFF — état au 2025 (branche feat/color-harmonization, tout poussé) :**
+**HANDOFF — P2 mécanique CONSOMMÉ (session suivante, branche
+feat/color-harmonization) :**
 
-Commits session : `1223204` P1b · `6f76b7c` MovesTable · `d951c6c`/`6ef5172` docs.
+L'inventaire ~590 occurrences ci-dessous a été intégralement traité —
+~15 commits `colors:` ( SpatialFxPanel → queue longue). Chaque
+fichier lu, chaque occurrence classée, patch groupé, tsc+tests+build
+verts à chaque étape. Résidus = hues doctrine-correctes ou
+identités catégorielles assumées (PORT_COLORS, MiniBars audio,
+park/attention pink, hold cyan, badges P/H/S).
 
-**Méthode validée (OBLIGATOIRE) :** par fichier — lire les zones
-d'occurrences, classifier CHAQUE occurrence sémantiquement, un patch
-python groupé, `npx tsc -b` + `npm test` (612), commit par fichier.
-NE PAS regex aveugle. Tokens dispo : stagespace-{live,warning,danger,
-conduite,osc,target,derived,modulation,accent} + CHIP_SOLID +
-SOURCE_TEXT/SOURCE_CHIP + UI_HEX/VIZ (hex pour SVG/three).
+**Arbitrages rendus (questions 1-4 tranchées) :**
+1. Domaine spatial → **pas de teinte dédiée** — SpatialFxPanel
+   neutralisé (accent interactif / derived previews) ; zones 3D
+   gardent teintes H3 (provenance=fonction) ; lane SPATIALFX neutre.
+2. Lanes score → teinte = token du domaine sinon neutre :
+   CONDUCTOR neutre (mixte), OSC=osc, MODULATION=modulation,
+   SPATIALFX neutre, lanes objets = couleurs-track (identité).
+3. Transport score → playhead=accent, loop+région=target, TC chase=
+   live, dope curves=modulation indigo, events=amber, playhead
+   dope=accent.
+4. Dopesheet → curves=modulation (domaine paramétré), events gardent
+   amber (événements clip).
 
-**Inventaire restant par fichier (occurrences chromatiques brutes,
-tri desc) — ~590 après MovesTable :**
-```
-41 SpatialFxPanel   36 SlotTile        35 ScoreTimeline
-27 AnimationList    26 LiveDrawer      23 ConduiteView
-21 CuelistPanel     20 ScoreClipPicker 18 ScoreClipParams
-14 ScoreTransport   12 ScoreCurvePane  12 ParkedChip
-12 AudioPanel       12 PosesPanel       9 MovesTable(résidu:logo)
- 8 OscMappingsPanel  7 ScoreDopesheet   7 NodePalette
- 6 ScoreParamsPanel  6 ScorePanel       6 NodeParamsPanel
- 6 GestureStrip      5 ScoreView        4 ScoreToolbar
- 4 LinkedTracksField 3 ScorePoseEditor  3 CurveEditor
- 3 ScoreProgress     3 GraphCanvas      2 ScoreClipBlock
- ~15 fichiers ≤2 occ (voir grep)
-```
+**Application effective :** sections SettingsModal → tokens domaine
+(OSC=osc, PSN=tracking, spatial=target, engine=modulation) + toggles
+ON unifiés accent ; Titlebar onglets → tokens domaine (atelier=
+modulation, jeu=live, score=accent, conduite=conduite) ; expert UI
+App.tsx → tracking ; toasts/IconButton/PanicButton/OscArmToggle →
+variants tokens ; CUE GO=live vs SETLIST GO=target partout ;
+sélections=accent, playing=live, danger=red-partout.
+
+**Reste ouvert :**
+- Q5 brand : gradients indigo→purple logos panels (P3 chrome).
+- H4 suite : P3 chrome/décor restant, règle lint anti-palette
+  (allowlist uiColors, mécanique z-index).
 
 **Questions doctrinales OUVERTES (à trancher par l'utilisateur) :**
 1. **Domaine spatial** : SpatialFxPanel=cyan identité + lane
