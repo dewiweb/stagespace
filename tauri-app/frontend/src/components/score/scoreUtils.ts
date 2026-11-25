@@ -58,8 +58,8 @@ export function rulerTicks(pxPerSec: number): { minorMs: number; majorMs: number
 ///   conduite  (amber)   — transitions de show : cue/cueArm/cueGo
 ///   danger    (red)     — stopAll/panic
 ///   placement (teal)    — placer dans l'espace : pose/positions/throw/gesture
-///   objectCtl (emerald) — contrôle doux des objets : park/solo/attention…
-///   graphs    (indigo→fuchsia) — pipelines de traitement
+///   objectCtl (fuchsia) — contrôle doux des objets : park/solo/attention…
+///   graphs    (indigo)  — pipelines de traitement, zones incluses
 ///   system    (cyan)    — utilitaires : osc/soundcheck/view
 ///   slot      (purple)  — le contenu (moves)
 /// Les projections de lanes (blast/spans) reprennent la teinte de la
@@ -75,16 +75,16 @@ export const CLIP_COLORS: Record<string, string> = {
   positions: 'bg-teal-700/80 border-teal-400',
   throw: 'bg-teal-800/80 border-teal-500',
   gesture: 'bg-teal-500/80 border-teal-300',
-  park: 'bg-emerald-800/80 border-emerald-500',
-  unpark: 'bg-emerald-600/80 border-emerald-400',
-  solo: 'bg-emerald-500/80 border-emerald-300',
-  unsolo: 'bg-emerald-500/80 border-emerald-300',
-  attention: 'bg-emerald-700/80 border-emerald-400',
-  manualClear: 'bg-emerald-900/80 border-emerald-500',
+  park: 'bg-fuchsia-800/80 border-fuchsia-500',
+  unpark: 'bg-fuchsia-600/80 border-fuchsia-400',
+  solo: 'bg-fuchsia-500/80 border-fuchsia-300',
+  unsolo: 'bg-fuchsia-500/80 border-fuchsia-300',
+  attention: 'bg-fuchsia-700/80 border-fuchsia-400',
+  manualClear: 'bg-fuchsia-900/80 border-fuchsia-500',
   modGraph: 'bg-indigo-700/80 border-indigo-400',
   postGraph: 'bg-indigo-600/80 border-indigo-300',
   chanMods: 'bg-indigo-500/80 border-indigo-300',
-  zones: 'bg-fuchsia-700/80 border-fuchsia-400',
+  zones: 'bg-indigo-400/80 border-indigo-200',
   osc: 'bg-cyan-700/80 border-cyan-400',
   soundcheck: 'bg-cyan-500/80 border-cyan-300',
   view: 'bg-cyan-900/80 border-cyan-500',

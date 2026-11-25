@@ -61,7 +61,7 @@ export const CLIP_FAMILY_HEX: Record<ClipFamily, string> = {
   conduite: UI_HEX.conduite,
   danger: UI_HEX.danger,
   placement: UI_HEX.target,
-  objectControl: '#34d399', // emerald-400 — contrôle doux des objets
+  objectControl: '#e879f9', // fuchsia-400 — contrôle doux des objets
   graphs: '#818cf8',        // indigo-400 — pipelines de traitement
   system: UI_HEX.osc,
   slot: '#a78bfa',          // violet-400 — le contenu, neutre

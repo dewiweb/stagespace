@@ -122,6 +122,23 @@ Trois règles de câblage :
 
 | Phase | Contenu | Vérif |
 |---|---|---|
+### Décisions H1 actées (swatch review)
+
+- **objectCtl = fuchsia, pas emerald** — la première passe (emerald)
+  échouait au swatch : l'axe vert-cyan concentrait trois familles
+  (teal/emerald/cyan) dans ~35° de hue, indiscernables à taille de
+  clip. Fuchsia libère l'axe et ne collisionne que modérément avec
+  le purple des slots (magenta vs violet-bleu — tranché par les
+  labels, slots omniprésents donc vite appris).
+- **zones réintégrées dans graphs (indigo-400)** — la rupture fuchsia
+  n'avait pas de justification fonctionnelle : un clip zones EST une
+  opération de pipeline. C'est ce qui libère fuchsia pour objectCtl.
+- **green/emerald réservés** — green = token `live` cross-surface,
+  interdit aux familles de clips pour ne pas créer de faux sens
+  (« ce clip est en train de jouer »).
+- Point faible accepté : `view` cyan-900 vs teal à petite taille —
+  system et placement coexistent rarement ; labels obligatoires.
+
 | **H1 — fondations** | tokens `target`/`derived` + module `uiColors.ts` · re-teintage CLIP_COLORS par familles · correction des collisions actives du score (positions/pose) · swatch review visuelle avec l'utilisateur | capture score avant/après, collisions teal résolues |
 | **H2 — fichiers live ad-hoc** | migration StatusBar (52), SettingsModal (54), PerformView (30), CuelistPanel (29), RunView — les surfaces d'exploitation d'abord | compteur palette brute ÷2 dans ces fichiers, captures de non-régression |
 | **H3 — viz** | unification 3D/radar/ghosts/zones dans `uiColors` — hex three.js centralisés, dissolution des couleurs-entités (pose violet → `target`) | captures 3D/radar, ghosts toujours distincts des rest-ghosts |
