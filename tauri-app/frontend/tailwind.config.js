@@ -20,6 +20,13 @@ export default {
           danger: '#ef4444',
           tracking: '#a855f7',
           dim: '#6b7280',
+          // target = visualisation de destination (ghosts pose, ancres,
+          // projections) — distinct de tracking (QUI pilote) et d'osc
+          // (liens réseau) : les cibles spatiales sont teal-vert.
+          target: '#2dd4bf',
+          // derived = états projetés non-actionnables (blast radius,
+          // audition) — toujours translucide, jamais plein.
+          derived: '#94a3b8',
         },
       },
       // Échelle de z-index nommée — fini les z-10/z-50/z-[9999] ad hoc.
