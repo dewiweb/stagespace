@@ -165,6 +165,80 @@ z-index).
   teal, non-patché orange, distinction nette. Tout hex du SVG radar
   provient d'un token. 612/612 vitest, tsc propre.
 
+### Audit exhaustif H4 (4 passes par surface — live, score, atelier, chrome)
+
+Mesures : ~874 classes chromatiques brutes dans 69 fichiers, 54 hex
+hors modules légitimes (uiColors/sourceColors). Atelier et score :
+zéro token consommé. Trois générations de couleurs coexistent :
+chrome décoratif pré-tokens, couleurs fonctionnelles correctes non
+migrées, couleurs-entités contraires à la doctrine.
+
+**Bugs de lecture live (P0) — pas du cosmétique :**
+
+1. LIVE audio en ROUGE vs vert partout ailleurs (`CustomNode.tsx:223`)
+2. Cyan = 9 fonctions dont preview — la couleur-réseau pour l'état
+   « rien ne sort sur le réseau » (cohérent cross-surface, mais
+   collisionne osc/hold)
+3. Park cyan (ParkedChip, ObjectInspectBar) vs amber canonique
+   (radar/pads/sourceColors)
+4. Warning déguisé en amber/yellow — partagé, orphelin, non-patché,
+   stale-psn, dirty, toasts, `.rf-node-warning` — inversion complète
+   amber/orange (l'orange sert à du non-warning : solo, hot-swap)
+5. ConduiteView viole H2 — cue courante purple, DRY-RUN/TC emerald
+   (banni en H2) — CuelistPanel migré, pas ConduiteView
+6. Violet pose-entité persistant dans PosesPanel + ScorePoseEditor
+   (H3 dissous dans viz, pas dans les panels)
+7. Toggle booléen : 2 couleurs dans le même composant
+   (`ParamInput:94` blue vs `:105` cyan)
+8. Attention/freeze = 3 couleurs (amber GestureStrip / purple
+   SlotTile / indigo sourceColors)
+9. Modulation = 3 couleurs (cyan AudioModControls / amber NodeEditor
+   + dot CustomNode / purple ModChips)
+10. Omissions : orphelins seulement désaturés, delete/clear neutres
+    — la doctrine exige warning/danger (Score)
+
+**Arbitrages doctrinaux requis (bloquants pour la migration) :**
+
+1. `park` == `conduite` hex-identique (#f59e0b) — une couleur = une
+   fonction, à trancher. Même question pour manual==warning,
+   hold==osc, move==live, psn==tracking (recouvrement voulu ?)
+2. Contradiction interne du doc : `derived` couvre les projections
+   MAIS « projection = teinte parent translucide » — blast radius
+   concernés. Écrire la règle finale.
+3. Preview → `derived` (recommandation unanime des 4 passes, migrer
+   aussi `VIZ.obj.preview` en même temps) ou token dédié
+4. Modulation → nouveau token ou famille `graphs` formalisée
+5. Couleurs de catégories de nodes — l'audit recommande la
+   SUPPRESSION pure (entité, statique, collisionne live/osc ;
+   discriminants défaillants : Spline=PostProcess=cyan,
+   Source=Plugin=yellow). Icônes/regroupement à la place.
+6. Ports/edges triple contradiction (connectionRules ≠ index.css ≠
+   légende palette) — tokens graphe ou retrait couleur
+7. Chrome accent : `stagespace.accent` existe et est INUTILISÉ —
+   indigo/blue/cyan/purple se partagent sélection/focus/CTA.
+   Sélection = 4 conventions concurrentes (ring-white clips, cyan
+   lanes, bleu segmented, indigo pads)
+8. Solo : warning (tue les autres moves) vs objectControl-fuchsia
+9. Setlist NOW/NEXT : 4 schémas concurrents — extension de `target` ?
+10. TC chase : cyan (Score) vs live (Perform/Cuelist) — divergent
+11. CUE GO vert vs table « conduite = cues GO » — écrire la règle
+12. Stop-fade yellow : gradient de sévérité hors tokens → danger à
+    opacités différenciées ?
+
+**Bloqueurs structurels avant la règle lint :**
+
+- `Slider.tsx` — ACCENTS expose la palette brute : le composant
+  partagé institue la violation (15+ consommateurs)
+- `index.css` — 25 hex overrides React Flow, pas tokenisables sans
+  variables CSS `--stagespace-*` à créer
+- `CHIP_SOLID` existe mais n'est consommé nulle part
+- `SOURCE_CHIP` dupliqué par badges hardcodés (SlotTile P/H)
+- 20 `focus:border-*` en 7 teintes (SettingsModal déjà migré accent)
+
+**Séquençage proposé :** P0 sécurité live (~75 occ) → P1 arbitrages
++ architecture (~120) → P2 migrations mécaniques (~200) → P3 chrome/
+décor (~450) → règle lint (sinon CI rouge massive).
+
 ### Décisions H1 actées (swatch review)
 
 - **objectCtl = fuchsia, pas emerald** — la première passe (emerald)
