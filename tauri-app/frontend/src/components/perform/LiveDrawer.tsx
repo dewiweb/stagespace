@@ -5,6 +5,7 @@ import { AudioModList } from '../AudioModControls';
 import { GlobalTransformSurface } from '../show/GlobalTransformSurface';
 import { Slider } from '../ui/Slider';
 import { NodeParamsPanel } from '../panels/NodeParamsPanel';
+import { PosesPanel } from '../conduite/PosesPanel';
 import { OscMappingsPanel } from './OscMappingsPanel';
 import { useGraphStore } from '../../store/useGraphStore';
 import { usePoseStore } from '../../store/usePoseStore';
@@ -62,7 +63,7 @@ export const LiveDrawer: React.FC = () => {
   const current = useMoveEditorStore((s) => s.current);
 
 
-  type Scope = 'params' | 'playback' | 'tracks' | 'audio' | 'global' | 'osc';
+  type Scope = 'params' | 'playback' | 'tracks' | 'audio' | 'global' | 'osc' | 'poses';
   const [scope, setScope] = React.useState<Scope | null>(null);
 
   const slot = moveSlots.find((s) => s.id === editingSlotId);
@@ -159,6 +160,8 @@ export const LiveDrawer: React.FC = () => {
           'Audio-reactive mods of the selected move')}
         {scopeBtn('osc', <>OSC IN</>, false,
           'Mappings OSC entrants (fader→param) + learn')}
+        {scopeBtn('poses', <>Poses</>, false,
+          'Position presets — capture la formation courante, snap/goto/morph')}
         {scopeBtn('global', <><Globe size={12} className="inline -mt-0.5" /> Global transform</>, false,
           'Global transform — merge scope, affecte TOUS les moves live')}
 
@@ -220,6 +223,15 @@ export const LiveDrawer: React.FC = () => {
       {scope === 'global' && (
         <div className="border-t border-stagespace-border px-4 py-2 max-h-[42vh] overflow-y-auto">
           <GlobalTransformSurface live includeRadius />
+        </div>
+      )}
+
+      {/* ── Drawer POSES — capture avec radar/3D sous les yeux : la
+          boucle place → regarde → capture est complète dans cette
+          surface (contrairement à la conduite, aveugle). */}
+      {scope === 'poses' && (
+        <div className="border-t border-indigo-900/40 px-4 py-2 max-h-[42vh] overflow-y-auto">
+          <PosesPanel fill={false} />
         </div>
       )}
 

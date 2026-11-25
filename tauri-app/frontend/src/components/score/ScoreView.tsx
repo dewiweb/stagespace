@@ -49,6 +49,8 @@ import { ScoreToolbar } from './ScoreToolbar';
 import { ScoreDopesheet } from './ScoreDopesheet';
 import { ScoreClipParams } from './ScoreClipParams';
 import { ScoreExplorerInfo, type ExplorerItem } from './ScoreExplorerInfo';
+import { ScorePoseEditor } from './ScorePoseEditor';
+import { usePoseStore } from '../../store/usePoseStore';
 import { collectDopesheetRows, type DopeRow } from '../../utils/scoreDopesheet';
 import { extractDuration } from '../../store/slices/moveSlotsTypes';
 import type { ClipDragMode } from './ScoreClipBlock';
@@ -646,8 +648,12 @@ const ScoreView: React.FC = () => {
   // ── Bibliothèque (explorer) — moves + cues disponibles, drag & drop
   //    vers la timeline ; l'item sélectionné affiche sa fiche
   //    « mediainfo » dans la colonne éditeur.
-  type ExplorerSel = { kind: 'slot' | 'cue'; id: string };
+  type ExplorerSel = { kind: 'slot' | 'cue' | 'pose'; id: string };
   const [explorerSel, setExplorerSel] = useState<ExplorerSel | null>(null);
+  const biblioPoses = usePoseStore((st) => st.poses);
+  const refreshPoses = usePoseStore((st) => st.refreshPoses);
+  useEffect(() => { void refreshPoses(); }, [refreshPoses]);
+  const biblioPoseNames = useMemo(() => biblioPoses.map((p) => p.name), [biblioPoses]);
   const biblioGroups: ParamGroup[] = useMemo(() => [
     ...(moveSlots.length
       ? [{
@@ -682,7 +688,27 @@ const ScoreView: React.FC = () => {
           })),
         }]
       : []),
-  ], [moveSlots, cues, explorerSel]);
+    // Poses — le clip par défaut est un goto 2s (musical, cible tenue) ;
+    // snap/morph et la durée s'éditent dans l'inspector après dépôt.
+    // La fiche pose est ÉDITABLE (x/y/z numérique) — seule fiche non
+    // read-only de la bibliothèque.
+    ...(biblioPoseNames.length
+      ? [{
+          header: 'bibliothèque — poses',
+          rows: biblioPoseNames.map((name) => ({
+            id: `bib:pose:${name}`,
+            active: explorerSel?.kind === 'pose' && explorerSel.id === name,
+            hasData: false,
+            title: `Pose '${name}' — glisser sur la lane CONDUCTOR (goto 2s par défaut)`,
+            display: `◈ ${name}`,
+            dragPayload: JSON.stringify({
+              ref: { type: 'pose', name, mode: 'goto', duration: 2 },
+              durationMs: 2000,
+            }),
+          })),
+        }]
+      : []),
+  ], [moveSlots, cues, biblioPoseNames, explorerSel]);
   /// Rangées panel en mode dopesheet — bibliothèque EN DESSOUS des
   /// rangées du plot pour préserver l'alignement vertical.
   const dopePanelGroups = useMemo(() => [...dopeGroups, ...biblioGroups], [dopeGroups, biblioGroups]);
@@ -722,7 +748,8 @@ const ScoreView: React.FC = () => {
       const dur = s.graphJson ? extractDuration(s.graphJson.nodes) * 1000 : 30_000;
       return { ref: { type: 'slot', slotId: s.id } as const, durationMs: dur, repeatEveryMs: s.loopMode !== 'oneshot' ? dur : undefined };
     }
-    return { ref: { type: 'cue', cueId: sel.id } as const };
+    if (sel.kind === 'cue') return { ref: { type: 'cue', cueId: sel.id } as const };
+    return { ref: { type: 'pose', name: sel.id, mode: 'goto', duration: 2 } as const, durationMs: 2000 };
   }, [moveSlots]);
   /// Drop bibliothèque → lane : moves sur lanes objet, cues sur
   /// CONDUCTOR — les autres cibles sont refusées avec un toast.
@@ -733,8 +760,8 @@ const ScoreView: React.FC = () => {
       toast.warning('Un move se dépose sur une lane objet');
       return;
     }
-    if (p.ref.type === 'cue' && laneId !== CONDUCTOR_LANE) {
-      toast.warning('Une cue se dépose sur la lane CONDUCTOR');
+    if ((p.ref.type === 'cue' || p.ref.type === 'pose') && laneId !== CONDUCTOR_LANE) {
+      toast.warning(`${p.ref.type === 'cue' ? 'Une cue' : 'Une pose'} se dépose sur la lane CONDUCTOR`);
       return;
     }
     addClip(p.ref, ms, { durationMs: p.durationMs, repeatEveryMs: p.repeatEveryMs });
@@ -870,6 +897,7 @@ const ScoreView: React.FC = () => {
   const onSelectParamRow = useCallback((id: string) => {
     if (id.startsWith('bib:slot:')) { setExplorerSel({ kind: 'slot', id: id.slice(9) }); setPaneView('biblio'); return; }
     if (id.startsWith('bib:cue:')) { setExplorerSel({ kind: 'cue', id: id.slice(8) }); setPaneView('biblio'); return; }
+    if (id.startsWith('bib:pose:')) { setExplorerSel({ kind: 'pose', id: id.slice(9) }); setPaneView('biblio'); return; }
     setExplorerSel(null);
     const r = dopeRows.find((x) => x.key === id);
     if (r) onDopeSelectRow(r);
@@ -921,6 +949,10 @@ const ScoreView: React.FC = () => {
         setClipCurve={setClipCurve}
         explorerInfo={(() => {
           if (!explorerSel) return undefined;
+          if (explorerSel.kind === 'pose') {
+            const pose = biblioPoses.find((x) => x.name === explorerSel.id);
+            return pose ? <ScorePoseEditor pose={pose} onInsert={onBiblioInsert} /> : undefined;
+          }
           const item: ExplorerItem | undefined = explorerSel.kind === 'slot'
             ? (() => { const s = moveSlots.find((x) => x.id === explorerSel.id); return s ? { kind: 'slot' as const, slot: s } : undefined; })()
             : (() => { const i = cues.findIndex((c) => String(c.id) === explorerSel.id); return i >= 0 ? { kind: 'cue' as const, cue: cues[i], index: i } : undefined; })();

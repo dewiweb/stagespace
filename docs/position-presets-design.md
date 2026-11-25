@@ -410,7 +410,25 @@ marque le show dirty. À câbler comme `oscMappings`.
 
 ack/nack standard. Refus pendant recall de cue comme les slot commands.
 
-### UI — panel « Poses » (surface Conduite, duplicable en Jeu)
+### UI — répartition des surfaces (révisée post-analyse d'usage)
+
+La capture est un acte de **design spatial** — elle exige manipulation
+(radar/3D), feedback visuel et sélection de tracks simultanés. L'analyse
+des running sheets documentées (A-D) montre : captures = soundcheck/
+répétition, rappels = automatisés (cues/score/OSC) ou busking — jamais
+d'écran FOH. D'où la répartition livrée :
+
+- **Jeu** — capture + rappel : scope `Poses` du drawer live (la boucle
+  place → regarde → capture est complète dans cette surface)
+- **Atelier** — tab `Poses` de la colonne SHOW (le contenu du show à
+  côté de Moves/Cues/FX)
+- **Score** — bibliothèque + édition numérique : fiche pose éditable
+  (table x/y/z, ajout/retrait de tracks, save atomique) dans la zone
+  explorer/inspector, drag vers CONDUCTOR (clip goto 2s par défaut)
+- **Conduite** — rien : le rappel FOH passe par OSC/cues, l'usage
+  busking vit dans les pads (vérifié sur les conduites documentées)
+
+### Panel « Poses » — contenu commun
 
 - Liste des poses : nom, nombre de tracks, aperçu.
 - **Capture** : bouton « capture » — tracks sélectionnées si sélection

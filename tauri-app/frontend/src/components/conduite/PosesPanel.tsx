@@ -8,7 +8,10 @@ import { usePoseStore } from '../../store/usePoseStore';
 import { useGraphStore } from '../../store/useGraphStore';
 import { doPoseCapture, doPoseSnap, doPoseGoto, doPoseMorph } from '../../utils/liveActions';
 
-export const PosesPanel: React.FC = () => {
+/// Layout-agnostic — le host décide du cadre (colonne Conduite, tab
+/// Atelier, drawer Jeu). `fill` = colonne flex verticale (défaut) ;
+/// sans fill le panel s'intègre dans un conteneur scrollable horizontal.
+export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
   const poses = usePoseStore((s) => s.poses);
   const selectedPoseName = usePoseStore((s) => s.selectedPoseName);
   const selectPose = usePoseStore((s) => s.selectPose);
@@ -37,7 +40,7 @@ export const PosesPanel: React.FC = () => {
   };
 
   return (
-    <div className="w-56 border-l border-gray-800 flex flex-col flex-shrink-0">
+    <div className={fill ? 'flex flex-col flex-1 min-h-0' : 'flex flex-col'}>
       <div className="px-3 py-2 text-[10px] text-gray-500 uppercase tracking-widest border-b border-gray-800 flex items-center justify-between">
         <span>Poses — position presets</span>
         <label className="flex items-center gap-1 normal-case tracking-normal" title="Goto ramp duration (seconds)">
