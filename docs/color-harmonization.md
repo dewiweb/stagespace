@@ -257,6 +257,12 @@ migrées, couleurs-entités contraires à la doctrine.
   supprimé (palette/QuickAdd/nodes/minimap neutres), FrameNode→slate,
   variables CSS --stagespace-* dans index.css. Drive-by : fix crash
   canvas à l'ajout node Objects (track_ids string vs array)
+- **P2a** — focus borders unifiés accent (20 en 11 fichiers), violet
+  pose dissous panels (PosesPanel sélection accent/morph target-teal,
+  ScorePoseEditor accent)
+- **P2b** — warnings score amber→orange, mini-radar audition
+  CuelistPanel sur tokens (destinations cue→target teal), orphelins
+  score bordure orange dashed
 - **P1b** `1223204` — tokens graphe unifiés handles/edges/légendes
   (Duration yellow-400, Spline violet-400, Signal indigo=modulation,
   ObjectSet cyan=osc ; edges objectset/signal ajoutées), modulation
@@ -264,14 +270,15 @@ migrées, couleurs-entités contraires à la doctrine.
   freeze indigo→pink stase (libère indigo pour modulation),
   attention GestureStrip/SlotTile→pink
 
-**Reste à faire (P2/P3) :** violet pose panels (PosesPanel,
-ScorePoseEditor — morph/selection/focus), focus borders 7 teintes
-→accent (~20), migrations mécaniques score (warnings amber restants,
-picker aligné CLIP_COLORS, sélection unifiée, transport cyan), live
-surfaces (verts/rouges corrects→tokens), hex SVG résiduels
-(CuelistPanel mini-radar, courbes score), metering audio
-(monochrome+healthTone), SettingsModal arc-en-ciel sections, puis
-règle lint. Note : ports OSC 8001 peut être tenu par dev_bridge au
+**Reste à faire (P2/P3) :** migrations mécaniques score (picker
+aligné CLIP_COLORS — gesture orange→teal, objectControl sky→fuchsia ;
+sélection unifiée ; transport cyan→vocabulaire dédié ; lanes
+couleurs-domaines CONDUCTOR/OSC/MODULATION/SPATIALFX à arbitrer ;
+delete/clear→danger), live surfaces (verts/rouges corrects→tokens),
+hex résiduels courbes score (#a78bfa violet courbes !), metering
+audio (monochrome+healthTone bg), SettingsModal arc-en-ciel sections
+entity/décor, CHIP_SOLID PLAY/STOP/PANIC, badges source dupliqués
+SlotTile, data-viz palette, puis règle lint H4. Note : ports OSC 8001 peut être tenu par dev_bridge au
 lieu de tauri dev (warning sans impact).
 
 **Bloqueurs structurels avant la règle lint :**
