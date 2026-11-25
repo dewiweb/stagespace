@@ -175,7 +175,7 @@ export default function MovesTable() {
         <div className="flex-1" />
         {moveSlots.length > 0 && (
           <span className="text-xs font-mono text-gray-500">
-            {playingCount > 0 && <span className="text-green-400">{playingCount} live</span>}
+            {playingCount > 0 && <span className="text-stagespace-live">{playingCount} live</span>}
             {playingCount > 0 && stoppedCount > 0 && <span className="text-gray-400"> / </span>}
             {stoppedCount > 0 && <span className="text-gray-400">{stoppedCount} ready</span>}
           </span>
@@ -186,7 +186,7 @@ export default function MovesTable() {
       <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-stagespace-border flex-shrink-0">
         <button
           onClick={addMoveSlot}
-          className="px-2 py-1 bg-indigo-900/50 hover:bg-indigo-800/60 text-indigo-300 text-xs rounded font-medium transition-colors border border-indigo-800/40"
+          className="px-2 py-1 bg-stagespace-accent/15 hover:bg-stagespace-accent/25 text-stagespace-accent text-xs rounded font-medium transition-colors border border-stagespace-accent/40"
           title="Add a move to the setlist"
         >
           + Move
@@ -196,7 +196,7 @@ export default function MovesTable() {
             <button
               onClick={goAllSlots}
               disabled={stoppedCount === 0}
-              className="px-2 py-1 bg-green-900/50 hover:bg-green-800/60 text-green-300 text-xs rounded font-medium transition-colors border border-green-800/40 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="px-2 py-1 bg-stagespace-live/15 hover:bg-stagespace-live/25 text-stagespace-live text-xs rounded font-medium transition-colors border border-stagespace-live/40 disabled:opacity-30 disabled:cursor-not-allowed"
               title="Launch all stopped moves"
             >
               ▶ GO All
@@ -204,7 +204,7 @@ export default function MovesTable() {
             <button
               onClick={stopAllSlots}
               disabled={playingCount === 0}
-              className="px-2 py-1 bg-red-900/50 hover:bg-red-800/60 text-red-300 text-xs rounded font-medium transition-colors border border-red-800/40 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="px-2 py-1 bg-stagespace-danger/15 hover:bg-stagespace-danger/25 text-red-300 text-xs rounded font-medium transition-colors border border-stagespace-danger/40 disabled:opacity-30 disabled:cursor-not-allowed"
               title="Stop all active moves"
             >
               ■ Stop All
@@ -236,14 +236,14 @@ export default function MovesTable() {
             <button
               onClick={handleGO}
               disabled={!nextSetlistSlotId}
-              className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-bold rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
+              className="px-4 py-2 bg-stagespace-target hover:bg-teal-300 text-gray-900 text-sm font-bold rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
               title="GO: advance to the next move in the setlist (crossfade) — Enter. RECALL cue = Shift+Enter."
             >
               GO ▶
             </button>
           </div>
           {goFeedback && (
-            <div className={`text-xs mt-1 text-center animate-pulse ${goFeedback.ok ? 'text-green-400' : 'text-red-400 font-bold'}`}>
+            <div className={`text-xs mt-1 text-center animate-pulse ${goFeedback.ok ? 'text-stagespace-live' : 'text-stagespace-danger font-bold'}`}>
               {goFeedback.message}
             </div>
           )}
@@ -301,8 +301,8 @@ export default function MovesTable() {
                       setSlotCtxMenu({ x: e.clientX, y: e.clientY, slot });
                     }}
                     className={`border-b border-gray-800/40 transition-colors cursor-pointer ${
-                      isEditing ? 'bg-indigo-900/30 ring-1 ring-inset ring-indigo-700/50' :
-                      isPlaying ? 'bg-green-900/10' : 'hover:bg-gray-800/20'
+                      isEditing ? 'bg-stagespace-accent/10 ring-1 ring-inset ring-stagespace-accent/50' :
+                      isPlaying ? 'bg-stagespace-live/10' : 'hover:bg-gray-800/20'
                     }`}
                   >
                     {/* # — clic pour sélectionner/désélectionner */}
@@ -310,7 +310,7 @@ export default function MovesTable() {
                         onClick={() => selectSlotForEditing(editingSlotId === slot.id ? null : slot.id)}>
                       <span className={`text-xs font-mono w-5 h-5 rounded flex items-center justify-center ${
                         isPlaying
-                          ? (slot.isPreview ? 'bg-slate-700 text-slate-300' : 'bg-green-800 text-green-300')
+                          ? (slot.isPreview ? 'bg-slate-700 text-slate-300' : 'bg-stagespace-live/30 text-stagespace-live')
                           : 'bg-gray-800 text-gray-500'
                       }`}>{idx + 1}</span>
                     </td>
@@ -330,7 +330,7 @@ export default function MovesTable() {
                             if (e.key === 'Enter') { if (tempName.trim()) renameMoveSlot(slot.id, tempName.trim()); setRenamingId(null); }
                             if (e.key === 'Escape') setRenamingId(null);
                           }}
-                          className="bg-gray-900 text-white text-xs px-1 py-0.5 rounded border border-indigo-700 w-full"
+                          className="bg-gray-900 text-white text-xs px-1 py-0.5 rounded border border-stagespace-accent/60 w-full"
                         />
                       ) : (
                         <span
@@ -342,7 +342,7 @@ export default function MovesTable() {
                         </span>
                       )}
                       {isPlaying && mv && (
-                        <div className="text-xs font-mono text-green-500 mt-0.5">
+                        <div className="text-xs font-mono text-stagespace-live mt-0.5">
                           {mv.track_count} tracks
                         </div>
                       )}
@@ -356,7 +356,7 @@ export default function MovesTable() {
                           value={slot.templateId}
                           onChange={(e) => { selectSlotForEditing(slot.id); setSlotTemplate(slot.id, e.target.value); setEditingTemplateFor(null); }}
                           onBlur={() => setEditingTemplateFor(null)}
-                          className="bg-gray-900 text-white text-xs px-1 py-0.5 rounded border border-indigo-700 w-full"
+                          className="bg-gray-900 text-white text-xs px-1 py-0.5 rounded border border-stagespace-accent/60 w-full"
                         >
                           {basicTemplates.map((p) => (
                             <option key={p.id} value={p.id}>{p.name}</option>
@@ -365,7 +365,7 @@ export default function MovesTable() {
                       ) : (
                         <button
                           onClick={() => { selectSlotForEditing(slot.id); setEditingTemplateFor(slot.id); }}
-                          className="text-indigo-300 hover:text-indigo-200 text-xs font-mono px-1 py-0.5 rounded hover:bg-indigo-900/30 transition-colors"
+                          className="text-stagespace-accent hover:text-blue-300 text-xs font-mono px-1 py-0.5 rounded hover:bg-stagespace-accent/15 transition-colors"
                           title="Changer de template"
                         >
                           {preset?.name ?? (slot.graphJson?.nodes?.length ? 'Custom' : slot.templateId)}
@@ -377,7 +377,7 @@ export default function MovesTable() {
                     <td className="px-2 py-1.5" onClick={() => selectSlotForEditing(slot.id)}>
                       <button
                         onClick={() => { selectSlotForEditing(slot.id); openTrackPicker(slot.id, slot.trackIds); }}
-                        className="text-cyan-300 hover:text-cyan-200 text-xs font-mono px-1 py-0.5 rounded hover:bg-cyan-900/30 transition-colors"
+                        className="text-stagespace-accent hover:text-blue-300 text-xs font-mono px-1 py-0.5 rounded hover:bg-stagespace-accent/15 transition-colors"
                         title="Choisir les tracks"
                       >
                         {slot.trackIds.length}tr
@@ -443,7 +443,7 @@ export default function MovesTable() {
                           disabled={!!slot.movementId}
                           className={`text-xs px-1 rounded transition-colors ${
                             slot.isPreview
-                              ? 'bg-cyan-900/50 text-cyan-300 hover:bg-cyan-800/60'
+                              ? 'bg-slate-700/70 text-slate-300 hover:bg-slate-600/70'
                               : 'text-gray-400 hover:text-gray-400 hover:bg-gray-800/30'
                           } disabled:opacity-30 disabled:cursor-not-allowed`}
                           title={slot.movementId
@@ -454,20 +454,20 @@ export default function MovesTable() {
                           <>
                             <button
                               onClick={(e) => { e.stopPropagation(); stopSlotWithFade(slot.id, slot.fadeOut ?? 1); }}
-                              className="text-red-400/60 hover:text-red-300 text-xs px-1 rounded hover:bg-red-900/30"
+                              className="text-stagespace-danger/60 hover:text-stagespace-danger text-xs px-1 rounded hover:bg-stagespace-danger/15"
                               title="Stop avec fade 1s"
                             ><Square size={10} /></button>
                             <button
                               onClick={(e) => { e.stopPropagation(); stopSlot(slot.id); }}
-                              className="text-red-400 hover:text-red-300 text-xs px-1 rounded hover:bg-red-900/30"
+                              className="text-stagespace-danger hover:opacity-80 text-xs px-1 rounded hover:bg-stagespace-danger/15"
                               title="Immediate stop"
                             ><Square size={10} fill="currentColor" /></button>
                           </>
                         ) : (
                           <button
                             onClick={(e) => { e.stopPropagation(); playSlot(slot.id); }}
-                            className={`text-xs px-1.5 rounded hover:bg-green-900/30 font-bold ${
-                              slot.isPreview ? 'text-slate-400 hover:text-slate-300' : 'text-green-400 hover:text-green-300'
+                            className={`text-xs px-1.5 rounded hover:bg-stagespace-live/20 font-bold ${
+                              slot.isPreview ? 'text-slate-400 hover:text-slate-300' : 'text-stagespace-live hover:opacity-80'
                             }`}
                             title={slot.isPreview ? 'Launch in preview (no OSC out)' : 'Launch live (OSC out)'}
                           ><Play size={10} fill="currentColor" /></button>
@@ -478,13 +478,13 @@ export default function MovesTable() {
                             editSlotGraph(slot.id);
                             if (!showExpert) setShowExpert(true);
                           }}
-                          className={`text-purple-400 hover:text-purple-300 text-xs px-1 rounded hover:bg-purple-900/30 ${editingSlotId === slot.id ? 'font-bold ring-1 ring-purple-600/50' : ''}`}
+                          className={`text-stagespace-accent hover:text-blue-300 text-xs px-1 rounded hover:bg-stagespace-accent/15 ${editingSlotId === slot.id ? 'font-bold ring-1 ring-stagespace-accent/50' : ''}`}
                           title="Edit the graph in the node editor"
                         ><Pencil size={10} /></button>
                         {isPlaying && (
                           <button
                             onClick={(e) => { e.stopPropagation(); saveEditorToSlot(slot.id); }}
-                            className="text-orange-400 hover:text-orange-300 text-xs px-1 rounded hover:bg-orange-900/30"
+                            className="text-stagespace-warning hover:opacity-80 text-xs px-1 rounded hover:bg-stagespace-warning/15"
                             title="Hot-swap: apply the edited graph to the running move"
                           ><RefreshCw size={10} /></button>
                         )}
@@ -500,7 +500,7 @@ export default function MovesTable() {
                         ><Copy size={10} /></button>
                         <button
                           onClick={(e) => { e.stopPropagation(); setPendingDeleteSlot({ id: slot.id, name: slot.name }); }}
-                          className="text-gray-400 hover:text-red-400 text-xs px-1 rounded hover:bg-red-900/20"
+                          className="text-gray-400 hover:text-stagespace-danger text-xs px-1 rounded hover:bg-stagespace-danger/10"
                           title="Delete this slot"
                         ><X size={11} /></button>
                       </div>
@@ -546,7 +546,7 @@ export default function MovesTable() {
                   }}
                   className={`text-xs font-mono px-2 py-1.5 rounded transition-colors ${
                     tempTrackIds.includes(id)
-                      ? 'bg-indigo-700 text-white'
+                      ? 'bg-stagespace-accent text-white'
                       : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                   }`}
                 >
@@ -557,7 +557,7 @@ export default function MovesTable() {
             <div className="flex gap-2 mt-4">
               <button
                 onClick={confirmTrackPicker}
-                className="flex-1 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-white text-xs rounded font-medium"
+                className="flex-1 py-1.5 bg-stagespace-accent hover:bg-blue-600 text-white text-xs rounded font-medium"
               >Confirmer</button>
               <button
                 onClick={() => setEditingTracksFor(null)}
@@ -617,7 +617,7 @@ export default function MovesTable() {
               </div>
               <button
                 onClick={() => setEditingTransformFor(null)}
-                className="w-full mt-4 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-white text-xs rounded font-medium"
+                className="w-full mt-4 py-1.5 bg-stagespace-accent hover:bg-blue-600 text-white text-xs rounded font-medium"
               >Close</button>
             </div>
           </Modal>
