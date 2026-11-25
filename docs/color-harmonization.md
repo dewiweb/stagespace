@@ -239,6 +239,22 @@ migrées, couleurs-entités contraires à la doctrine.
     outline, stop danger plein, stop-all/panic danger plein +
     taille/label. Yellow éliminé du système.
 
+**Arbitrages ACTÉS — session 2 (4/4 tranchés) :**
+
+13. **Domaine spatial = PAS de teinte dédiée** — c'est un domaine de
+    paramètres, pas une fonction colorable (comme les macros). Panel →
+    chrome neutre/accent, previews → derived. Zones 3D gardent leurs
+    teintes H3 (zoneGraph violet / zoneManual cyan) : la couleur y code
+    la PROVENANCE (qui a créé la zone), vraie fonction.
+14. **Lanes score = teinte du token-domaine ou neutre** — CONDUCTOR
+    neutre (lane mixte, toute teinte collisionnerait), OSC=osc cyan,
+    MODULATION/GLOBALFX=modulation indigo, SPATIALFX=neutre.
+15. **Transport score** — playhead=accent (navigation), loop region +
+    handles=target (zone vers laquelle on boucle), TC chase=live (arb.
+    10), ruler/fonds neutres.
+16. **Dopesheet** — curves=modulation indigo (ce SONT des paramètres
+    modulés), events=teinte du clip parent (CLIP_COLORS) ou neutre.
+
 **Progression implémentation (commits sur feat/color-harmonization) :**
 
 - **P0a** `f8c9e78` — LIVE rouge→vert (CustomNode), park re-teinté pink
