@@ -87,12 +87,16 @@ pub async fn sample_movement_trajectories(
     let n = sample_count(n_samples, track_indices.len())?;
     let dur = sample_duration(duration)?;
     tauri::async_runtime::spawn_blocking(move || {
+        // UNE passe pour tous les objets : pour un engine à état (swarm,
+        // avoidance), sampler objet-par-objet paierait un reset + resim
+        // complet par track (63 × resim ≈ des dizaines de secondes, le
+        // dispatch IPC séquentiel gelait derrière — GUI morte en edit live).
+        let all = sampler.sample_all(track_indices.len(), n, dur);
         let mut out = Vec::with_capacity(track_indices.len());
-        for (object_index, &track_index) in track_indices.iter().enumerate() {
+        for (local, &track_index) in track_indices.iter().enumerate() {
             // object_index = index LOCAL du move (0..n_objects) pour le sampler ;
             // track_index = index GLOBAL (.hol) pour le post-process et le frontend.
-            let raw = sampler.sample(object_index, n, dur);
-            let points = post_process(raw, track_index);
+            let points = post_process(all[local].clone(), track_index);
             if points.len() >= 2 {
                 out.push(SampledPath {
                     track_index,

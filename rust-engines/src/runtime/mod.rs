@@ -503,6 +503,56 @@ impl TrajectorySampler {
         }
         samples
     }
+
+    /// Échantillonne TOUS les objets en une seule passe temporelle —
+    /// retourne `paths[local_obj][point]`. Pour les engines à état
+    /// (swarm, avoidance) c'est la seule version supportable : itérer
+    /// objet-par-objet force un reset + re-simulation COMPLÈTE par objet
+    /// (63 objets × resim fenêtre entière ≈ des dizaines de secondes de
+    /// CPU, qui saturent le pool blocking et gèlent le dispatch IPC).
+    /// En itérant t-externe / objet-interne, la cache avance une seule
+    /// fois par pas — UNE resim couvre tous les objets.
+    pub fn sample_all(
+        &self,
+        n_objects: usize,
+        n_samples: usize,
+        duration: f64,
+    ) -> Vec<Vec<(f64, f64, f64, f64)>> {
+        let msnap = self.macros.snapshot();
+        let (yaw, pitch, roll) = (msnap.yaw, msnap.pitch, msnap.roll);
+        let rot_matrix = crate::spatial_transform::euler_rotation(
+            pitch.to_radians(),
+            yaw.to_radians(),
+            roll.to_radians(),
+        );
+        let origin = *self.origin.lock().unwrap_or_else(|e| e.into_inner());
+        let fn_arc = self
+            .position_fn
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let mut paths: Vec<Vec<(f64, f64, f64, f64)>> = (0..n_objects)
+            .map(|_| Vec::with_capacity(n_samples))
+            .collect();
+        for i in 0..n_samples {
+            let t = (i as f64 / (n_samples - 1).max(1) as f64) * duration;
+            for (obj, path) in paths.iter_mut().enumerate() {
+                let pos = fn_arc(t, obj);
+                let p = move_transform(
+                    pos,
+                    origin,
+                    msnap.scale,
+                    msnap.shift,
+                    rot_matrix.as_ref(),
+                    msnap.radius_scale,
+                    msnap.height_offset,
+                    1.0,
+                );
+                path.push((t, p.x, p.y, p.z));
+            }
+        }
+        paths
+    }
 }
 
 impl Runtime {
