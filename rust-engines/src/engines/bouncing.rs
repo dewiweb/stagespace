@@ -19,16 +19,23 @@
 use crate::engines::{finite_or_zero, sim_window, Engine, EngineParams, SIM_REWIND_EPS};
 use crate::rng::SimpleRng;
 use nalgebra::Vector3;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// Engine à état — `Default` produit un cache vide (premier appel = init).
 #[derive(Default)]
 pub struct Bouncing {
-    cache: Mutex<BouncingCache>,
+    cache: Arc<Mutex<BouncingCache>>,
+}
+
+impl Bouncing {
+    /// Cache partagé via `EngineStateStore` — warm-start au hot-swap.
+    pub(crate) fn with_cache(cache: Arc<Mutex<BouncingCache>>) -> Self {
+        Self { cache }
+    }
 }
 
 #[derive(Default)]
-struct BouncingCache {
+pub(crate) struct BouncingCache {
     /// État par objet — intégration lazy (l'objet requis avance seul).
     agents: Vec<BouncingAgent>,
 }

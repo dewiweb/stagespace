@@ -21,10 +21,10 @@ use crate::engines::{
 use crate::rng::SimpleRng;
 use nalgebra::Vector3;
 use std::f64::consts::TAU;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// État simulé de l'essaim — conservé entre appels (audit B1).
-struct AvoidanceCache {
+pub(crate) struct AvoidanceCache {
     sim_t: f64,
     n_objects: usize,
     positions: Vec<Vector3<f64>>,
@@ -78,7 +78,14 @@ impl AvoidanceCache {
 /// Engine à état — `Default` produit un cache vide (premier appel = init).
 #[derive(Default)]
 pub struct Avoidance {
-    cache: Mutex<AvoidanceCache>,
+    cache: Arc<Mutex<AvoidanceCache>>,
+}
+
+impl Avoidance {
+    /// Cache partagé via `EngineStateStore` — warm-start au hot-swap.
+    pub(crate) fn with_cache(cache: Arc<Mutex<AvoidanceCache>>) -> Self {
+        Self { cache }
+    }
 }
 
 impl Engine for Avoidance {

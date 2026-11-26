@@ -377,6 +377,7 @@ fn spawn_move_inner(
         Some(slots.clone()),
         Some(runtime.held_positions()),
         pose_ctx,
+        Some(runtime.engine_states()),
     )
     .map_err(|e| {
         eprintln!("[ACTIVATE-ERROR] compile_graph failed: {e}");
@@ -385,12 +386,15 @@ fn spawn_move_inner(
     // Instance jetable pour le TrajectorySampler — les evals de preview
     // n'avancent pas sim_t des engines stateful de la fn live. Partage la
     // même table de slots (read-only) : le preview reflète la modulation.
+    // engine_states = None : le sampler ne doit JAMAIS partager le cache
+    // des engines live — ses evals avanceraient leur sim_t.
     if let Ok(sample_fn) = compile_graph_live(
         &graph,
         sh,
         Some(slots.clone()),
         Some(runtime.held_positions()),
         pose_ctx,
+        None,
     ) {
         runtime.set_sample_fn(sample_fn);
     }

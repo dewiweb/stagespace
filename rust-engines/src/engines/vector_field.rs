@@ -44,16 +44,23 @@ use crate::engines::{finite_or_zero, sim_window, Engine, EngineParams, SIM_REWIN
 use crate::rng::SimpleRng;
 use nalgebra::{Vector2, Vector3};
 use std::f64::consts::TAU;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// Engine à état — `Default` produit un cache vide (premier appel = init).
 #[derive(Default)]
 pub struct VectorField {
-    cache: Mutex<VectorFieldCache>,
+    cache: Arc<Mutex<VectorFieldCache>>,
+}
+
+impl VectorField {
+    /// Cache partagé via `EngineStateStore` — warm-start au hot-swap.
+    pub(crate) fn with_cache(cache: Arc<Mutex<VectorFieldCache>>) -> Self {
+        Self { cache }
+    }
 }
 
 #[derive(Default)]
-struct VectorFieldCache {
+pub(crate) struct VectorFieldCache {
     /// État par objet — le RNG est conservé car son stream est consommé
     /// à chaque pas (wander). Intégration lazy par objet requis.
     agents: Vec<VectorFieldAgent>,

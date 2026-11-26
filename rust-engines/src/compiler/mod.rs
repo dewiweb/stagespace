@@ -22,6 +22,52 @@ pub type OscValueMap = Arc<Mutex<HashMap<String, Vec<f64>>>>;
 /// Positions tenues par les nodes Freeze — partagées entre recompiles.
 pub type HeldPositions = Arc<Mutex<HashMap<String, nalgebra::Vector3<f64>>>>;
 
+/// Store des caches d'engines à état — partagé entre les recompiles
+/// d'un même move (hot-swap `update_move_graph_merged`, recall_cue…).
+///
+/// Pourquoi : un engine à état (Swarm, Bouncing…) re-simule tout son
+/// historique 0→t à son premier eval avec un cache froid. En hot-swap à
+/// t élevé cette resim payait ~2 s dans la boucle worker → stale-kill
+/// du superviseur. Avec un store par move, la nouvelle instance
+/// compilée adopte le `Arc<Mutex<Cache>>` de la précédente — `sim_t`,
+/// positions et vélocités sont déjà à jour : zéro resim.
+///
+/// Clé `{kind}:{__fe_id}` — l'id React Flow (stable entre recompiles,
+/// contrairement aux `NodeId` régénérés à chaque parse). Un changement
+/// de type de node au même fe_id donne une clé différente → miss →
+/// cache froid (comportement pré-warm-start). La `sample_fn` compile
+/// SANS store (`None`) : ses evals ne doivent jamais avancer le `sim_t`
+/// de la live.
+#[derive(Clone, Default)]
+pub struct EngineStateStore(
+    Arc<std::sync::RwLock<HashMap<String, Arc<dyn std::any::Any + Send + Sync>>>>,
+);
+
+impl EngineStateStore {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Cache partagé `{kind}:{node_key}` — retourne l'`Arc<Mutex<T>>`
+    /// existant ou en crée un froid. Une entrée de type incompatible
+    /// (collision théorique) est remplacée — jamais de cache mal typé.
+    pub fn get_or_default<T>(&self, kind: &str, node_key: &str) -> Arc<Mutex<T>>
+    where
+        T: Default + Send + Sync + 'static,
+    {
+        let key = format!("{kind}:{node_key}");
+        let mut map = self.0.write().unwrap_or_else(|e| e.into_inner());
+        if let Some(entry) = map.get(&key) {
+            if let Ok(arc) = entry.clone().downcast::<Mutex<T>>() {
+                return arc;
+            }
+        }
+        let arc = Arc::new(Mutex::new(T::default()));
+        map.insert(key, arc.clone());
+        arc
+    }
+}
+
 /// Entrées live disponibles pendant l'évaluation d'une frame —
 /// audio state (BPM/amplitude/spectre) + dernières valeurs OSC reçues
 /// + registry des plugins WASM (résolution de `params.plugin_id`).
@@ -46,6 +92,10 @@ pub struct LiveInputs {
     /// positions live capturées + snapshot des poses). Sans lui, un node
     /// PoseRamp échoue la compile (même pattern que Plugin sans registry).
     pub pose_resolver: Option<Arc<crate::poses::PoseResolver>>,
+    /// Caches des engines à état du move — warm-start au hot-swap.
+    /// `None` pour la sample_fn (ne doit pas partager le sim_t live)
+    /// et les compiles hors contexte move (tests, previews froides).
+    pub engine_states: Option<EngineStateStore>,
 }
 
 /// Erreur de compilation
@@ -74,7 +124,7 @@ pub struct Compiler;
 impl Compiler {
     /// Compile un graphe en une fonction composite
     pub fn compile(graph: &Graph) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, None, None, None, None, None, None)
+        Self::compile_inner(graph, None, None, None, None, None, None, None)
     }
 
     /// Compile un graphe avec accès à l'audio state temps réel
@@ -84,7 +134,7 @@ impl Compiler {
         graph: &Graph,
         audio_state: Arc<Mutex<AudioState>>,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), None, None, None, None, None)
+        Self::compile_inner(graph, Some(audio_state), None, None, None, None, None, None)
     }
 
     /// Compile un graphe avec audio state + overrides de paramètres audio
@@ -96,7 +146,7 @@ impl Compiler {
         audio_state: Arc<Mutex<AudioState>>,
         _overrides: AudioParamOverrides,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), None, None, None, None, None)
+        Self::compile_inner(graph, Some(audio_state), None, None, None, None, None, None)
     }
 
     /// Compile un graphe avec un ensemble complet d'entrées live —
@@ -113,6 +163,7 @@ impl Compiler {
             live.param_slots,
             live.held_positions,
             live.pose_resolver,
+            live.engine_states,
         )
     }
 
@@ -134,9 +185,11 @@ impl Compiler {
             None,
             None,
             None,
+            None,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn compile_inner(
         graph: &Graph,
         audio_state: Option<Arc<Mutex<AudioState>>>,
@@ -145,6 +198,7 @@ impl Compiler {
         param_slots: Option<Arc<crate::param_slots::ParamSlots>>,
         held_positions: Option<HeldPositions>,
         pose_resolver: Option<Arc<crate::poses::PoseResolver>>,
+        engine_states: Option<EngineStateStore>,
     ) -> Result<CompiledFunction, CompilationError> {
         let live = LiveInputs {
             audio: audio_state,
@@ -153,6 +207,7 @@ impl Compiler {
             param_slots,
             held_positions,
             pose_resolver,
+            engine_states,
         };
         let start = Instant::now();
         log_graph_compilation(graph.nodes.len(), graph.edges.len());
@@ -336,3 +391,124 @@ mod engines;
 mod modifiers;
 mod plugins;
 mod resolvers;
+
+#[cfg(test)]
+mod engine_state_store_tests {
+    use super::EngineStateStore;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Default)]
+    struct CacheA {
+        marker: f64,
+    }
+    #[derive(Default)]
+    struct CacheB {
+        other: u8,
+    }
+
+    #[test]
+    fn get_or_default_shares_and_separates() {
+        let store = EngineStateStore::new();
+        let a1 = store.get_or_default::<CacheA>("swarm", "n1");
+        let a2 = store.get_or_default::<CacheA>("swarm", "n1");
+        // Même clé → même instance partagée (warm-start).
+        assert!(Arc::ptr_eq(&a1, &a2));
+
+        // Clé différente (autre node ou autre kind) → instance distincte.
+        let b = store.get_or_default::<CacheA>("swarm", "n2");
+        assert!(!Arc::ptr_eq(&a1, &b));
+        let kind_diff = store.get_or_default::<CacheA>("bouncing", "n1");
+        assert!(!Arc::ptr_eq(&a1, &kind_diff));
+
+        // Mutations visibles à travers les deux refs du même cache.
+        a1.lock().unwrap().marker = 7.5;
+        assert_eq!(a2.lock().unwrap().marker, 7.5);
+    }
+
+    #[test]
+    fn get_or_default_type_collision_replaces() {
+        let store = EngineStateStore::new();
+        let a = store.get_or_default::<CacheA>("k", "n");
+        // Même clé mais type différent (changement du type de node au
+        // même fe_id / collision théorique) → remplacée, pas de downcast raté.
+        let b = store.get_or_default::<CacheB>("k", "n");
+        assert_eq!(b.lock().unwrap().other, 0);
+        // L'ancienne entrée est remplacée : un nouveau get::<CacheA>
+        // repart froid (pas de downcast sur CacheB).
+        let a2 = store.get_or_default::<CacheA>("k", "n");
+        assert!(!Arc::ptr_eq(&a, &a2));
+    }
+
+    #[test]
+    fn arc_mutex_ergonomics() {
+        // Sanity du type stocké : Arc<Mutex<T>> clonable + accès partagé.
+        let store = EngineStateStore::new();
+        let c: Arc<Mutex<CacheA>> = store.get_or_default("swarm", "e1");
+        c.lock().unwrap().marker = 3.0;
+        let c2: Arc<Mutex<CacheA>> = store.get_or_default("swarm", "e1");
+        assert_eq!(c2.lock().unwrap().marker, 3.0);
+    }
+}
+
+#[test]
+fn swarm_compile_adopts_shared_cache() {
+    use crate::graph::{Edge, Graph, Node, NodeType};
+    use serde_json::json;
+
+    // Graphe minimal Objects→Swarm→Output + Duration — le `__fe_id`
+    // (id React Flow injecté au parse) est stable entre recompiles,
+    // c'est la clé du store.
+    fn swarm_graph() -> Graph {
+        let mut g = Graph::new();
+        let o = Node::with_params(NodeType::Objects, json!({"n_objects": 4}));
+        let d = Node::with_params(NodeType::Duration, json!({"duration": 30.0}));
+        let s = Node::with_params(NodeType::Swarm, json!({"seed": 7, "__fe_id": "sw1"}));
+        let out = Node::with_params(NodeType::Output, json!({}));
+        let (o_id, d_id, s_id, out_id) = (o.id, d.id, s.id, out.id);
+        for n in [o, d, s, out] {
+            g.add_node(n);
+        }
+        for (from, to, fp, tp) in [
+            (o_id, s_id, "objects", "objects"),
+            (d_id, s_id, "duration", "duration"),
+            (s_id, out_id, "out", "in"),
+        ] {
+            g.add_edge(Edge {
+                from,
+                to,
+                from_port: fp.to_string(),
+                to_port: tp.to_string(),
+            });
+        }
+        g
+    }
+
+    let store = EngineStateStore::new();
+    let live = LiveInputs {
+        engine_states: Some(store.clone()),
+        ..Default::default()
+    };
+    let g = swarm_graph();
+    let f1 = Compiler::compile_with_live_inputs(&g, live.clone()).unwrap();
+    // La première fn simule jusqu'à t=2 — le cache du store se remplit.
+    let _ = f1(2.0, 0);
+
+    // Marqueur dans le cache partagé — clé {kind}:{fe_id}.
+    let cache = store.get_or_default::<crate::engines::swarm::SwarmCache>("swarm", "sw1");
+    cache.lock().unwrap().positions[0] = nalgebra::Vector3::new(9.9, 9.9, 9.9);
+
+    // Recompile avec le même store (hot-swap) → adoption : la
+    // nouvelle fn lit l'état chaud (fenêtre nulle → marqueur tel
+    // quel ; un cache froid ré-initialiserait sur le cercle).
+    let f2 = Compiler::compile_with_live_inputs(&g, live).unwrap();
+    let p2 = f2(2.0, 0);
+    assert!(
+        (p2 - nalgebra::Vector3::new(9.9, 9.9, 9.9)).norm() < 1e-9,
+        "le recompile doit adopter le cache partagé, got {p2:?}"
+    );
+
+    // Contrôle : compile sans store → cache froid → re-init + resim.
+    let f3 = Compiler::compile(&g).unwrap();
+    let p3 = f3(2.0, 0);
+    assert!((p3 - nalgebra::Vector3::new(9.9, 9.9, 9.9)).norm() > 0.5);
+}

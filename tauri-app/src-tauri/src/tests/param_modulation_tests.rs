@@ -135,6 +135,7 @@ mod param_modulation_tests {
                 Some(slots.clone()),
                 Some(m.runtime.held_positions()),
                 Some((m.osc_ids.as_slice(), m.track_indices.as_slice())),
+                Some(m.runtime.engine_states()),
             )
             .unwrap();
             let sig_graph = crate::graph::parser::build_graph_from_json(

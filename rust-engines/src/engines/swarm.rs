@@ -39,14 +39,17 @@ use crate::engines::{
 use crate::rng::SimpleRng;
 use nalgebra::Vector3;
 use std::f64::consts::TAU;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// État simulé du troupeau — conservé entre appels (audit B1).
-struct SwarmCache {
+/// `pub(crate)` : `EngineStateStore` le partage entre recompiles
+/// (warm-start au hot-swap).
+pub(crate) struct SwarmCache {
     /// Temps déjà couvert par l'intégration.
     sim_t: f64,
     n_objects: usize,
-    positions: Vec<Vector3<f64>>,
+    /// `pub(crate)` : le test warm-start du compiler y injecte un marqueur.
+    pub(crate) positions: Vec<Vector3<f64>>,
     velocities: Vec<Vector3<f64>>,
     /// Buffer d'accélérations réutilisé à chaque pas (snapshot des forces
     /// avant mise à jour → intégration symplectique cohérente).
@@ -93,9 +96,17 @@ impl SwarmCache {
 }
 
 /// Engine à état — `Default` produit un cache vide (premier appel = init).
+/// `with_cache` injecte un cache partagé (`EngineStateStore`) — la
+/// nouvelle instance d'un hot-swap adopte l'état de la précédente.
 #[derive(Default)]
 pub struct Swarm {
-    cache: Mutex<SwarmCache>,
+    cache: Arc<Mutex<SwarmCache>>,
+}
+
+impl Swarm {
+    pub(crate) fn with_cache(cache: Arc<Mutex<SwarmCache>>) -> Self {
+        Self { cache }
+    }
 }
 
 /// Direction de wander lisse par agent — fonction pure de `t` (hash + sommes
@@ -639,5 +650,51 @@ mod tests {
             let b = e.position(2.0, i, &p);
             assert_eq!(a, b, "agent {i}: non déterministe");
         }
+    }
+
+    #[test]
+    fn swarm_with_cache_warm_starts() {
+        // Warm-start hot-swap : une seconde instance partageant le cache
+        // adopte sim_t/positions/vélocités — pas de re-init, pas de resim.
+        let cache = Arc::new(Mutex::new(SwarmCache::default()));
+        let p = params(4, json!({"seed": 42}));
+
+        // A pousse la sim jusqu'à t=2.
+        let a = Swarm::with_cache(cache.clone());
+        let pos_a = a.position(2.0, 0, &p);
+        assert!((cache.lock().unwrap().sim_t - 2.0).abs() < 1e-9);
+
+        // B partage le cache : même t → fenêtre nulle → même état lu,
+        // aucune re-simulation (sinon init() repartirait sur le cercle).
+        let b = Swarm::with_cache(cache.clone());
+        let pos_b = b.position(2.0, 0, &p);
+        assert_eq!(pos_a, pos_b);
+
+        // Marqueur : l'état injecté est lu tel quel (fenêtre nulle) —
+        // un cache froid l'aurait écrasé par l'init cercle.
+        cache.lock().unwrap().positions[0] = Vector3::new(9.9, 9.9, 9.9);
+        let marked = b.position(2.0, 0, &p);
+        assert!((marked - Vector3::new(9.9, 9.9, 9.9)).norm() < 1e-9);
+        let cold = Swarm::default();
+        let pos_cold = cold.position(2.0, 0, &p);
+        assert_ne!(pos_cold, marked, "un cache froid ignore le marqueur");
+    }
+
+    #[test]
+    fn swarm_with_cache_reinits_on_n_change() {
+        // n_objects différent au hot-swap (Objects changé) → re-init :
+        // l'adoption ne doit jamais lire un tableau à la mauvaise taille.
+        let cache = Arc::new(Mutex::new(SwarmCache::default()));
+        let a = Swarm::with_cache(cache.clone());
+        a.position(1.0, 0, &params(4, json!({"seed": 42})));
+        assert_eq!(cache.lock().unwrap().n_objects, 4);
+
+        let b = Swarm::with_cache(cache.clone());
+        let _ = b.position(1.0, 5, &params(7, json!({"seed": 42})));
+        assert_eq!(
+            cache.lock().unwrap().n_objects,
+            7,
+            "n changé → re-init à la nouvelle taille"
+        );
     }
 }

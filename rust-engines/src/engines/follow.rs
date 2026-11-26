@@ -1,7 +1,7 @@
 use crate::engines::{finite_or_zero, sim_window, Engine, EngineParams, SIM_REWIND_EPS};
 use crate::rng::SimpleRng;
 use nalgebra::Vector3;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// Follow-the-leader étendu — steering behaviors (Reynolds).
 ///
@@ -26,11 +26,18 @@ use std::sync::Mutex;
 /// de l'agent + re-simulation (déterministe : même séquence → mêmes
 /// positions).
 pub struct Follow {
-    cache: Mutex<FollowCache>,
+    cache: Arc<Mutex<FollowCache>>,
+}
+
+impl Follow {
+    /// Cache partagé via `EngineStateStore` — warm-start au hot-swap.
+    pub(crate) fn with_cache(cache: Arc<Mutex<FollowCache>>) -> Self {
+        Self { cache }
+    }
 }
 
 #[derive(Default)]
-struct FollowCache {
+pub(crate) struct FollowCache {
     /// État par objet — chacun avance à son propre rythme de requêtes.
     agents: Vec<FollowAgent>,
 }
@@ -44,7 +51,7 @@ struct FollowAgent {
 impl Default for Follow {
     fn default() -> Self {
         Self {
-            cache: Mutex::new(FollowCache::default()),
+            cache: Arc::new(Mutex::new(FollowCache::default())),
         }
     }
 }

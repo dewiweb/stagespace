@@ -61,6 +61,13 @@ pub struct Runtime {
     /// Positions tenues par les nodes Freeze — survit aux recompiles
     /// (partagé avec les closures compilées via LiveInputs).
     held_positions: crate::compiler::HeldPositions,
+    /// Caches des engines à état du move — passé au compile de la
+    /// position_fn (jamais à la sample_fn) pour le warm-start au
+    /// hot-swap : la nouvelle instance adopte le cache de la
+    /// précédente, la resim 0→t disparaît (complément du prewarm qui
+    /// couvre les miss : changement de type de node, fe_id différent).
+    /// Vit avec le Runtime — un stop/spawn repart sur caches froids.
+    engine_state_store: crate::compiler::EngineStateStore,
     /// Table de slots de params modulables — partagée entre position_fn,
     /// sample_fn et signal_fn d'un même compile (swap atomique). Le worker
     /// y écrit les deltas `param:` de la signal_fn à chaque frame ; les
@@ -173,6 +180,7 @@ impl Runtime {
             audio_state,
             audio_param_overrides: Arc::new(Mutex::new(HashMap::new())),
             held_positions: Arc::new(Mutex::new(HashMap::new())),
+            engine_state_store: crate::compiler::EngineStateStore::new(),
             param_slots: Arc::new(Mutex::new(crate::param_slots::ParamSlots::empty())),
             external_param_deltas: Arc::new(Mutex::new(HashMap::new())),
             position_buffer: Mutex::new(None),
@@ -313,6 +321,14 @@ impl Runtime {
     /// le hold survive au hot-swap du graphe.
     pub fn held_positions(&self) -> Arc<Mutex<HashMap<String, nalgebra::Vector3<f64>>>> {
         self.held_positions.clone()
+    }
+
+    /// Store des caches d'engines à état — à passer à la compile de la
+    /// position_fn (LiveInputs.engine_states) pour le warm-start au
+    /// hot-swap. Jamais à la sample_fn : ses evals ne doivent pas
+    /// avancer le sim_t partagé avec la live.
+    pub fn engine_states(&self) -> crate::compiler::EngineStateStore {
+        self.engine_state_store.clone()
     }
 
     /// Récupère l'Arc de l'audio state — permet de mettre à jour sans locker state.movements
