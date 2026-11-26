@@ -240,11 +240,11 @@ impl Engine for Swarm {
                     // k plus proches — la densité locale s'adapte toute seule
                     // (pas de trou dans le voisinage quand le troupeau se dilate).
                     scratch.clear();
-                    for j in 0..n_objects {
+                    for (j, &pos_j) in c.positions.iter().enumerate() {
                         if j == i {
                             continue;
                         }
-                        let diff = pos_i - c.positions[j];
+                        let diff = pos_i - pos_j;
                         let dist = diff.norm();
                         if dist < separation {
                             sep += diff / (dist + 1e-9);
@@ -260,11 +260,11 @@ impl Engine for Swarm {
                         neighbors += 1;
                     }
                 } else {
-                    for j in 0..n_objects {
+                    for (j, &pos_j) in c.positions.iter().enumerate() {
                         if j == i {
                             continue;
                         }
-                        let diff = pos_i - c.positions[j];
+                        let diff = pos_i - pos_j;
                         let dist = diff.norm();
 
                         if dist < separation {
