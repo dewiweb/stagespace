@@ -31,6 +31,7 @@
 //!   inline_weight    file indienne — l'agent i suit i−1,
 //!                    l'agent 0 suit le leader                    (défaut 0)
 //!   inline_standoff  espacement dans la file                     (défaut 0.3)
+//!   bounds           enceinte locale — clamp ±bounds par axe     (défaut 1.0)
 
 use crate::engines::{
     finite_or_zero, sim_window, Engine, EngineParams, MAX_OBJECTS, SIM_REWIND_EPS,
@@ -164,6 +165,9 @@ impl Engine for Swarm {
         // leader (origine). Formation V/ligne émergente.
         let inline_weight = get("inline_weight", 0.0);
         let inline_standoff = get("inline_standoff", 0.3).max(0.0);
+        // Enceinte locale — clamp ±bounds par axe (avant transform monde :
+        // scale/shift du move s'appliquent ensuite). 1.0 = le cube historique.
+        let bounds = get("bounds", 1.0).max(0.01);
 
         // object_index peut dépasser n_objects (hot-swap d'osc_id) : on dimensionne
         // le troupeau pour l'inclure plutôt que de paniquer. MAX_OBJECTS borne le
@@ -323,7 +327,7 @@ impl Engine for Swarm {
                     vel *= min_speed / speed;
                 }
                 c.velocities[i] = vel;
-                c.positions[i] = (c.positions[i] + vel * dt).map(|v| v.clamp(-1.0, 1.0));
+                c.positions[i] = (c.positions[i] + vel * dt).map(|v| v.clamp(-bounds, bounds));
             }
         }
         c.sim_t = new_t;
@@ -578,6 +582,44 @@ mod tests {
         assert!(
             (mean_gap - 0.3).abs() < 0.25,
             "les espacements en file devraient ~0.3, mean_gap={mean_gap}"
+        );
+    }
+
+    #[test]
+    fn swarm_bounds_clamps_spread() {
+        // bounds réduit : même sous forte répulsion + wander, aucun agent
+        // ne dépasse ±bounds par axe. Comparaison : bounds large → le
+        // nuage s'étale davantage.
+        let tight = Swarm::default();
+        let p_tight = params(
+            8,
+            json!({"separation": 2.0, "wander": 0.6, "min_speed": 0.3,
+                   "max_speed": 2.0, "bounds": 0.4, "seed": 13}),
+        );
+        for i in 0..8 {
+            let p = tight.position(3.0, i, &p_tight);
+            for axis in 0..3 {
+                assert!(
+                    p[axis].abs() <= 0.4 + 1e-9,
+                    "agent {i} axe {axis} hors des murs: {}",
+                    p[axis]
+                );
+            }
+        }
+        let wide = Swarm::default();
+        let p_wide = params(
+            8,
+            json!({"separation": 2.0, "wander": 0.6, "min_speed": 0.3,
+                   "max_speed": 2.0, "bounds": 1.8, "seed": 13}),
+        );
+        let spread = |e: &Swarm, p: &EngineParams| -> f64 {
+            let pos: Vec<Vector3<f64>> = (0..8).map(|i| e.position(3.0, i, p)).collect();
+            let center: Vector3<f64> = pos.iter().sum::<Vector3<f64>>() / 8.0;
+            pos.iter().map(|v| (v - center).norm()).fold(0.0, f64::max)
+        };
+        assert!(
+            spread(&wide, &p_wide) > spread(&tight, &p_tight),
+            "bounds large devrait permettre plus d'étalement"
         );
     }
 

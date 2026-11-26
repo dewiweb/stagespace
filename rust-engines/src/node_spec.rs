@@ -747,6 +747,7 @@ fn build_catalog() -> Vec<NodeSpec> {
                 nmin("leader_standoff", "Leader Standoff", 0.1, 0.0).d(0.0),
                 ns("inline_weight", "In-Line Weight", 0.1).d(0.0),
                 nmin("inline_standoff", "In-Line Spacing", 0.1, 0.0).d(0.3),
+                nmin("bounds", "Bounds", 0.1, 0.01).d(1.0),
                 ns("seed", "Seed", 1.0).d(42).fixed(),
             ],
         ),

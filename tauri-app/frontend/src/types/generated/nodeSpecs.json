@@ -2007,6 +2007,17 @@
         "modulable": true
       },
       {
+        "key": "bounds",
+        "label": "Bounds",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": 0.01,
+        "max": null,
+        "default_json": "1.0",
+        "modulable": true
+      },
+      {
         "key": "seed",
         "label": "Seed",
         "kind": "number",
