@@ -32,10 +32,6 @@ use std::sync::{Arc, Mutex};
 pub(crate) struct AvoidanceCache {
     sim_t: f64,
     n_objects: usize,
-    /// `params.n_objects` vu au dernier init — la population SIMULÉE peut
-    /// dépasser `declared` (grow monotone sur object_index supérieur) :
-    /// la re-init ne se déclenche que sur changement du param déclaré.
-    declared: usize,
     positions: Vec<Vector3<f64>>,
     velocities: Vec<Vector3<f64>>,
     /// Buffer de forces réutilisé (snapshot avant intégration).
@@ -47,7 +43,6 @@ impl Default for AvoidanceCache {
         Self {
             sim_t: f64::INFINITY, // force le premier init (t < sim_t)
             n_objects: 0,
-            declared: 0,
             positions: Vec::new(),
             velocities: Vec::new(),
             forces: Vec::new(),
@@ -208,14 +203,17 @@ impl Engine for Avoidance {
             .min(MAX_OBJECTS);
 
         let mut c = self.cache.lock().unwrap_or_else(|e| e.into_inner());
-        // Rewind : conserver la taille courante (elle peut couvrir des
-        // objets vus avant — un shrink ici referait le re-init par objet).
+        // Rewind : conserver la taille courante. Hors rewind : ré-init
+        // uniquement sur GROW — jamais sur `declared` seul (pendant le
+        // crossfade d'un hot-swap, l'ancienne fn et la nouvelle partagent
+        // ce cache avec des declared différents → un re-init ici ferait
+        // alterner init(N)/init(M) à chaque eval = resim × objets × frames
+        // → deassign à chaud = freeze → stale-kill ; même pathologie
+        // que swarm.rs).
         if t < c.sim_t - SIM_REWIND_EPS {
             let n = c.n_objects.max(need);
-            c.declared = declared;
             c.init(n, seed);
-        } else if c.declared != declared || c.n_objects < need {
-            c.declared = declared;
+        } else if c.n_objects < need {
             c.init(need, seed);
         }
         let n_objects = c.n_objects;
@@ -341,6 +339,34 @@ mod tests {
         let p = params(4, json!({}));
         let pos = e.position(1.0, 10, &p);
         assert!(pos.iter().all(|v| v.is_finite()));
+    }
+
+    #[test]
+    fn avoidance_with_cache_never_shrinks_on_declared_decrease() {
+        // Régression : deassign à chaud — pendant le crossfade, l'ancienne
+        // fn (Objects=60) et la nouvelle (30) partagent ce cache. Un
+        // re-init sur shrink alternerait init(60)/init(30) à chaque eval
+        // = resim × objets × frames → worker gelé → stale-kill.
+        let cache = Arc::new(Mutex::new(AvoidanceCache::default()));
+        let big = Avoidance::with_cache(cache.clone());
+        let small = Avoidance::with_cache(cache.clone());
+        let p60 = params(60, json!({"seed": 42}));
+        let p30 = params(30, json!({"seed": 42}));
+        big.position(1.0, 0, &p60);
+        assert_eq!(cache.lock().unwrap().n_objects, 60);
+        cache.lock().unwrap().positions[0] = Vector3::new(9.9, 9.9, 9.9);
+        small.position(1.0, 0, &p30);
+        {
+            let c = cache.lock().unwrap();
+            assert_eq!(c.n_objects, 60, "shrink interdit sur declared");
+            assert_eq!(
+                c.positions[0],
+                Vector3::new(9.9, 9.9, 9.9),
+                "pas de re-init"
+            );
+        }
+        big.position(1.0, 0, &p60);
+        assert_eq!(cache.lock().unwrap().n_objects, 60);
     }
 
     #[test]

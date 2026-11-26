@@ -7,6 +7,7 @@ import React from 'react';
 import type { ScoreClipDoc } from '../../store/useScoreStore';
 import type { MoveSlot } from '../../store/slices/moveSlotsTypes';
 import { effectiveTrackIds } from '../../utils/scoreResolve';
+import { graphHasStatefulEngine, STATEFUL_PLAYBACK_HINT } from '../../utils/graphMigration';
 
 /// Champ de lecture du slot éditable en mode score.
 type SlotEditField = 'loopMode' | 'direction' | 'endMode' | 'anchorMode' | 'anchorTarget' | 'anchorPose' | 'speed';
@@ -43,19 +44,27 @@ export const ScoreClipParams: React.FC<{
   /// Groupe de boutons segmenté — même pattern que le drawer
   /// Playback de Jeu, version compacte du panneau.
   const seg = (label: string, opts: readonly { v: string; label: string }[], cur: string,
-    onPick: (v: string) => void, title?: string, warn?: string) => (
+    onPick: (v: string) => void, title?: string, warn?: string,
+    disabledVs?: readonly string[], disabledHint?: string) => (
     <div className="flex items-center gap-1" title={title}>
       <span className="w-20 text-gray-500 shrink-0">{label}</span>
       <span className="flex gap-0.5">
-        {opts.map((o) => (
+        {opts.map((o) => {
+          const blocked = disabledVs?.includes(o.v) ?? false;
+          return (
           <button
             key={o.v}
+            disabled={blocked}
+            title={blocked ? disabledHint : undefined}
             onClick={() => onPick(o.v)}
-            className={`px-1.5 py-0.5 rounded border ${cur === o.v
-              ? 'bg-stagespace-accent/30 border-stagespace-accent text-stagespace-info'
-              : 'bg-gray-800 border-gray-700 text-gray-500 hover:text-gray-300'}`}
+            className={`px-1.5 py-0.5 rounded border ${blocked
+              ? 'bg-gray-800/40 border-gray-800 text-gray-700 cursor-not-allowed'
+              : cur === o.v
+                ? 'bg-stagespace-accent/30 border-stagespace-accent text-stagespace-info'
+                : 'bg-gray-800 border-gray-700 text-gray-500 hover:text-gray-300'}`}
           >{o.label}</button>
-        ))}
+          );
+        })}
       </span>
       {warn && <span className="text-stagespace-warning">{warn}</span>}
     </div>
@@ -241,7 +250,10 @@ export const ScoreClipParams: React.FC<{
                   'Mode de lecture du move — loop boucle dans la fenêtre, oneshot joue une fois')}
                 {seg('direction', [{ v: 'forward', label: '→' }, { v: 'backward', label: '←' }, { v: 'ping_pong', label: '⇄' }],
                   slot.direction, (v) => onSlotEdit('direction', v),
-                  'Direction — ping-pong n\'a d\'effet qu\'en loop')}
+                  'Direction — ping-pong n\'a d\'effet qu\'en loop',
+                  undefined,
+                  graphHasStatefulEngine(slot.graphJson?.nodes) ? ['backward', 'ping_pong'] : undefined,
+                  STATEFUL_PLAYBACK_HINT)}
                 {rawIn('vitesse', slot.macros?.speed ?? 1,
                   (v) => onSlotEdit('speed', Math.max(0.05, v)),
                   'Vitesse de lecture du move (×) — déforme la durée réelle vs la fenêtre clip')}

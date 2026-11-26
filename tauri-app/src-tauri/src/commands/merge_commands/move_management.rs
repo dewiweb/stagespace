@@ -339,7 +339,7 @@ fn spawn_move_inner(
             .unwrap_or(false);
         if spec.direction != PlayDirection::Forward || spread {
             return Err(IpcError::validation(
-                "Physics engines (stateful) cannot run backward, ping-pong or with phase spread — every backward eval re-simulates from t=0".to_string(),
+                super::STATEFUL_DIRECTION_MSG.to_string(),
             ));
         }
     }

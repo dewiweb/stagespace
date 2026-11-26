@@ -11,6 +11,7 @@ import { useGraphStore } from '../../store/useGraphStore';
 import { usePoseStore } from '../../store/usePoseStore';
 import { useMoveEditorStore } from '../../store/useMoveEditorStore';
 import { SOURCE_CHIP } from '../../utils/sourceColors';
+import { graphHasStatefulEngine, STATEFUL_PLAYBACK_HINT } from '../../utils/graphMigration';
 import { type NodeParamValue } from '../nodeParamSchema';
 
 /// Drawer live à scopes — gros boutons à la demande (Params / Tracks /
@@ -255,21 +256,30 @@ export const LiveDrawer: React.FC = () => {
           {/* Direction + loop — groupes de boutons */}
           <div className="flex-shrink-0 w-56 space-y-2">
             <div>
-              <div className="text-gray-500 text-xs uppercase tracking-wider mb-1">Direction</div>
+              <div className="text-gray-500 text-xs uppercase tracking-wider mb-1"
+                title={graphHasStatefulEngine(slot.graphJson?.nodes) ? STATEFUL_PLAYBACK_HINT : undefined}
+              >Direction</div>
               <div className="flex gap-1">
-                {(['forward', 'backward', 'ping_pong'] as const).map((d) => (
+                {(['forward', 'backward', 'ping_pong'] as const).map((d) => {
+                  const blocked = d !== 'forward' && graphHasStatefulEngine(slot.graphJson?.nodes);
+                  return (
                   <button
                     key={d}
+                    disabled={blocked}
+                    title={blocked ? STATEFUL_PLAYBACK_HINT : undefined}
                     onClick={() => setSlotDirection(slot.id, d)}
                     className={`flex-1 py-1.5 text-xs rounded ${
-                      slot.direction === d
-                        ? 'bg-stagespace-accent text-gray-950'
-                        : 'bg-gray-800 text-gray-500 hover:text-gray-300'
+                      blocked
+                        ? 'bg-gray-800/40 text-gray-700 cursor-not-allowed'
+                        : slot.direction === d
+                          ? 'bg-stagespace-accent text-gray-950'
+                          : 'bg-gray-800 text-gray-500 hover:text-gray-300'
                     }`}
                   >
                     {d === 'ping_pong' ? 'pingpong' : d}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
             <div>

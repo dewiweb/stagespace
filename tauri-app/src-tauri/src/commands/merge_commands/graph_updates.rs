@@ -34,6 +34,8 @@ pub async fn update_move_graph_merged(
             move_track_indices,
             engine_states,
             external_positions,
+            move_direction,
+            move_has_phase,
         ) = {
             let movements = lock_or_recover(&sh.movements);
             let movement = movements.get(&movement_id).ok_or_else(|| {
@@ -47,8 +49,19 @@ pub async fn update_move_graph_merged(
                 movement.track_indices.clone(),
                 movement.runtime.engine_states(),
                 movement.runtime.external_positions(),
+                movement.direction.clone(),
+                movement
+                    .runtime
+                    .animation_state()
+                    .is_some_and(|s| s.track_phase_offsets.iter().any(|o| o.abs() > 1e-9)),
             )
         };
+
+        // Le swap peut INTRODUIRE un engine stateful alors que le move joue
+        // déjà en backward/ping-pong ou avec des phases — premier eval =
+        // resim non bornée, même poison qu'au spawn. Le guard du spawn ne
+        // couvre pas ce chemin — même message, même règle.
+        super::check_stateful_playback(&graph_json, move_direction == "forward", move_has_phase)?;
 
         let audio_state = lock_or_recover(&sh.audio_state);
         let graph =

@@ -5,9 +5,25 @@ import nodeSpecs from '../types/generated/nodeSpecs.json';
 
 /// Types valides + specs = le catalogue généré (source unique — ts-rs).
 interface PortSpec { name: string; port_type: string; }
-interface NodeSpec { node_type: string; inputs: PortSpec[]; outputs: PortSpec[]; }
+interface NodeSpec { node_type: string; inputs: PortSpec[]; outputs: PortSpec[]; stateful?: boolean; }
 const SPECS = new Map((nodeSpecs as NodeSpec[]).map((s) => [s.node_type, s]));
 const VALID_TYPES = new Set(SPECS.keys());
+
+/// Tooltip/refus partagé — même règle que le guard backend (spawn +
+/// chemins live) : un engine à état re-simule depuis t=0 à chaque eval
+/// rétrograde (backward, ping-pong, phase spread) → worker gelé → kill.
+export const STATEFUL_PLAYBACK_HINT =
+  'Physics engines cannot run backward, ping-pong or with phase spread (re-simulation from t=0 each frame)';
+
+/// Le graphe contient-il un engine à état interne (physique) ?
+/// Miroir front de `node_spec().stateful` côté Rust — sert à griser les
+/// options playback incompatibles et à court-circuiter setSlotDirection.
+export function graphHasStatefulEngine(nodes: GraphNode[] | null | undefined): boolean {
+  return (nodes ?? []).some((n) => {
+    const t = n.data?.type as string | undefined;
+    return t != null && SPECS.get(t)?.stateful === true;
+  });
+}
 
 /// Renommages/suppressions de types entre versions de graphes persistés.
 /// `Input` a été absorbé par `Merge` lors du refactor des ports.

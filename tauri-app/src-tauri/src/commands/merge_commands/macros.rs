@@ -224,6 +224,11 @@ pub async fn set_move_playback_mode(
             "ping_pong" => PlayDirection::PingPong,
             _ => return Err(IpcError::validation(format!("Unknown direction: {dir}"))),
         };
+        // Même règle qu'au spawn : un t décroissant re-simule depuis t=0 à
+        // chaque frame (O(t·n²)) → worker gelé → stale-kill. Le refus doit
+        // exister ici aussi — le guard spawn ne couvre pas le changement
+        // de direction en cours de jeu.
+        super::check_stateful_playback(&movement.graph_json, pd == PlayDirection::Forward, false)?;
         movement.runtime.set_direction(pd);
     }
     Ok(())

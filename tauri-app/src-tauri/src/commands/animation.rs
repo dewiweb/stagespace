@@ -1,7 +1,7 @@
 use super::error::IpcError;
 use super::state::lock_or_recover;
 use crate::commands::merge_commands::{
-    resolve_track_indices, spawn_move, MoveSpec, SpatialMacroInit,
+    check_stateful_playback, resolve_track_indices, spawn_move, MoveSpec, SpatialMacroInit,
 };
 use crate::commands::state::Shared;
 use crate::AppState;
@@ -98,6 +98,19 @@ pub async fn update_animation_state(
         .ok_or_else(|| IpcError::not_found(format!("Movement {movement_id} not found")))?;
     let osc_ids = movement.osc_ids.clone();
     let anim_state = AnimationState::from_animation(&animation, &osc_ids);
+    // Même règle qu'au spawn : direction non-forward ou phase offsets ≠0
+    // produisent des evals à t décroissant → resim depuis t=0 à chaque frame
+    // → stale-kill. Ce chemin est appelé throttlé (~30Hz) à chaque edit
+    // Inspector, y compris le slider Spread — le guard doit vivre ici.
+    let has_phase = anim_state
+        .track_phase_offsets
+        .iter()
+        .any(|o| o.abs() > 1e-9);
+    check_stateful_playback(
+        &movement.graph_json,
+        animation.direction == Direction::Forward,
+        has_phase,
+    )?;
     movement.runtime.set_animation_state(anim_state);
     // Durée hot-swappable — et sync du snapshot Movement, sinon un cue
     // store/recall ramène la durée/loop/direction d'avant l'edit.

@@ -758,5 +758,9 @@ mod show_control_e2e_test_file;
 mod osc_locks_test_file;
 
 #[cfg(test)]
+#[path = "tests/stateful_guard_tests.rs"]
+mod stateful_guard_test_file;
+
+#[cfg(test)]
 #[path = "tests/pose_tests.rs"]
 mod pose_test_file;

@@ -48,10 +48,6 @@ pub(crate) struct SwarmCache {
     /// Temps déjà couvert par l'intégration.
     sim_t: f64,
     n_objects: usize,
-    /// `params.n_objects` vu au dernier init — la population SIMULÉE peut
-    /// dépasser `declared` (grow monotone sur object_index supérieur) :
-    /// la re-init ne se déclenche que sur changement du param déclaré.
-    declared: usize,
     /// `pub(crate)` : le test warm-start du compiler y injecte un marqueur.
     pub(crate) positions: Vec<Vector3<f64>>,
     velocities: Vec<Vector3<f64>>,
@@ -65,7 +61,6 @@ impl Default for SwarmCache {
         Self {
             sim_t: f64::INFINITY, // force le premier init (t < sim_t)
             n_objects: 0,
-            declared: 0,
             positions: Vec::new(),
             velocities: Vec::new(),
             acc: Vec::new(),
@@ -200,16 +195,18 @@ impl Engine for Swarm {
             .max(object_index.saturating_add(1))
             .min(MAX_OBJECTS);
         let mut c = self.cache.lock().unwrap_or_else(|e| e.into_inner());
-        // Ré-init si : seek arrière (rewind), param Objects modifié
-        // (hot-swap), ou objet jamais vu au-delà de la population (grow).
-        // Rewind : conserver la taille courante (elle peut couvrir des
-        // objets vus avant — un shrink ici referait le re-init par objet).
+        // Ré-init si : seek arrière (rewind) ou objet jamais vu au-delà de
+        // la population (grow). JAMAIS sur `declared` seul : pendant le
+        // crossfade de swap_compiled_with_fade, l'ancienne fn (declared=60)
+        // et la nouvelle (declared=30) partagent ce cache — re-init sur
+        // mismatch ferait alterner init(60)/init(30) à chaque eval =
+        // resim × objets × frames (deassign à chaud = freeze → stale-kill,
+        // observé en live). Le surplus simulé reste inerte (agents non émis
+        // exercent encore leurs forces — meilleure continuité du troupeau).
         if t < c.sim_t - SIM_REWIND_EPS {
             let n = c.n_objects.max(need);
-            c.declared = declared;
             c.init(n, seed);
-        } else if c.declared != declared || c.n_objects < need {
-            c.declared = declared;
+        } else if c.n_objects < need {
             c.init(need, seed);
         }
         let n_objects = c.n_objects;
@@ -712,6 +709,64 @@ mod tests {
             cache.lock().unwrap().n_objects,
             7,
             "n changé → re-init à la nouvelle taille"
+        );
+    }
+
+    #[test]
+    fn swarm_with_cache_never_shrinks_on_declared_decrease() {
+        // Régression : deassign à chaud — pendant le crossfade, l'ancienne
+        // fn (Objects=60) et la nouvelle (30) partagent ce cache. Un
+        // re-init sur shrink alternerait init(60)/init(30) à chaque eval
+        // = resim × objets × frames → worker gelé → stale-kill.
+        let cache = Arc::new(Mutex::new(SwarmCache::default()));
+        let big = Swarm::with_cache(cache.clone());
+        let small = Swarm::with_cache(cache.clone());
+        let p60 = params(60, json!({"seed": 42}));
+        let p30 = params(30, json!({"seed": 42}));
+        big.position(1.0, 0, &p60);
+        assert_eq!(cache.lock().unwrap().n_objects, 60);
+        // Marqueur : un re-init réécrirait le cercle par-dessus.
+        cache.lock().unwrap().positions[0] = Vector3::new(9.9, 9.9, 9.9);
+        // La "nouvelle" fn (30) ne rétrécit ni ne ré-init la population.
+        small.position(1.0, 0, &p30);
+        {
+            let c = cache.lock().unwrap();
+            assert_eq!(c.n_objects, 60, "shrink interdit sur declared");
+            assert_eq!(
+                c.positions[0],
+                Vector3::new(9.9, 9.9, 9.9),
+                "pas de re-init"
+            );
+        }
+        // L'ancienne (60) ne relance pas non plus — aucun ping-pong.
+        big.position(1.0, 0, &p60);
+        assert_eq!(cache.lock().unwrap().n_objects, 60);
+    }
+
+    #[test]
+    fn swarm_60_agents_frame_budget() {
+        // Mesure le temps max par "frame" (60 evals à 60fps) sur 30s — un
+        // worker doit rester sous ~16ms/frame ; >500ms = stale-kill live.
+        let e = Swarm::default();
+        let p = params(60, json!({"seed": 42}));
+        let mut max_frame = std::time::Duration::ZERO;
+        let mut worst_t = 0.0;
+        for frame in 0..1800u64 {
+            let t = frame as f64 / 60.0;
+            let t0 = std::time::Instant::now();
+            for i in 0..60 {
+                let _ = e.position(t, i, &p);
+            }
+            let dt = t0.elapsed();
+            if dt > max_frame {
+                max_frame = dt;
+                worst_t = t;
+            }
+        }
+        eprintln!("max frame: {:?} at t={worst_t:.2}s", max_frame);
+        assert!(
+            max_frame.as_millis() < 200,
+            "frame trop lente: {max_frame:?} at t={worst_t}"
         );
     }
 }

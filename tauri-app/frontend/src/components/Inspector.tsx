@@ -7,6 +7,7 @@ import { NodeParamsPanel } from './panels/NodeParamsPanel';
 import { ParamInput } from './ParamInput';
 import type { MacrosState } from '../store/slices/macrosSlice';
 import { silentCatch } from '../utils/tauri';
+import { graphHasStatefulEngine, STATEFUL_PLAYBACK_HINT } from '../utils/graphMigration';
 
 // ── Section repliable ──
 function Section({ title, icon, defaultOpen = true, badge, badgeColor = 'gray', children }: {
@@ -71,6 +72,10 @@ export default function Inspector() {
   // (hot-swap / update_animation_state), ce badge rend ce scope visible.
   const editingSlot = useGraphStore((s) => s.moveSlots.find((sl) => sl.id === editingSlotId) ?? null);
   const editingIsLive = !!editingSlot?.movementId;
+  // Engine à état dans le graphe édité (canvas OU snapshot du slot) →
+  // direction backward/pingpong et phase spread interdits (même règle
+  // que le guard backend — le grisage évite le contrôle mort + le toast).
+  const statefulGraph = graphHasStatefulEngine(nodes) || graphHasStatefulEngine(editingSlot?.graphJson?.nodes);
 
   // Flash effect on launch
   const [flashClass, setFlashClass] = React.useState('');
@@ -314,13 +319,16 @@ export default function Inspector() {
             <Section key={`perform-${performMode}`} title="Playback" icon={<Play size={12} />} defaultOpen={!performMode}>
               <Slider label="Duration" value={current.duration} min={0.5} max={30} step={0.5} onChange={(v) => updateCurrent({ duration: v })} unit="s" />
               <div className="flex gap-1 pt-1">
-                {(['forward', 'backward', 'ping_pong'] as const).map((d) => (
-                  <button key={d} onClick={() => updateCurrent({ direction: d })}
-                    title={d === 'forward' ? 'Direction — la trajectoire joue dans le sens du dessin' : d === 'backward' ? 'Direction — la trajectoire joue à rebours' : 'Direction — la trajectoire alterne aller/retour'}
-                    className={`flex-1 py-1 text-xs rounded ${current.direction === d ? 'bg-stagespace-accent text-gray-950' : 'bg-gray-800 text-gray-500'}`}>
+                {(['forward', 'backward', 'ping_pong'] as const).map((d) => {
+                  const blocked = d !== 'forward' && statefulGraph;
+                  return (
+                  <button key={d} disabled={blocked} onClick={() => updateCurrent({ direction: d })}
+                    title={blocked ? STATEFUL_PLAYBACK_HINT : d === 'forward' ? 'Direction — la trajectoire joue dans le sens du dessin' : d === 'backward' ? 'Direction — la trajectoire joue à rebours' : 'Direction — la trajectoire alterne aller/retour'}
+                    className={`flex-1 py-1 text-xs rounded ${blocked ? 'bg-gray-800/40 text-gray-700 cursor-not-allowed' : current.direction === d ? 'bg-stagespace-accent text-gray-950' : 'bg-gray-800 text-gray-500'}`}>
                     {d === 'forward' ? '→ Fwd' : d === 'backward' ? '← Bwd' : '↔ Ping'}
                   </button>
-                ))}
+                  );
+                })}
               </div>
               <div className="flex gap-1">
                 {(['loop', 'one_shot'] as const).map((l) => (
@@ -399,9 +407,14 @@ export default function Inspector() {
           )}
           {!showExpert && (
             <>
-              <Slider label="Spread" value={current.phase_spread} min={0} max={1} step={0.05}
-                onChange={(v) => updateCurrent({ phase_spread: v })} />
-              <div className="text-gray-400 text-xs -mt-1">Phase offset between tracks (chasing effect)</div>
+              <div title={statefulGraph ? STATEFUL_PLAYBACK_HINT : undefined}>
+                <Slider label="Spread" value={current.phase_spread} min={0} max={1} step={0.05}
+                  disabled={statefulGraph}
+                  onChange={(v) => updateCurrent({ phase_spread: v })} />
+              </div>
+              <div className="text-gray-400 text-xs -mt-1">
+                {statefulGraph ? 'Not available on physics engines (re-simulation)' : 'Phase offset between tracks (chasing effect)'}
+              </div>
             </>
           )}
           {centroid && (

@@ -72,3 +72,43 @@ fn default_loop_mode() -> String {
 fn default_direction() -> String {
     "forward".to_string()
 }
+
+/// Message unique pour tout refus direction/spread sur un engine à état —
+/// spawn (move_management) ET chemins live (playback_mode, animation_state,
+/// hot-swap de graphe) : une seule formulation pour l'opérateur.
+pub(crate) const STATEFUL_DIRECTION_MSG: &str = "Physics engines (stateful) cannot run backward, ping-pong or with phase spread — every backward eval re-simulates from t=0";
+
+/// Le graphe (payload React Flow) contient-il un node à état interne ?
+/// Même règle que le guard du spawn (`node_spec().stateful`) mais sans
+/// parser le graphe — le check live doit rester cheap (appelé à chaque
+/// commande direction/animation/hot-swap).
+pub(crate) fn graph_json_has_stateful(graph_json: &stagespace_engines::GraphJson) -> bool {
+    graph_json.nodes.iter().any(|n| {
+        n.data
+            .node_type
+            .as_deref()
+            .and_then(|s| {
+                serde_json::from_value::<stagespace_engines::NodeType>(serde_json::json!(s)).ok()
+            })
+            .is_some_and(|nt| stagespace_engines::node_spec::node_spec(&nt).stateful)
+    })
+}
+
+/// Règle unique pour les chemins LIVE (playback_mode, animation_state,
+/// hot-swap de graphe) — le même que le guard du spawn : direction
+/// non-forward ou phase offset ≠0 + graphe stateful → refus.
+/// `forward`/`has_phase` décrivent l'état DEMANDÉ (ou courant pour le
+/// swap de graphe — introduire un engine stateful sous des evals
+/// rétrogrades gèle immédiatement).
+pub(crate) fn check_stateful_playback(
+    graph_json: &stagespace_engines::GraphJson,
+    forward: bool,
+    has_phase: bool,
+) -> Result<(), super::error::IpcError> {
+    if (!forward || has_phase) && graph_json_has_stateful(graph_json) {
+        return Err(super::error::IpcError::validation(
+            STATEFUL_DIRECTION_MSG.to_string(),
+        ));
+    }
+    Ok(())
+}

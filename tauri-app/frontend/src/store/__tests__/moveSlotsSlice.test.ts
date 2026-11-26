@@ -460,3 +460,57 @@ describe('duplicateMoveSlot', () => {
     expect((useGraphStore.getState() as any).moveSlots).toHaveLength(0);
   });
 });
+
+describe('stateful graph playback guards', () => {
+  // Engine à état (Swarm…) : backward/ping-pong/phase spread re-simulent
+  // depuis t=0 à chaque eval → worker gelé → stale-kill. Le store refuse
+  // en amont (même règle que le guard backend) — pas d'état injouable
+  // persisté, pas de désync avec le move en cours.
+  const swarmGraph = () => ({
+    nodes: [
+      { id: 'o', type: 'custom', position: { x: 0, y: 0 }, data: { label: 'Objects', type: 'Objects', params: { n_objects: 3 } } },
+      { id: 'd', type: 'custom', position: { x: 0, y: 0 }, data: { label: 'Duration', type: 'Duration', params: { duration: 4 } } },
+      { id: 'sw', type: 'custom', position: { x: 0, y: 0 }, data: { label: 'Swarm', type: 'Swarm', params: {} } },
+      { id: 'out', type: 'custom', position: { x: 0, y: 0 }, data: { label: 'Output', type: 'Output', params: {} } },
+    ],
+    edges: [],
+  });
+
+  it('setSlotDirection refuse backward/ping_pong sur graphe stateful', () => {
+    const slot = makeSlot({ id: 'sw-1', graphJson: swarmGraph(), movementId: 'mv-1', direction: 'forward' });
+    useGraphStore.setState({ moveSlots: [slot] } as any);
+    useGraphStore.getState().setSlotDirection('sw-1', 'backward');
+    expect((useGraphStore.getState() as any).moveSlots[0].direction).toBe('forward');
+    useGraphStore.getState().setSlotDirection('sw-1', 'ping_pong');
+    expect((useGraphStore.getState() as any).moveSlots[0].direction).toBe('forward');
+    // Aucun invoke live n'est parti — le move tourne toujours forward.
+    expect(getInvokeCalls().filter((c) => c.cmd === 'set_move_playback_mode')).toHaveLength(0);
+  });
+
+  it('setSlotDirection autorise backward sur graphe non-stateful', () => {
+    const slot = makeSlot({ id: 'c-1', movementId: 'mv-1', direction: 'forward' }); // Circular
+    useGraphStore.setState({ moveSlots: [slot] } as any);
+    useGraphStore.getState().setSlotDirection('c-1', 'backward');
+    expect((useGraphStore.getState() as any).moveSlots[0].direction).toBe('backward');
+    expect(getInvokeCalls().some((c) => c.cmd === 'set_move_playback_mode')).toBe(true);
+  });
+
+  it('updateSlotAnimationFields filtre phaseSpread sur graphe stateful', () => {
+    const slot = makeSlot({ id: 'sw-1', graphJson: swarmGraph() });
+    useGraphStore.setState({ moveSlots: [slot] } as any);
+    useGraphStore.getState().updateSlotAnimationFields('sw-1', { phaseSpread: 0.5 });
+    expect((useGraphStore.getState() as any).moveSlots[0].phaseSpread).toBe(0);
+    // Les autres champs passent quand même.
+    useGraphStore.getState().updateSlotAnimationFields('sw-1', { phaseSpread: 0.5, fadeIn: 1.2 });
+    const s = (useGraphStore.getState() as any).moveSlots[0];
+    expect(s.phaseSpread).toBe(0);
+    expect(s.fadeIn).toBe(1.2);
+  });
+
+  it('updateSlotAnimationFields laisse phaseSpread sur graphe non-stateful', () => {
+    const slot = makeSlot({ id: 'c-1' });
+    useGraphStore.setState({ moveSlots: [slot] } as any);
+    useGraphStore.getState().updateSlotAnimationFields('c-1', { phaseSpread: 0.5 });
+    expect((useGraphStore.getState() as any).moveSlots[0].phaseSpread).toBe(0.5);
+  });
+});

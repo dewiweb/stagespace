@@ -4,7 +4,7 @@
 /// dans le slice composite.
 import { safeInvoke as invoke } from '../../utils/tauri';
 import { toast } from '../../utils/toast-helpers';
-import { migrateStoredGraph } from '../../utils/graphMigration';
+import { graphHasStatefulEngine, migrateStoredGraph, STATEFUL_PLAYBACK_HINT } from '../../utils/graphMigration';
 import type { StateCreator } from 'zustand';
 import type { MoveSlotsSlice, MoveSlotsStore } from './moveSlotsSlice';
 import {
@@ -419,6 +419,15 @@ export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]):
   },
 
   setSlotDirection: (id, direction) => {
+    // Engine à état + direction non-forward = resim depuis t=0 à chaque
+    // frame (le backend refuse au spawn ET en live — le store refuse en
+    // amont pour ne pas persister un état injouable ni désynchroniser
+    // slot.direction du move en cours).
+    const target = get().moveSlots.find((sl) => sl.id === id);
+    if (direction !== 'forward' && graphHasStatefulEngine(target?.graphJson?.nodes)) {
+      toast.warning(`"${target?.name}": ${STATEFUL_PLAYBACK_HINT}`);
+      return;
+    }
     set((s) => {
       const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, direction } : sl);
       saveSlotsToStorage(newSlots);
@@ -436,8 +445,27 @@ export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]):
   },
 
   updateSlotAnimationFields: (id, fields) => {
+    // Phase offsets (spread OU per-assignment) sur un graphe stateful →
+    // evals rétrogrades par objet → même poison que backward. Filtré ici
+    // (le slider passe par syncCurrentToSlot, pas seulement l'Inspector ;
+    // les assignments peuvent transporter un phase_offset de données
+    // antérieures au guard).
+    const target = get().moveSlots.find((sl) => sl.id === id);
+    const stateful = graphHasStatefulEngine(target?.graphJson?.nodes);
+    const spreadBad = fields.phaseSpread !== undefined && fields.phaseSpread > 0;
+    const assignBad = fields.assignments?.some((a) => Math.abs(a.phase_offset) > 1e-9) ?? false;
+    let safeFields = fields;
+    if (stateful && (spreadBad || assignBad)) {
+      toast.warning(`"${target?.name}": ${STATEFUL_PLAYBACK_HINT}`);
+      safeFields = { ...fields };
+      delete safeFields.phaseSpread;
+      if (safeFields.assignments) {
+        safeFields.assignments = safeFields.assignments.map((a) => ({ ...a, phase_offset: 0 }));
+      }
+      if (Object.keys(safeFields).length === 0) return;
+    }
     set((s) => {
-      const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, ...fields } : sl);
+      const newSlots = s.moveSlots.map((sl) => sl.id === id ? { ...sl, ...safeFields } : sl);
       // Chemin slider (fade/phase_spread) → debounced comme setSlotMacros.
       saveSlotsToStorageDebounced(newSlots);
       return { moveSlots: newSlots };
