@@ -27,6 +27,10 @@ use std::sync::{Arc, Mutex};
 pub(crate) struct AvoidanceCache {
     sim_t: f64,
     n_objects: usize,
+    /// `params.n_objects` vu au dernier init — la population SIMULÉE peut
+    /// dépasser `declared` (grow monotone sur object_index supérieur) :
+    /// la re-init ne se déclenche que sur changement du param déclaré.
+    declared: usize,
     positions: Vec<Vector3<f64>>,
     velocities: Vec<Vector3<f64>>,
     /// Buffer de forces réutilisé (snapshot avant intégration).
@@ -38,6 +42,7 @@ impl Default for AvoidanceCache {
         Self {
             sim_t: f64::INFINITY, // force le premier init (t < sim_t)
             n_objects: 0,
+            declared: 0,
             positions: Vec::new(),
             velocities: Vec::new(),
             forces: Vec::new(),
@@ -119,21 +124,30 @@ impl Engine for Avoidance {
             .and_then(|v| v.as_i64())
             .unwrap_or(42) as u64;
 
-        // object_index peut dépasser n_objects (hot-swap d'osc_id) : on
-        // dimensionne l'essaim pour l'inclure plutôt que de paniquer
-        // (MAX_OBJECTS borne le coût ; au-delà on retourne le dernier agent).
-        let n_objects = params
-            .n_objects
-            .max(1)
+        // `declared` = le param Objects (stable dans un compile) ;
+        // `need` = la couverture requise CETTE eval (≥ object_index+1).
+        // La sim grandit de façon MONOTONE : un object_index < c.n_objects
+        // ne rétrécit pas la population — sinon chaque objet ferait varier
+        // n → re-init + resim par objet par frame (worker gelé →
+        // stale-kill ; même pathologie que swarm.rs).
+        let declared = params.n_objects.max(1);
+        let need = declared
             .max(object_index.saturating_add(1))
             .min(MAX_OBJECTS);
-        let queried = object_index.min(n_objects - 1);
 
         let mut c = self.cache.lock().unwrap_or_else(|e| e.into_inner());
-        // Seek arrière ou changement de population → reset + re-sim.
-        if c.n_objects != n_objects || t < c.sim_t - SIM_REWIND_EPS {
-            c.init(n_objects, seed);
+        // Rewind : conserver la taille courante (elle peut couvrir des
+        // objets vus avant — un shrink ici referait le re-init par objet).
+        if t < c.sim_t - SIM_REWIND_EPS {
+            let n = c.n_objects.max(need);
+            c.declared = declared;
+            c.init(n, seed);
+        } else if c.declared != declared || c.n_objects < need {
+            c.declared = declared;
+            c.init(need, seed);
         }
+        let n_objects = c.n_objects;
+        let queried = object_index.min(n_objects - 1);
 
         let cost = (n_objects as u64).saturating_mul(n_objects as u64);
         let (n_steps, dt, new_t) = sim_window(c.sim_t, t, params.fps, cost);

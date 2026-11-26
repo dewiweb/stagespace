@@ -48,6 +48,10 @@ pub(crate) struct SwarmCache {
     /// Temps déjà couvert par l'intégration.
     sim_t: f64,
     n_objects: usize,
+    /// `params.n_objects` vu au dernier init — la population SIMULÉE peut
+    /// dépasser `declared` (grow monotone sur object_index supérieur) :
+    /// la re-init ne se déclenche que sur changement du param déclaré.
+    declared: usize,
     /// `pub(crate)` : le test warm-start du compiler y injecte un marqueur.
     pub(crate) positions: Vec<Vector3<f64>>,
     velocities: Vec<Vector3<f64>>,
@@ -61,6 +65,7 @@ impl Default for SwarmCache {
         Self {
             sim_t: f64::INFINITY, // force le premier init (t < sim_t)
             n_objects: 0,
+            declared: 0,
             positions: Vec::new(),
             velocities: Vec::new(),
             acc: Vec::new(),
@@ -184,24 +189,36 @@ impl Engine for Swarm {
         // le troupeau pour l'inclure plutôt que de paniquer. MAX_OBJECTS borne le
         // tout ; si object_index ≥ MAX_OBJECTS on retourne le dernier agent
         // (déterministe, fini) plutôt que de crasher.
-        let n_objects = params
-            .n_objects
-            .max(1)
+        // `declared` = le param Objects (stable dans un compile) ;
+        // `need` = la couverture requise CETTE eval (≥ object_index+1).
+        // La sim grandit de façon MONOTONE : un object_index < c.n_objects
+        // ne rétrécit pas la population — sinon chaque objet ferait varier
+        // n → re-init + resim par objet par frame (63 resims à 63 pistes →
+        // worker gelé → stale-kill ; observé en live).
+        let declared = params.n_objects.max(1);
+        let need = declared
             .max(object_index.saturating_add(1))
             .min(MAX_OBJECTS);
+        let mut c = self.cache.lock().unwrap_or_else(|e| e.into_inner());
+        // Ré-init si : seek arrière (rewind), param Objects modifié
+        // (hot-swap), ou objet jamais vu au-delà de la population (grow).
+        // Rewind : conserver la taille courante (elle peut couvrir des
+        // objets vus avant — un shrink ici referait le re-init par objet).
+        if t < c.sim_t - SIM_REWIND_EPS {
+            let n = c.n_objects.max(need);
+            c.declared = declared;
+            c.init(n, seed);
+        } else if c.declared != declared || c.n_objects < need {
+            c.declared = declared;
+            c.init(need, seed);
+        }
+        let n_objects = c.n_objects;
         let queried = object_index.min(n_objects - 1);
         let k_take = if k_neighbors == 0 {
             0
         } else {
             k_neighbors.min(n_objects.saturating_sub(1)).max(1)
         };
-
-        let mut c = self.cache.lock().unwrap_or_else(|e| e.into_inner());
-        // Seek arrière (sampling arbitraire) ou changement de population →
-        // reset + re-simulation depuis t=0 via la fenêtre [0 → t].
-        if c.n_objects != n_objects || t < c.sim_t - SIM_REWIND_EPS {
-            c.init(n_objects, seed);
-        }
 
         let cost = (n_objects as u64).saturating_mul(n_objects as u64);
         let (n_steps, dt, new_t) = sim_window(c.sim_t, t, params.fps, cost);
@@ -697,4 +714,34 @@ mod tests {
             "n changé → re-init à la nouvelle taille"
         );
     }
+}
+
+#[test]
+fn swarm_n_objects_mismatch_grows_monotonically() {
+    // Régression : node Objects déclaré à 1 alors que le move pilote 63
+    // objets (slot injecté sans sync). La population doit grandir de
+    // façon MONOTONE vers 63 puis rester stable — l'ancien comportement
+    // recalculait n par objet → chaque object_index < n déclenchait un
+    // re-init + resim complet (63 resims/frame → worker gelé →
+    // supervisor stale-kill, observé live).
+    let cache = Arc::new(Mutex::new(SwarmCache::default()));
+    let e = Swarm::with_cache(cache.clone());
+    let params = EngineParams {
+        n_objects: 1,
+        duration: 4.0,
+        fps: 60.0,
+        extra: serde_json::json!({}),
+    };
+    for i in 0..63 {
+        let _ = e.position(0.05, i, &params);
+    }
+    assert_eq!(cache.lock().unwrap().n_objects, 63);
+    // Un objet seul au rang suivant NE DOIT PAS rétrécir la sim —
+    // sous l'ancien code il re-init à n=1.
+    let _ = e.position(0.10, 0, &params);
+    assert_eq!(
+        cache.lock().unwrap().positions.len(),
+        63,
+        "la population simulée ne doit pas rétrécir sur un object_index bas"
+    );
 }
