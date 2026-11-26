@@ -317,7 +317,7 @@ export default function Inspector() {
                 contrôles live sont Params (pinned) et Macros. key force le
                 repli à l'entrée/sortie de mode. */}
             <Section key={`perform-${performMode}`} title="Playback" icon={<Play size={12} />} defaultOpen={!performMode}>
-              <Slider label="Duration" value={current.duration} min={0.5} max={30} step={0.5} onChange={(v) => updateCurrent({ duration: v })} unit="s" />
+              <Slider label="Duration" value={current.duration} min={0.5} max={60} step={0.5} editable onChange={(v) => updateCurrent({ duration: v })} unit="s" />
               <div className="flex gap-1 pt-1">
                 {(['forward', 'backward', 'ping_pong'] as const).map((d) => {
                   const blocked = d !== 'forward' && statefulGraph;

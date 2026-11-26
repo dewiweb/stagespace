@@ -351,9 +351,21 @@ export const LiveDrawer: React.FC = () => {
               )}
             </div>
           </div>
-          {/* Fades de cycle */}
+          {/* Timing — durée du cycle + fades. La duration est hot-swappable
+              (set_duration atomique) — l'éditer pendant le jeu ne fige pas. */}
           <div className="flex-shrink-0 w-64 space-y-1">
-            <div className="text-gray-500 text-xs uppercase tracking-wider">Fades</div>
+            <div className="text-gray-500 text-xs uppercase tracking-wider">Timing</div>
+            <Slider
+              label="Duration"
+              value={current.duration}
+              min={0.5}
+              max={60}
+              step={0.5}
+              unit="s"
+              editable
+              live={!!slot.movementId}
+              onChange={(v) => updateCurrent({ duration: v })}
+            />
             <Slider
               label="In"
               value={current.fade_in}

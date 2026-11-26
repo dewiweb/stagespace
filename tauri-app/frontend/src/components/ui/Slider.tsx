@@ -22,6 +22,11 @@ interface SliderProps {
   layout?: 'row' | 'stack' | 'bare';
   /// Affiche la valeur en vert quand le contrôle agit sur un move live
   live?: boolean;
+  /// Valeur cliquable → saisie libre (Enter/blur = commit, Esc = annule).
+  /// La valeur saisie n'est bornée que par `min` — pas par `max` (le range
+  /// sature) : sert pour les champs sans plafond réel (ex. duration, le
+  /// backend n'a pas de borne haute).
+  editable?: boolean;
   disabled?: boolean;
   /// Nombre de décimales forcé (sinon déduit du step)
   decimals?: number;
@@ -44,12 +49,43 @@ export const Slider: React.FC<SliderProps> = ({
   tone = 'accent',
   layout = 'row',
   live = false,
+  editable = false,
   disabled = false,
   decimals,
   className = '',
 }) => {
   const dec = decimals ?? (step < 0.1 ? 2 : step < 1 ? 1 : 0);
   const display = `${value.toFixed(dec)}${unit ?? ''}`;
+  const [draft, setDraft] = React.useState<string | null>(null);
+  const commit = () => {
+    const v = parseFloat(draft ?? '');
+    if (Number.isFinite(v)) onChange(Math.max(min, v));
+    setDraft(null);
+  };
+  const valueEl = (cls: string) =>
+    draft !== null ? (
+      <input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') setDraft(null);
+        }}
+        className={`bg-gray-900 text-white rounded border border-stagespace-accent/60 px-0.5 ${cls}`}
+      />
+    ) : (
+      <span
+        onClick={editable && !disabled ? () => setDraft(value.toFixed(dec)) : undefined}
+        title={editable && !disabled ? 'Click to type a value' : undefined}
+        className={`text-xs font-mono ${live ? 'text-stagespace-live' : 'text-white'} ${
+          editable && !disabled ? 'cursor-text border-b border-dashed border-gray-600 hover:border-gray-400' : ''
+        } ${cls}`}
+      >
+        {display}
+      </span>
+    );
   const input = (
     <input
       type="range"
@@ -73,11 +109,7 @@ export const Slider: React.FC<SliderProps> = ({
       <div className={`space-y-1 ${className}`}>
         <div className="flex items-center justify-between gap-2">
           <span className="text-gray-400 text-xs truncate" title={label}>{label}</span>
-          <span
-            className={`text-xs font-mono ${live ? 'text-stagespace-live' : 'text-white'}`}
-          >
-            {display}
-          </span>
+          {valueEl('')}
         </div>
         {input}
       </div>
@@ -92,13 +124,7 @@ export const Slider: React.FC<SliderProps> = ({
         </span>
       )}
       {input}
-      <span
-        className={`text-xs font-mono w-12 text-right flex-shrink-0 ${
-          live ? 'text-stagespace-live' : 'text-white'
-        }`}
-      >
-        {display}
-      </span>
+      {valueEl('w-12 text-right flex-shrink-0')}
     </div>
   );
 };

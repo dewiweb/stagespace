@@ -34,6 +34,44 @@ describe('ui/Slider', () => {
     expect(container.querySelector('input[type="range"]')).toBeInTheDocument();
     expect(container.textContent).toBe('');
   });
+
+  it('editable: click on the value opens an input, Enter commits beyond max', () => {
+    const onChange = vi.fn();
+    render(
+      <Slider label="Duration" value={30} min={0.5} max={60} step={0.5} editable onChange={onChange} unit="s" />,
+    );
+    fireEvent.click(screen.getByText('30.0s'));
+    const field = screen.getByDisplayValue('30.0');
+    fireEvent.change(field, { target: { value: '120' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    // La saisie n'est pas clampée au max du range (pas de plafond backend)
+    expect(onChange).toHaveBeenCalledWith(120);
+  });
+
+  it('editable: Esc cancels without committing, blur clamps to min', () => {
+    const onChange = vi.fn();
+    render(
+      <Slider label="Duration" value={30} min={0.5} max={60} step={0.5} editable onChange={onChange} unit="s" />,
+    );
+    fireEvent.click(screen.getByText('30.0s'));
+    fireEvent.keyDown(screen.getByDisplayValue('30.0'), { key: 'Escape' });
+    expect(onChange).not.toHaveBeenCalled();
+    // blur avec une valeur sous le min → clampée à min
+    fireEvent.click(screen.getByText('30.0s'));
+    const field = screen.getByDisplayValue('30.0');
+    fireEvent.change(field, { target: { value: '0.1' } });
+    fireEvent.blur(field);
+    expect(onChange).toHaveBeenCalledWith(0.5);
+  });
+
+  it('non-editable: clicking the value does nothing', () => {
+    const { container } = render(
+      <Slider label="Speed" value={1.5} min={0} max={4} step={0.1} onChange={() => {}} />,
+    );
+    fireEvent.click(screen.getByText('1.5'));
+    // Un seul input (le range) — pas de champ de saisie
+    expect(container.querySelectorAll('input').length).toBe(1);
+  });
 });
 
 describe('ui/Modal', () => {
