@@ -9,9 +9,8 @@ import Modal from '../ui/Modal';
 import Slider from '../ui/Slider';
 import EmptyState from '../ui/EmptyState';
 import ConfirmModal from '../ui/ConfirmModal';
-import { TRACK_PATTERNS, applySelectionPattern } from '../../utils/trackPatterns';
-import { buildObjectMenuItems } from '../../utils/objectMenuItems';
 import ContextMenu from '../ui/ContextMenu';
+import { TrackGrid } from '../TrackGrid';
 
 /// MovesTable — la table des moves (concept unifié)
 /// Tout est un Move. Certains moves sont dans la setlist (l'ordre du spectacle).
@@ -65,10 +64,6 @@ export default function MovesTable() {
     refreshMovements();
   }, [refreshMovements]);
 
-  // Tous les tracks disponibles pour le picker
-  const allTrackIds = holProject
-    ? holProject.tracks.map((t) => t.id)
-    : manualOscIds;
 
   const playingCount = moveSlots.filter((s) => s.movementId).length;
   const stoppedCount = moveSlots.length - playingCount;
@@ -102,7 +97,16 @@ export default function MovesTable() {
   // ─── Track Picker (modal inline) ───
   const [editingTracksFor, setEditingTracksFor] = React.useState<string | null>(null);
   const [tempTrackIds, setTempTrackIds] = React.useState<number[]>([]);
-  const [objMenu, setObjMenu] = React.useState<{ x: number; y: number; trackId: number } | null>(null);
+
+  // TrackInfos pour la TrackGrid du picker — même construction que
+  // LiveDrawer (couleurs/noms du .hol, fallback IDs manuels).
+  const pickerTrackInfos = React.useMemo(
+    () =>
+      holProject?.tracks.length
+        ? holProject.tracks.map((t) => ({ id: t.id, name: t.name, color: t.color, position: t.position }))
+        : manualOscIds.map((id) => ({ id, name: `#${id}` })),
+    [holProject, manualOscIds],
+  );
 
   const openTrackPicker = (slotId: string, currentTracks: number[]) => {
     setEditingTracksFor(slotId);
@@ -513,47 +517,26 @@ export default function MovesTable() {
         )}
       </div>
 
-      {/* ═══ Track Picker Modal ═══ */}
+      {/* ═══ Track Picker Modal ═══ — même TrackGrid que l'Inspector /
+          le drawer Perform, mais la sélection est STAGÉE (tempTrackIds,
+          appliquée via setSlotTracks à la confirmation). Sans
+          updateAssignment → mode select-only (pas de mode depth : le
+          picker règle l'appartenance, la depth se règle à l'Inspector). */}
       {editingTracksFor && (
         <Modal title="Move tracks" onClose={() => setEditingTracksFor(null)}>
           <div className="p-4">
-            <div className="flex flex-wrap items-center gap-1 mb-3">
-              {TRACK_PATTERNS.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => setTempTrackIds((prev) => applySelectionPattern(p.id, allTrackIds, new Set(prev)))}
-                  title={p.title}
-                  className="text-xs px-1.5 py-0.5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded transition-colors"
-                >{p.label}</button>
-              ))}
-              <div className="flex-1" />
-              <span className="text-xs text-gray-500 self-center">{tempTrackIds.length} selected</span>
-            </div>
-            <div className="grid grid-cols-6 gap-1 max-h-60 overflow-y-auto">
-              {allTrackIds.map((id) => (
-                <button
-                  key={id}
-                  onClick={() => {
-                    setTempTrackIds((prev) =>
-                      prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
-                    );
-                  }}
-                  onContextMenu={(e) => {
-                    // Clic-droit cellule = ops live sur l'objet (release/
-                    // park…) — identique au clic-droit radar/3D/TrackGrid.
-                    e.preventDefault();
-                    setObjMenu({ x: e.clientX, y: e.clientY, trackId: id });
-                  }}
-                  className={`text-xs font-mono px-2 py-1.5 rounded transition-colors ${
-                    tempTrackIds.includes(id)
-                      ? 'bg-stagespace-accent text-gray-950'
-                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                  }`}
-                >
-                  {id}
-                </button>
-              ))}
-            </div>
+            <TrackGrid
+              compact
+              tracks={pickerTrackInfos}
+              selectedTrackIds={new Set(tempTrackIds)}
+              toggleTrackSelection={(tid) =>
+                setTempTrackIds((prev) =>
+                  prev.includes(tid) ? prev.filter((t) => t !== tid) : [...prev, tid],
+                )
+              }
+              setTrackSelection={setTempTrackIds}
+              assignments={moveSlots.find((s) => s.id === editingTracksFor)?.assignments ?? []}
+            />
             <div className="flex gap-2 mt-4">
               <button
                 onClick={confirmTrackPicker}
@@ -621,22 +604,6 @@ export default function MovesTable() {
               >Close</button>
             </div>
           </Modal>
-        );
-      })()}
-
-      {/* ═══ Menu clic-droit cellule track (picker) — ops live objet ═══ */}
-      {objMenu && (() => {
-        const gs = useGraphStore.getState();
-        const obj = gs.manualOscIds.indexOf(objMenu.trackId);
-        if (obj < 0) return null;
-        return (
-          <ContextMenu
-            x={objMenu.x}
-            y={objMenu.y}
-            header={`Track ${objMenu.trackId} · obj ${obj + 1}`}
-            onClose={() => setObjMenu(null)}
-            items={buildObjectMenuItems(obj, gs.objectStates[obj] ?? 'move', gs.emittedPositions[obj])}
-          />
         );
       })()}
 

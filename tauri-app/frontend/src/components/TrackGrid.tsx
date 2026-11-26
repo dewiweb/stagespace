@@ -25,7 +25,10 @@ interface TrackGridProps {
   /// mutent le mauvais espace.
   setTrackSelection: (ids: number[]) => void;
   assignments: TrackAssignment[];
-  updateAssignment: (trackId: number, patch: Partial<TrackAssignment>) => void;
+  /// Omis = mode select-only (ex. le picker modal de MovesTable, qui stage
+  /// l'appartenance et n'édite pas la depth) : le toggle Select/Depth est
+  /// caché et les patterns n'écrivent pas de patches depth.
+  updateAssignment?: (trackId: number, patch: Partial<TrackAssignment>) => void;
   /// Mode dense pour le drawer Perform (pleine largeur) : cellules petites,
   /// grille auto-fill au lieu de 4 colonnes fixes.
   compact?: boolean;
@@ -64,7 +67,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
     // de choix (all/even/odd/halves) initialisent depth à 1 sur les
     // tracks retenues ; none/inverse sont des sélections pures.
     const patches =
-      pattern === 'none' || pattern === 'inverse'
+      !updateAssignment || pattern === 'none' || pattern === 'inverse'
         ? []
         : nextSel.map((id) => ({ trackId: id, patch: { depth: 1.0 } }));
     setTrackSelection(nextSel);
@@ -138,18 +141,21 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
         ))}
       </div>
 
-      {/* Toggle depth view */}
+      {/* Toggle depth view (absent en select-only) + compteur */}
       <div className="flex items-center gap-2">
-        <button
-          onClick={() => setShowDepth(!showDepth)}
-          className={`px-1.5 py-0.5 text-xs rounded transition-colors ${
-            showDepth ? 'bg-stagespace-accent text-gray-950' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-          }`}
-        >
-          {showDepth ? 'Depth' : 'Select'}
-        </button>
+        {updateAssignment && (
+          <button
+            onClick={() => setShowDepth(!showDepth)}
+            className={`px-1.5 py-0.5 text-xs rounded transition-colors ${
+              showDepth ? 'bg-stagespace-accent text-gray-950' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            }`}
+          >
+            {showDepth ? 'Depth' : 'Select'}
+          </button>
+        )}
         <span className="text-gray-500 text-xs font-mono ml-auto">
-          {assignedCount}/{tracks.length} · Σ={totalDepth.toFixed(1)}
+          {assignedCount}/{tracks.length}
+          {updateAssignment && ` · Σ=${totalDepth.toFixed(1)}`}
         </span>
       </div>
 
@@ -210,7 +216,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
                   </span>
                 </div>
                 {/* Mini depth slider */}
-                {isSelected && (
+                {isSelected && updateAssignment && (
                   <input
                     type="range" min={0} max={1} step={0.05} value={depth}
                     onChange={(e) => {
