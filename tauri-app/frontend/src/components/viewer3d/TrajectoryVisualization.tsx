@@ -29,6 +29,10 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
 }) => {
   const pathLinesRef = useRef<THREE.Line[]>([]);
   const cancelRef = useRef<(() => void) | null>(null);
+  /// Dedup d'appels : un sample en vol ne s'empile pas (les engines à état
+  /// paient une resim par sampling — empiler saturait le pool backend).
+  const inFlightRef = useRef(false);
+  const dirtyRef = useRef(false);
   const macros = useGraphStore((s) => s.macros);
   const graphCompileVersion = useGraphStore((s) => s.graphCompileVersion);
   const movements = useGraphStore((s) => s.movements);
@@ -103,6 +107,11 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
           // Mode movement (système multi-move) : échantillonner depuis les movements à afficher
           // (uniquement le move sélectionné si editingSlotId pointe vers un move actif, sinon tous)
           if (hasMovements && movementsToShow.length > 0) {
+            if (inFlightRef.current) {
+              dirtyRef.current = true;
+              return;
+            }
+            inFlightRef.current = true;
             const durationNode = useGraphStore.getState().nodes.find((n) => n.data.type === 'Duration');
             const duration = Number(durationNode?.data.params?.duration ?? 4.0);
             // Échantillonner chaque movement à afficher — UN invoke batché
@@ -110,34 +119,45 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
             // avec leur track_index global). Avant : nObjs invokes séquentiels
             // par move, dont la plupart échouaient silencieusement pour les
             // moves couvrant peu de tracks.
-            for (const movement of movementsToShow) {
-              if (cancelled) return;
-              try {
-                const paths = await invoke<Array<{ track_index: number; points: Array<[number, number, number, number]> }>>(
-                  'sample_movement_trajectories',
-                  { movementId: movement.id, nSamples, duration },
-                );
-                for (const path of paths) {
-                  if (cancelled) return;
-                  if (path.points.length < 2) continue;
+            try {
+              for (const movement of movementsToShow) {
+                if (cancelled) return;
+                try {
+                  const paths = await invoke<Array<{ track_index: number; points: Array<[number, number, number, number]> }>>(
+                    'sample_movement_trajectories',
+                    { movementId: movement.id, nSamples, duration },
+                  );
+                  for (const path of paths) {
+                    if (cancelled) return;
+                    if (path.points.length < 2) continue;
 
-                  const points = path.points.map((s) => {
-                    const [tx, ty, tz] = toThree(s[1], s[2], s[3]);
-                    return new THREE.Vector3(tx, ty, tz);
-                  });
-                  const geo = new THREE.BufferGeometry().setFromPoints(points);
-                  // Teinte par track_index global — stable entre moves
-                  const hue = trackHue(path.track_index, nObjs);
-                  const mat = new THREE.LineBasicMaterial({
-                    color: new THREE.Color().setHSL(hue, 0.7, 0.5),
-                    transparent: true, opacity: movement.is_preview ? 0.2 : 0.35,
-                  });
-                  const line = new THREE.Line(geo, mat);
-                  scene.add(line);
-                  pathLinesRef.current.push(line);
+                    const points = path.points.map((s) => {
+                      const [tx, ty, tz] = toThree(s[1], s[2], s[3]);
+                      return new THREE.Vector3(tx, ty, tz);
+                    });
+                    const geo = new THREE.BufferGeometry().setFromPoints(points);
+                    // Teinte par track_index global — stable entre moves
+                    const hue = trackHue(path.track_index, nObjs);
+                    const mat = new THREE.LineBasicMaterial({
+                      color: new THREE.Color().setHSL(hue, 0.7, 0.5),
+                      transparent: true, opacity: movement.is_preview ? 0.2 : 0.35,
+                    });
+                    const line = new THREE.Line(geo, mat);
+                    scene.add(line);
+                    pathLinesRef.current.push(line);
+                  }
+                } catch {
+                  // Un movement peut ne pas avoir de runtime — silencieux
                 }
-              } catch {
-                // Un movement peut ne pas avoir de runtime — silencieux
+              }
+            } finally {
+              inFlightRef.current = false;
+              // Un edit est arrivé pendant le sample — un seul re-run
+              // suffit (le dernier état du graphe gagne, les intermédiaires
+              // n'ont aucune valeur visuelle).
+              if (dirtyRef.current && !cancelled) {
+                dirtyRef.current = false;
+                fetchTrajectory();
               }
             }
             return;

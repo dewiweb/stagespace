@@ -8,16 +8,23 @@
 use crate::engines::{finite_or_zero, sim_window, Engine, EngineParams, SIM_REWIND_EPS};
 use crate::rng::SimpleRng;
 use nalgebra::Vector3;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// Engine à état — `Default` produit un cache vide (premier appel = init).
 #[derive(Default)]
 pub struct Spring {
-    cache: Mutex<SpringCache>,
+    cache: Arc<Mutex<SpringCache>>,
+}
+
+impl Spring {
+    /// Cache partagé via `EngineStateStore` — warm-start au hot-swap.
+    pub(crate) fn with_cache(cache: Arc<Mutex<SpringCache>>) -> Self {
+        Self { cache }
+    }
 }
 
 #[derive(Default)]
-struct SpringCache {
+pub(crate) struct SpringCache {
     /// État par objet — intégration lazy (l'objet requis avance seul).
     agents: Vec<SpringAgent>,
 }

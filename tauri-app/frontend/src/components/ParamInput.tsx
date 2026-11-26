@@ -8,6 +8,7 @@ import React from 'react';
 import { Slider } from './ui/Slider';
 import type { ParamDef, NodeParamValue } from './nodeParamSchema';
 import { NODE_INPUT_CLS, NODE_INPUT_MONO_CLS } from './editor/LinkedTracksField';
+import { useGraphStore } from '../store/useGraphStore';
 
 const FIELD_CLS =
   'nodrag flex-1 min-w-0 px-2 py-1 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none';
@@ -15,6 +16,49 @@ const FIELD_MONO_CLS = `${FIELD_CLS} font-mono`;
 
 const blurOnEnter = (e: React.KeyboardEvent<HTMLElement>) => {
   if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur();
+};
+
+/// Dropdown `objectref` — le param stocke un OBJ INDEX (position dans
+/// `manualOscIds`, −1 = off) ; les options présentent des TRACK IDs en
+/// excluant les tracks du move édité (fuir soi-même n'a pas de sens).
+/// La valeur courante reste listée si hors-ensemble (move édité depuis).
+const ObjectRefSelect: React.FC<{
+  value: NodeParamValue;
+  onChange: (v: NodeParamValue) => void;
+  compact: boolean;
+}> = ({ value, onChange, compact }) => {
+  const manualOscIds = useGraphStore((s) => s.manualOscIds);
+  const editingSlotId = useGraphStore((s) => s.editingSlotId);
+  const moveSlots = useGraphStore((s) => s.moveSlots);
+  const inMove = new Set<number>();
+  for (const tid of moveSlots.find((sl) => sl.id === editingSlotId)?.trackIds ?? []) {
+    const idx = manualOscIds.indexOf(tid);
+    if (idx >= 0) inMove.add(idx);
+  }
+  const cur = typeof value === 'number' ? value : -1;
+  const cls = compact ? NODE_INPUT_CLS : FIELD_CLS;
+  return (
+    <select
+      value={cur}
+      onChange={(e) => {
+        onChange(parseInt(e.target.value, 10));
+        // Rendre le focus (même raison que le cas 'enum').
+        e.currentTarget.blur();
+      }}
+      onKeyDown={blurOnEnter}
+      className={cls}
+    >
+      <option value={-1}>— static point (x,y,z)</option>
+      {manualOscIds.map((tid, idx) =>
+        inMove.has(idx) ? null : (
+          <option key={idx} value={idx}>T{tid}</option>
+        ),
+      )}
+      {cur >= 0 && inMove.has(cur) && (
+        <option value={cur}>T{manualOscIds[cur]} (in move)</option>
+      )}
+    </select>
+  );
 };
 
 /// Enveloppe "field" : label tronqué + contrôle. `wide` = vec3/texte
@@ -108,6 +152,11 @@ export const ParamInput: React.FC<{
           </button>
         </FieldRow>
       );
+
+    case 'objectref': {
+      const sel = <ObjectRefSelect value={value} onChange={onChange} compact={compact} />;
+      return compact ? sel : <FieldRow def={def}>{sel}</FieldRow>;
+    }
 
     case 'enum':
       if (compact) {

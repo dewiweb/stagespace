@@ -1837,7 +1837,7 @@
         "label": "out"
       }
     ],
-    "description": "Boids — flocking with separation/alignment/cohesion",
+    "description": "Boids — flocking with separation/alignment/cohesion, wander, k-nearest, leader & in-line rules",
     "object_distribution": "Agent",
     "stateful": true,
     "params": [
@@ -1880,9 +1880,42 @@
         "kind": "number",
         "options": null,
         "step": 0.1,
-        "min": null,
+        "min": 0.0,
         "max": null,
         "default_json": "0.5",
+        "modulable": true
+      },
+      {
+        "key": "k_neighbors",
+        "label": "K Neighbors (0=radius)",
+        "kind": "number",
+        "options": null,
+        "step": 1.0,
+        "min": 0.0,
+        "max": null,
+        "default_json": "0.0",
+        "modulable": true
+      },
+      {
+        "key": "wander",
+        "label": "Wander",
+        "kind": "number",
+        "options": null,
+        "step": 0.05,
+        "min": 0.0,
+        "max": 2.0,
+        "default_json": "0.0",
+        "modulable": true
+      },
+      {
+        "key": "wander_freq",
+        "label": "Wander Freq",
+        "kind": "number",
+        "options": null,
+        "step": 0.05,
+        "min": 0.0,
+        "max": null,
+        "default_json": "0.4",
         "modulable": true
       },
       {
@@ -1891,9 +1924,97 @@
         "kind": "number",
         "options": null,
         "step": 0.1,
-        "min": null,
+        "min": 0.0,
         "max": null,
         "default_json": "0.5",
+        "modulable": true
+      },
+      {
+        "key": "min_speed",
+        "label": "Min Speed",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": 0.0,
+        "max": null,
+        "default_json": "0.0",
+        "modulable": true
+      },
+      {
+        "key": "max_acc",
+        "label": "Max Accel (0=∞)",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": 0.0,
+        "max": null,
+        "default_json": "0.0",
+        "modulable": true
+      },
+      {
+        "key": "max_turn",
+        "label": "Max Turn rad/s (0=∞)",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": 0.0,
+        "max": null,
+        "default_json": "0.0",
+        "modulable": true
+      },
+      {
+        "key": "leader_weight",
+        "label": "Leader Weight (±)",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0",
+        "modulable": true
+      },
+      {
+        "key": "leader_standoff",
+        "label": "Leader Standoff",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": 0.0,
+        "max": null,
+        "default_json": "0.0",
+        "modulable": true
+      },
+      {
+        "key": "inline_weight",
+        "label": "In-Line Weight",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0",
+        "modulable": true
+      },
+      {
+        "key": "inline_standoff",
+        "label": "In-Line Spacing",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": 0.0,
+        "max": null,
+        "default_json": "0.3",
+        "modulable": true
+      },
+      {
+        "key": "bounds",
+        "label": "Bounds",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": 0.01,
+        "max": null,
+        "default_json": "1.0",
         "modulable": true
       },
       {
@@ -1935,7 +2056,7 @@
         "label": "out"
       }
     ],
-    "description": "Inter-object repulsion — mutual avoidance",
+    "description": "Inter-object repulsion — mutual avoidance, optional external repulsor",
     "object_distribution": "Agent",
     "stateful": true,
     "params": [
@@ -1982,6 +2103,72 @@
         "max": null,
         "default_json": "0.9",
         "modulable": true
+      },
+      {
+        "key": "avoid_strength",
+        "label": "External Repulsor Strength (0=off)",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0",
+        "modulable": true
+      },
+      {
+        "key": "avoid_radius",
+        "label": "External Repulsor Radius",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": 0.0,
+        "max": null,
+        "default_json": "0.5",
+        "modulable": true
+      },
+      {
+        "key": "avoid_x",
+        "label": "Repulsor X (local)",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0",
+        "modulable": true
+      },
+      {
+        "key": "avoid_y",
+        "label": "Repulsor Y (local)",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0",
+        "modulable": true
+      },
+      {
+        "key": "avoid_z",
+        "label": "Repulsor Z (local)",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0",
+        "modulable": true
+      },
+      {
+        "key": "avoid_object",
+        "label": "Repulsor Object (live)",
+        "kind": "objectref",
+        "options": null,
+        "step": null,
+        "min": null,
+        "max": null,
+        "default_json": "-1",
+        "modulable": false
       },
       {
         "key": "seed",

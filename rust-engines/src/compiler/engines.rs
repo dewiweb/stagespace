@@ -41,15 +41,51 @@ impl Compiler {
             NodeType::PoseRamp => Box::new(crate::engines::poseramp::PoseRamp),
             NodeType::PerlinNoise => Box::new(crate::engines::perlin_noise::PerlinNoise),
             NodeType::Converge => Box::new(crate::engines::converge::Converge),
-            NodeType::Pendulum => Box::new(crate::engines::pendulum::Pendulum::default()),
+            // Engines à état : le cache est partagé via `live.engine_states`
+            // (warm-start au hot-swap — la nouvelle instance adopte positions/
+            // vélocités/sim_t de la précédente, zéro resim). Hors chemin live
+            // (sample_fn, tests) → `shared_state` renvoie None → cache froid
+            // = comportement historique.
+            NodeType::Pendulum => match shared_state(live, "pendulum", &params, node) {
+                Some(c) => Box::new(crate::engines::pendulum::Pendulum::with_cache(c)),
+                None => Box::new(crate::engines::pendulum::Pendulum::default()),
+            },
             NodeType::RoseCurve => Box::new(crate::engines::rose_curve::RoseCurve),
             NodeType::Helix => Box::new(crate::engines::helix::Helix),
-            NodeType::Bouncing => Box::new(crate::engines::bouncing::Bouncing::default()),
-            NodeType::Avoidance => Box::new(crate::engines::avoidance::Avoidance::default()),
-            NodeType::Spring => Box::new(crate::engines::spring::Spring::default()),
-            NodeType::Follow => Box::new(crate::engines::follow::Follow::default()),
-            NodeType::Swarm => Box::new(crate::engines::swarm::Swarm::default()),
-            NodeType::VectorField => Box::new(crate::engines::vector_field::VectorField::default()),
+            NodeType::Bouncing => match shared_state(live, "bouncing", &params, node) {
+                Some(c) => Box::new(crate::engines::bouncing::Bouncing::with_cache(c)),
+                None => Box::new(crate::engines::bouncing::Bouncing::default()),
+            },
+            // Avoidance lit aussi `live.external_positions` (répulseur
+            // externe `avoid_object` — position live d'un objet animé en
+            // repère local). Partageable à la sample_fn : lecture seule.
+            NodeType::Avoidance => {
+                let ext = live.external_positions.clone().unwrap_or_default();
+                match shared_state(live, "avoidance", &params, node) {
+                    Some(c) => Box::new(
+                        crate::engines::avoidance::Avoidance::with_cache(c).with_external(ext),
+                    ),
+                    None => {
+                        Box::new(crate::engines::avoidance::Avoidance::default().with_external(ext))
+                    }
+                }
+            }
+            NodeType::Spring => match shared_state(live, "spring", &params, node) {
+                Some(c) => Box::new(crate::engines::spring::Spring::with_cache(c)),
+                None => Box::new(crate::engines::spring::Spring::default()),
+            },
+            NodeType::Follow => match shared_state(live, "follow", &params, node) {
+                Some(c) => Box::new(crate::engines::follow::Follow::with_cache(c)),
+                None => Box::new(crate::engines::follow::Follow::default()),
+            },
+            NodeType::Swarm => match shared_state(live, "swarm", &params, node) {
+                Some(c) => Box::new(crate::engines::swarm::Swarm::with_cache(c)),
+                None => Box::new(crate::engines::swarm::Swarm::default()),
+            },
+            NodeType::VectorField => match shared_state(live, "vectorfield", &params, node) {
+                Some(c) => Box::new(crate::engines::vector_field::VectorField::with_cache(c)),
+                None => Box::new(crate::engines::vector_field::VectorField::default()),
+            },
             // Expressions précompilées en AST borné (audit B3) — les
             // erreurs de parse/longueur/profondeur échouent la compile
             // avec InvalidParameter au lieu d'un re-parse à chaque tick.
@@ -306,4 +342,29 @@ fn resolve_poseramp(params: &mut EngineParams, live: &LiveInputs) -> Result<(), 
         map.insert("resolved_to".to_string(), serde_json::json!(tos));
     }
     Ok(())
+}
+
+/// Cache partagé d'un engine à état pour le compile courant —
+/// clé `{kind}:{__fe_id|node.id}` dans `live.engine_states`.
+///
+/// `__fe_id` (id React Flow injecté au parse) est stable entre
+/// recompiles contrairement à `NodeId` (UUID régénéré) — il fait foi
+/// quand présent ; le fallback `node.id` vaut pour les graphes
+/// direct-compilés (tests) où une clé quelconque suffit.
+/// `None` hors chemin live (sample_fn, previews froides, tests) →
+/// l'instance compile avec un cache froid = comportement historique.
+fn shared_state<T: Default + Send + Sync + 'static>(
+    live: &LiveInputs,
+    kind: &str,
+    params: &EngineParams,
+    node: &Node,
+) -> Option<std::sync::Arc<std::sync::Mutex<T>>> {
+    let store = live.engine_states.as_ref()?;
+    let node_key = params
+        .extra
+        .get("__fe_id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| node.id.0.to_string());
+    Some(store.get_or_default(kind, &node_key))
 }

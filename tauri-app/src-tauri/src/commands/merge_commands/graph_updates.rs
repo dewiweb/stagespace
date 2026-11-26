@@ -26,7 +26,15 @@ pub async fn update_move_graph_merged(
     tauri::async_runtime::spawn_blocking(move || {
         // Snapshot court sous le lock — la compilation (lourde) se fait ensuite
         // SANS tenir `movements`, sinon tout edit live gèle stop/panic/recall.
-        let (generation, held_positions, signal_graph_json, move_osc_ids, move_track_indices) = {
+        let (
+            generation,
+            held_positions,
+            signal_graph_json,
+            move_osc_ids,
+            move_track_indices,
+            engine_states,
+            external_positions,
+        ) = {
             let movements = lock_or_recover(&sh.movements);
             let movement = movements.get(&movement_id).ok_or_else(|| {
                 IpcError::not_found(format!("Movement '{movement_id}' not found"))
@@ -37,6 +45,8 @@ pub async fn update_move_graph_merged(
                 movement.signal_graph.clone(),
                 movement.osc_ids.clone(),
                 movement.track_indices.clone(),
+                movement.runtime.engine_states(),
+                movement.runtime.external_positions(),
             )
         };
 
@@ -56,15 +66,22 @@ pub async fn update_move_graph_merged(
             Some(slots.clone()),
             Some(held_positions.clone()),
             pose_ctx,
+            Some(engine_states),
+            Some(external_positions.clone()),
         )
         .map_err(IpcError::validation)?;
         // Instance jetable pour le TrajectorySampler — même table de slots.
+        // engine_states = None : le sampler ne partage jamais le cache
+        // des engines live (ses evals avanceraient leur sim_t).
+        // external_positions reste partagé : donnée live en lecture seule.
         let sample_fn = compile_graph_live(
             &graph,
             &sh,
             Some(slots.clone()),
             Some(held_positions),
             pose_ctx,
+            None,
+            Some(external_positions),
         )
         .map_err(IpcError::validation)?;
 
@@ -197,7 +214,15 @@ pub async fn update_signal_graph(
                 // signal — une table de slots commune, swap_compiled
                 // atomique (les cibles `param:` se re-lient à la nouvelle
                 // table, aucun stale possible).
-                let (generation, held_positions, move_graph_json, move_osc_ids, move_track_indices) = {
+                let (
+                    generation,
+                    held_positions,
+                    move_graph_json,
+                    move_osc_ids,
+                    move_track_indices,
+                    engine_states,
+                    external_positions,
+                ) = {
                     let movements = lock_or_recover(&sh.movements);
                     let movement = movements
                         .get(&id)
@@ -208,6 +233,8 @@ pub async fn update_signal_graph(
                         movement.graph_json.clone(),
                         movement.osc_ids.clone(),
                         movement.track_indices.clone(),
+                        movement.runtime.engine_states(),
+                        movement.runtime.external_positions(),
                     )
                 };
                 let audio_state = lock_or_recover(&sh.audio_state);
@@ -221,14 +248,20 @@ pub async fn update_signal_graph(
                     Some(slots.clone()),
                     Some(held_positions.clone()),
                     pose_ctx,
+                    Some(engine_states),
+                    Some(external_positions.clone()),
                 )
                 .map_err(IpcError::validation)?;
+                // engine_states = None : le sampler ne partage jamais le
+                // cache des engines live (avancerait leur sim_t).
                 let sample_fn = compile_graph_live(
                     &move_graph,
                     &sh,
                     Some(slots.clone()),
                     Some(held_positions),
                     pose_ctx,
+                    None,
+                    Some(external_positions),
                 )
                 .map_err(IpcError::validation)?;
                 let signal_fn = if graph_json.nodes.is_empty() {

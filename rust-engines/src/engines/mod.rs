@@ -138,9 +138,15 @@ pub fn sim_window(sim_t: f64, t: f64, fps: f64, cost: u64) -> (u64, f64, f64) {
 }
 
 /// Seuil de seek arrière : en dessous de ce recul l'appel est considéré
-/// comme du jitter flottant (fenêtre nulle) plutôt qu'un vrai rewind —
-/// évite un reset + re-sim complète sur `t = sim_t - ε`.
-pub const SIM_REWIND_EPS: f64 = 1e-9;
+/// comme du jitter (fenêtre nulle) plutôt qu'un vrai rewind — évite un
+/// reset + re-sim complète sur `t = sim_t - ε`.
+/// 0.1 s (~6 frames à 60 fps) : le pré-chauffe d'un hot-swap évalue à un
+/// `t` lu quelques frames en arrière — le worker a pu avancer `sim_t`
+/// entre-temps (cache partagé EngineStateStore) ; sans cette marge le
+/// prewarm déclenchait une resim complète sous le mutex du cache LIVE —
+/// worker bloqué > 0.5 s → stale-kill (observé en live). Tout vrai
+/// rewind (loop wrap, seek timecode, re-sample) recule de >> 0.1 s.
+pub const SIM_REWIND_EPS: f64 = 0.1;
 
 /// Garde-fou de sortie : un NaN/inf produit par des paramètres dégénérés ne
 /// doit jamais partir vers l'OSC — on retombe sur l'origine.

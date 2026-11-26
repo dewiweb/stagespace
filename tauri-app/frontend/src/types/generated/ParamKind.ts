@@ -4,4 +4,4 @@
  * Type de paramètre UI — aligné sur `ParamType` frontend et les types de
  * `PluginParamDef` (même rendu générique dans NodeParamField).
  */
-export type ParamKind = "number" | "boolean" | "string" | "vec3" | "enum" | "text";
+export type ParamKind = "number" | "boolean" | "string" | "vec3" | "enum" | "text" | "objectref";

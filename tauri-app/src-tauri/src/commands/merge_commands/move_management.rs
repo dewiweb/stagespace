@@ -377,6 +377,8 @@ fn spawn_move_inner(
         Some(slots.clone()),
         Some(runtime.held_positions()),
         pose_ctx,
+        Some(runtime.engine_states()),
+        Some(runtime.external_positions()),
     )
     .map_err(|e| {
         eprintln!("[ACTIVATE-ERROR] compile_graph failed: {e}");
@@ -385,12 +387,17 @@ fn spawn_move_inner(
     // Instance jetable pour le TrajectorySampler — les evals de preview
     // n'avancent pas sim_t des engines stateful de la fn live. Partage la
     // même table de slots (read-only) : le preview reflète la modulation.
+    // engine_states = None : le sampler ne doit JAMAIS partager le cache
+    // des engines live — ses evals avanceraient leur sim_t.
+    // external_positions reste partagé : donnée live en lecture seule.
     if let Ok(sample_fn) = compile_graph_live(
         &graph,
         sh,
         Some(slots.clone()),
         Some(runtime.held_positions()),
         pose_ctx,
+        None,
+        Some(runtime.external_positions()),
     ) {
         runtime.set_sample_fn(sample_fn);
     }
@@ -464,11 +471,16 @@ fn spawn_move_inner(
             runtime.set_anchor_capture(captured);
         }
     }
-    // AnchorMode::Follow — l'origine suit la dernière position émise de la
-    // track cible à chaque frame. Injecte le handle last_out du merge.
-    if spec.anchor_mode == stagespace_engines::AnchorMode::Follow {
+    // Handle positions monde du merge — injecté TOUJOURS (pas seulement en
+    // Follow) : les engines qui réagissent à un objet animé externe (ex.
+    // avoidance.avoid_object) en ont besoin quel que soit l'anchor_mode.
+    {
         let merge_rt = lock_or_recover(&sh.merge_runtime);
         runtime.set_last_positions_handle(merge_rt.last_positions_handle());
+    }
+    // AnchorMode::Follow — l'origine suit la dernière position émise de la
+    // track cible à chaque frame.
+    if spec.anchor_mode == stagespace_engines::AnchorMode::Follow {
         runtime.set_anchor_follow(spec.anchor_target.map(|t| t as usize));
     }
     if let Some(anim_state) = spec.animation_state {

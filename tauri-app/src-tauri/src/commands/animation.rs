@@ -168,14 +168,20 @@ pub async fn update_animation_state(
         Some(slots.clone()),
         Some(held_positions.clone()),
         pose_ctx,
+        Some(movement.runtime.engine_states()),
+        Some(movement.runtime.external_positions()),
     )
     .map_err(IpcError::validation)?;
+    // engine_states = None : le sampler ne partage jamais le cache des
+    // engines live (avancerait leur sim_t).
     let sample_fn = crate::graph::compilation::compile_graph_live(
         &move_graph,
         &crate::commands::state::Shared::from_state(&state),
         Some(slots.clone()),
         Some(held_positions),
         pose_ctx,
+        None,
+        Some(movement.runtime.external_positions()),
     )
     .map_err(IpcError::validation)?;
     movement

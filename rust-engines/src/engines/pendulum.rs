@@ -7,16 +7,23 @@
 
 use crate::engines::{finite_or_zero, sim_window, Engine, EngineParams, SIM_REWIND_EPS};
 use nalgebra::Vector3;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// Engine à état — `Default` produit un cache vide (premier appel = init).
 #[derive(Default)]
 pub struct Pendulum {
-    cache: Mutex<PendulumCache>,
+    cache: Arc<Mutex<PendulumCache>>,
+}
+
+impl Pendulum {
+    /// Cache partagé via `EngineStateStore` — warm-start au hot-swap.
+    pub(crate) fn with_cache(cache: Arc<Mutex<PendulumCache>>) -> Self {
+        Self { cache }
+    }
 }
 
 #[derive(Default)]
-struct PendulumCache {
+pub(crate) struct PendulumCache {
     /// État (theta, omega) par objet — intégration lazy.
     agents: Vec<PendulumAgent>,
 }

@@ -51,6 +51,11 @@ pub struct Runtime {
     /// Handle partagé vers les dernières positions monde du merge —
     /// injecté au spawn quand anchor_mode = Follow.
     last_positions_handle: Arc<RwLock<std::collections::HashMap<usize, [f64; 3]>>>,
+    /// Positions des objets externes vues dans le repère LOCAL du move —
+    /// le worker y écrit chaque frame l'inverse de move_transform des
+    /// positions canoniques émises. Les engines qui réagissent à un objet
+    /// animé (évitement…) lisent cette map (compilée via LiveInputs).
+    external_positions: Arc<RwLock<std::collections::HashMap<usize, nalgebra::Vector3<f64>>>>,
     /// Animation state — depth + phase_offset par track + audio mods
     animation_state: Arc<Mutex<Option<AnimationState>>>,
     /// Audio state — partagé avec l'app, lu à chaque frame pour les audio mods
@@ -61,6 +66,13 @@ pub struct Runtime {
     /// Positions tenues par les nodes Freeze — survit aux recompiles
     /// (partagé avec les closures compilées via LiveInputs).
     held_positions: crate::compiler::HeldPositions,
+    /// Caches des engines à état du move — passé au compile de la
+    /// position_fn (jamais à la sample_fn) pour le warm-start au
+    /// hot-swap : la nouvelle instance adopte le cache de la
+    /// précédente, la resim 0→t disparaît (complément du prewarm qui
+    /// couvre les miss : changement de type de node, fe_id différent).
+    /// Vit avec le Runtime — un stop/spawn repart sur caches froids.
+    engine_state_store: crate::compiler::EngineStateStore,
     /// Table de slots de params modulables — partagée entre position_fn,
     /// sample_fn et signal_fn d'un même compile (swap atomique). Le worker
     /// y écrit les deltas `param:` de la signal_fn à chaque frame ; les
@@ -86,6 +98,11 @@ pub struct Runtime {
     /// Offset temporel (seek timecode) — déplacement additif sur le
     /// temps virtuel à chaque frame, avant le modulo de boucle.
     time_offset_secs: Arc<std::sync::atomic::AtomicU64>,
+    /// Dernier `t` vu par les engines (post-modulo, obj 0) — bits d'un f64.
+    /// Sert à pré-chauffer le cache d'un engine à état LORS DU SWAP
+    /// (resim payée par le thread de la commande, pas par la boucle
+    /// worker — sinon le buffer gèle au-delà du seuil stale-kill).
+    last_engine_t: Arc<std::sync::atomic::AtomicU64>,
     /// OSC ids du move — hot-swappable en live via set_osc_ids.
     /// Le worker thread lit cette valeur à chaque frame pour savoir
     /// combien de positions calculer.
@@ -164,16 +181,19 @@ impl Runtime {
             anchor_capture: Arc::new(RwLock::new(std::collections::HashMap::new())),
             anchor_follow_target: Arc::new(RwLock::new(None)),
             last_positions_handle: Arc::new(RwLock::new(std::collections::HashMap::new())),
+            external_positions: Arc::new(RwLock::new(std::collections::HashMap::new())),
             animation_state: Arc::new(Mutex::new(None)),
             audio_state,
             audio_param_overrides: Arc::new(Mutex::new(HashMap::new())),
             held_positions: Arc::new(Mutex::new(HashMap::new())),
+            engine_state_store: crate::compiler::EngineStateStore::new(),
             param_slots: Arc::new(Mutex::new(crate::param_slots::ParamSlots::empty())),
             external_param_deltas: Arc::new(Mutex::new(HashMap::new())),
             position_buffer: Mutex::new(None),
             duration_ms: Arc::new(std::sync::atomic::AtomicU64::new(4000)),
             osc_ids_arc: Arc::new(std::sync::RwLock::new(Vec::new())),
             time_offset_secs: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            last_engine_t: Arc::new(std::sync::atomic::AtomicU64::new(0.0f64.to_bits())),
             signal_fn: Arc::new(Mutex::new(crate::signal_compiler::empty_signal_fn())),
             osc_values: Arc::new(std::sync::RwLock::new(Arc::new(Mutex::new(HashMap::new())))),
             thread_handle: Mutex::new(None),
@@ -309,6 +329,24 @@ impl Runtime {
         self.held_positions.clone()
     }
 
+    /// Store des caches d'engines à état — à passer à la compile de la
+    /// position_fn (LiveInputs.engine_states) pour le warm-start au
+    /// hot-swap. Jamais à la sample_fn : ses evals ne doivent pas
+    /// avancer le sim_t partagé avec la live.
+    pub fn engine_states(&self) -> crate::compiler::EngineStateStore {
+        self.engine_state_store.clone()
+    }
+
+    /// Positions des objets externes en repère LOCAL du move — remplies
+    /// par le worker chaque frame (inverse de move_transform). À passer
+    /// à la compile via `LiveInputs.external_positions` : les engines qui
+    /// réagissent à un objet animé (avoidance.avoid_object…) la lisent.
+    /// Partageable à la sample_fn — donnée live en lecture seule, sans
+    /// état de simulation contrairement à engine_states.
+    pub fn external_positions(&self) -> crate::engines::avoidance::ExternalPositions {
+        self.external_positions.clone()
+    }
+
     /// Récupère l'Arc de l'audio state — permet de mettre à jour sans locker state.movements
     pub fn audio_state_arc(&self) -> Arc<Mutex<AudioState>> {
         self.audio_state.clone()
@@ -327,6 +365,25 @@ impl Runtime {
         *self.param_slots.lock().unwrap_or_else(|e| e.into_inner()) = slots;
     }
 
+    /// Pré-chauffe le cache d'un engine à état (Swarm…) au dernier `t` vu
+    /// par le worker. Le premier eval d'une instance fraîche re-simule
+    /// l'historique 0→t — si ça arrivait dans la boucle worker (après un
+    /// hot-swap à t élevé), le buffer de positions gèlerait au-delà du
+    /// seuil stale-kill du superviseur et le move serait tué. En le
+    /// faisant ICI (thread de la commande, déjà hors worker via
+    /// spawn_blocking), la resim est payée par l'appelant — le premier
+    /// eval worker retombe sur un cache chaud = fenêtre incrémentale
+    /// d'une frame. No-op pour les engines sans état (eval direct) et
+    /// quand le worker n'a jamais tourné (t=0 → resim vide).
+    fn prewarm_stateful(&self, position_fn: &PositionFn) {
+        let t = f64::from_bits(self.last_engine_t.load(Ordering::Relaxed));
+        if t > 0.0 {
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                position_fn(t, 0);
+            }));
+        }
+    }
+
     /// Swap atomique d'un move recompilé : position_fn + sample_fn +
     /// signal_fn + leur ParamSlots commune — le worker ne peut jamais
     /// apparier une signal_fn avec une position_fn d'un autre compile
@@ -340,6 +397,7 @@ impl Runtime {
         signal_fn: crate::signal_compiler::SignalFn,
         slots: Arc<crate::param_slots::ParamSlots>,
     ) {
+        self.prewarm_stateful(&position_fn);
         let mut sig = self.signal_fn.lock().unwrap_or_else(|e| e.into_inner());
         *sig = signal_fn;
         *self.param_slots.lock().unwrap_or_else(|e| e.into_inner()) = slots;
@@ -361,6 +419,10 @@ impl Runtime {
         slots: Arc<crate::param_slots::ParamSlots>,
         fade_duration: f64,
     ) {
+        // Pré-chauffe AVANT tout lock : une resim longue sous le lock
+        // signal gèlerait quand même le worker (il prend ce lock à
+        // chaque frame) → même stale-kill qu'on cherche à éviter.
+        self.prewarm_stateful(&position_fn);
         let mut sig = self.signal_fn.lock().unwrap_or_else(|e| e.into_inner());
         *sig = signal_fn;
         *self.param_slots.lock().unwrap_or_else(|e| e.into_inner()) = slots;
@@ -408,6 +470,7 @@ impl Runtime {
     }
 
     pub fn swap_position_fn(&self, new_fn: PositionFn) {
+        self.prewarm_stateful(&new_fn);
         let mut old = self.position_fn.lock().unwrap_or_else(|e| e.into_inner());
         *old = new_fn;
     }
@@ -503,6 +566,56 @@ impl TrajectorySampler {
         }
         samples
     }
+
+    /// Échantillonne TOUS les objets en une seule passe temporelle —
+    /// retourne `paths[local_obj][point]`. Pour les engines à état
+    /// (swarm, avoidance) c'est la seule version supportable : itérer
+    /// objet-par-objet force un reset + re-simulation COMPLÈTE par objet
+    /// (63 objets × resim fenêtre entière ≈ des dizaines de secondes de
+    /// CPU, qui saturent le pool blocking et gèlent le dispatch IPC).
+    /// En itérant t-externe / objet-interne, la cache avance une seule
+    /// fois par pas — UNE resim couvre tous les objets.
+    pub fn sample_all(
+        &self,
+        n_objects: usize,
+        n_samples: usize,
+        duration: f64,
+    ) -> Vec<Vec<(f64, f64, f64, f64)>> {
+        let msnap = self.macros.snapshot();
+        let (yaw, pitch, roll) = (msnap.yaw, msnap.pitch, msnap.roll);
+        let rot_matrix = crate::spatial_transform::euler_rotation(
+            pitch.to_radians(),
+            yaw.to_radians(),
+            roll.to_radians(),
+        );
+        let origin = *self.origin.lock().unwrap_or_else(|e| e.into_inner());
+        let fn_arc = self
+            .position_fn
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let mut paths: Vec<Vec<(f64, f64, f64, f64)>> = (0..n_objects)
+            .map(|_| Vec::with_capacity(n_samples))
+            .collect();
+        for i in 0..n_samples {
+            let t = (i as f64 / (n_samples - 1).max(1) as f64) * duration;
+            for (obj, path) in paths.iter_mut().enumerate() {
+                let pos = fn_arc(t, obj);
+                let p = move_transform(
+                    pos,
+                    origin,
+                    msnap.scale,
+                    msnap.shift,
+                    rot_matrix.as_ref(),
+                    msnap.radius_scale,
+                    msnap.height_offset,
+                    1.0,
+                );
+                path.push((t, p.x, p.y, p.z));
+            }
+        }
+        paths
+    }
 }
 
 impl Runtime {
@@ -589,6 +702,7 @@ impl Runtime {
         let origin_arc = self.origin.clone();
         let anchor_follow_arc = self.anchor_follow_target.clone();
         let last_positions_arc = self.last_positions_handle.clone();
+        let external_positions_arc = self.external_positions.clone();
         let anchor_capture_arc = self.anchor_capture.clone();
         // Offsets d'ancre par objet — calculés à la première frame :
         // delta[obj] = capturée[obj] − pos(t0, obj), ensuite pos += delta.
@@ -601,6 +715,7 @@ impl Runtime {
         let external_deltas_arc = self.external_param_deltas.clone();
         let signal_fn_arc = self.signal_fn.clone();
         let osc_values_arc = self.osc_values.clone();
+        let last_engine_t_arc = self.last_engine_t.clone();
 
         let handle = std::thread::spawn(move || {
             // RAII : si la closure panique (bug engine, poison critique),
@@ -887,6 +1002,37 @@ impl Runtime {
                     eff_yaw.to_radians(),
                     eff_roll.to_radians(),
                 );
+                // Positions externes → repère LOCAL du move (inverse de
+                // move_transform) — les engines qui réagissent à un objet
+                // animé (ex. avoidance.avoid_object) lisent cette map.
+                // ~64 inversions par frame, négligeable.
+                {
+                    let lp = last_positions_arc.read().unwrap_or_else(|e| e.into_inner());
+                    let mut ext = external_positions_arc
+                        .write()
+                        .unwrap_or_else(|e| e.into_inner());
+                    ext.clear();
+                    if fade_factor.abs() > 1e-9
+                        && effective_scale.abs() > 1e-9
+                        && effective_radius_scale.abs() > 1e-9
+                    {
+                        ext.reserve(lp.len());
+                        let inv_rot = rot_matrix.map(|r| r.inverse());
+                        for (&obj, wp) in lp.iter() {
+                            let mut p = nalgebra::Vector3::new(wp[0], wp[1], wp[2])
+                                - move_origin
+                                - eff_shift;
+                            if let Some(r) = inv_rot.as_ref() {
+                                p = r * p;
+                            }
+                            p /= effective_scale;
+                            p /= fade_factor;
+                            p.y -= effective_height_offset;
+                            p /= effective_radius_scale;
+                            ext.insert(obj, p);
+                        }
+                    }
+                }
                 let positions: Vec<(usize, nalgebra::Vector3<f64>)> = {
                     // Snapshot pris sous le lock signal (appariement
                     // signal↔position du même compile) — l'évaluation de
@@ -910,6 +1056,11 @@ impl Runtime {
                                 } else {
                                     t_with_phase
                                 };
+                                // Dernier t vu par l'engine (obj 0) — sert de
+                                // cible de pré-chauffe du cache stateful au swap.
+                                if obj_idx == 0 {
+                                    last_engine_t_arc.store(t_looped.to_bits(), Ordering::Relaxed);
+                                }
                                 // catch_unwind: la position_fn peut panic si obj_idx
                                 // dépasse le n_objects pour lequel elle a été compilée
                                 // (race condition lors du hot-swap des osc_ids avant

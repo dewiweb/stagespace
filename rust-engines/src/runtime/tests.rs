@@ -635,3 +635,51 @@ fn test_speed_change_mid_flight_does_not_jump() {
         "t_virtual doit rester monotone : {x_later} < {x_after_flip}"
     );
 }
+
+#[test]
+fn test_swap_prewarms_stateful_cache() {
+    // Régression stale-kill : hot-swap d'un engine à état à t élevé —
+    // le premier eval de la nouvelle fn re-simulait 0→t dans la boucle
+    // worker → buffer gelé > seuil → supervisor tuait le move. Le swap
+    // évalue désormais la nouvelle fn au dernier t engine (resim payée
+    // par le thread de la commande, pas par le worker).
+    let rt = test_runtime();
+    rt.last_engine_t.store(12.5f64.to_bits(), Ordering::Relaxed);
+
+    let calls = Arc::new(Mutex::new(Vec::<f64>::new()));
+    let calls2 = calls.clone();
+    let fn_track: PositionFn = Arc::new(move |t, _| {
+        calls2.lock().unwrap().push(t);
+        nalgebra::Vector3::zeros()
+    });
+
+    rt.swap_position_fn(fn_track.clone());
+    assert_eq!(
+        *calls.lock().unwrap(),
+        vec![12.5],
+        "le swap doit évaluer la fn au dernier t engine (prewarm)"
+    );
+
+    // swap_compiled pareil (chemin update_move_graph_merged / recall)
+    calls.lock().unwrap().clear();
+    rt.swap_compiled(
+        fn_track.clone(),
+        fn_track.clone(),
+        crate::signal_compiler::empty_signal_fn(),
+        crate::param_slots::ParamSlots::empty(),
+    );
+    assert_eq!(*calls.lock().unwrap(), vec![12.5]);
+}
+
+#[test]
+fn test_no_prewarm_at_t_zero() {
+    // Worker jamais démarré → t=0 → pas d'eval parasite au swap.
+    let rt = test_runtime();
+    let calls = Arc::new(Mutex::new(Vec::<f64>::new()));
+    let calls2 = calls.clone();
+    rt.swap_position_fn(Arc::new(move |t, _| {
+        calls2.lock().unwrap().push(t);
+        nalgebra::Vector3::zeros()
+    }));
+    assert!(calls.lock().unwrap().is_empty());
+}

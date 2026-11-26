@@ -71,6 +71,16 @@ Un second lancement échoue sur `AddrInUse` : normal — vérifier
 l'instance existante avec `curl -s -X POST …/invoke`. Bind par défaut
 `127.0.0.1:4173`, même env var.
 
+⚠️ **Après un (re)démarrage le pool OSC est vide** — tout
+`activate_move` échoue instantanément (`track_index N hors de la liste
+OSC globale (0 entrées)`), y compris les replays de slots existants
+(leur `movementId` localStorage survit côté frontend mais le backend a
+tout perdu). Rejouer d'abord `set_global_osc_ids` (ex.
+`{"cmd":"set_global_osc_ids","args":{"oscIds":[1..64]}}`) avant tout
+play. Les `movementId`/slots persistés côté navigateur peuvent aussi
+désynchroniser `playSlot` (court-circuit "déjà en jeu") — `stopSlot`
+par slot (ou `panic`) purge proprement.
+
 ## Côté frontend
 
 Le shim `frontend/public/tauri-bridge.js` (chargé par `index.html` en

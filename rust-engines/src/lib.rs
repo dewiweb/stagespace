@@ -70,7 +70,7 @@ pub use cuelist::{
     Cue, CueMode, CueScope, CuelistManager, MacroSnapshot, MoveSnapshot, SpatialMacroSnapshot,
     CUE_SCHEMA_VERSION,
 };
-pub use engines::{Engine, EngineParams, MAX_OBJECTS};
+pub use engines::{avoidance::ExternalPositions, Engine, EngineParams, MAX_OBJECTS};
 pub use error::{Result, StagespaceError};
 pub use falloffs::{
     AudioAmplitudeFalloff, DirectionalFalloff, Falloff, FalloffContext, FalloffCurve,

@@ -148,6 +148,10 @@ pub enum ParamKind {
     Vec3,
     Enum,
     Text,
+    /// Sélecteur d'objet externe — valeur = index objet (i64), `−1` = off.
+    /// Le frontend rend un dropdown des tracks HORS du move (obj_index =
+    /// position dans manualOscIds), ex. `avoid_object` d'Avoidance.
+    ObjectRef,
 }
 
 /// Déclaration d'un paramètre de node — miroir structuré de `ParamDef`
@@ -313,6 +317,9 @@ fn enm(key: &str, label: &str, options: &[&str]) -> ParamSpec {
     let mut d = p(key, label, ParamKind::Enum);
     d.options = Some(options.iter().map(|s| s.to_string()).collect());
     d
+}
+fn oref(key: &str, label: &str) -> ParamSpec {
+    p(key, label, ParamKind::ObjectRef)
 }
 
 /// Attache un défaut (JSON-encodé) à un ParamSpec — builder postfixe.
@@ -730,24 +737,41 @@ fn build_catalog() -> Vec<NodeSpec> {
         ),
         spec(
             NodeType::Swarm, C::PhysicsEngine, S::SubOnly, engine_in(), out_pos(),
-            "Boids — flocking with separation/alignment/cohesion",
+            "Boids — flocking with separation/alignment/cohesion, wander, k-nearest, leader & in-line rules",
             vec![
                 ns("separation", "Separation", 0.1).d(0.3),
                 ns("alignment", "Alignment", 0.1).d(0.5),
                 ns("cohesion", "Cohesion", 0.1).d(0.3),
-                ns("neighbor_radius", "Neighbor Radius", 0.1).d(0.5),
-                ns("max_speed", "Max Speed", 0.1).d(0.5),
+                nmin("neighbor_radius", "Neighbor Radius", 0.1, 0.0).d(0.5),
+                nmin("k_neighbors", "K Neighbors (0=radius)", 1.0, 0.0).d(0.0),
+                nrange("wander", "Wander", 0.05, 0.0, 2.0).d(0.0),
+                nmin("wander_freq", "Wander Freq", 0.05, 0.0).d(0.4),
+                nmin("max_speed", "Max Speed", 0.1, 0.0).d(0.5),
+                nmin("min_speed", "Min Speed", 0.1, 0.0).d(0.0),
+                nmin("max_acc", "Max Accel (0=∞)", 0.1, 0.0).d(0.0),
+                nmin("max_turn", "Max Turn rad/s (0=∞)", 0.1, 0.0).d(0.0),
+                ns("leader_weight", "Leader Weight (±)", 0.1).d(0.0),
+                nmin("leader_standoff", "Leader Standoff", 0.1, 0.0).d(0.0),
+                ns("inline_weight", "In-Line Weight", 0.1).d(0.0),
+                nmin("inline_standoff", "In-Line Spacing", 0.1, 0.0).d(0.3),
+                nmin("bounds", "Bounds", 0.1, 0.01).d(1.0),
                 ns("seed", "Seed", 1.0).d(42).fixed(),
             ],
         ),
         spec(
             NodeType::Avoidance, C::PhysicsEngine, S::SubOnly, engine_in(), out_pos(),
-            "Inter-object repulsion — mutual avoidance",
+            "Inter-object repulsion — mutual avoidance, optional external repulsor",
             vec![
                 ns("repulsion_radius", "Repulsion Radius", 0.1).d(0.4),
                 ns("repulsion_strength", "Repulsion Strength", 0.1).d(2.0),
                 ns("damping", "Damping", 0.01).d(0.95),
                 ns("container_size", "Container Size", 0.1).d(0.9),
+                ns("avoid_strength", "External Repulsor Strength (0=off)", 0.1).d(0.0),
+                nmin("avoid_radius", "External Repulsor Radius", 0.1, 0.0).d(0.5),
+                ns("avoid_x", "Repulsor X (local)", 0.1).d(0.0),
+                ns("avoid_y", "Repulsor Y (local)", 0.1).d(0.0),
+                ns("avoid_z", "Repulsor Z (local)", 0.1).d(0.0),
+                oref("avoid_object", "Repulsor Object (live)").d(-1),
                 ns("seed", "Seed", 1.0).d(42).fixed(),
             ],
         ),
