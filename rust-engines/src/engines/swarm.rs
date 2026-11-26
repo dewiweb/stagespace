@@ -17,6 +17,20 @@
 //!   neighbor_radius   portée alignement/cohésion                 (défaut 0.5)
 //!   max_speed         vitesse max, unités/s                      (défaut 0.5)
 //!   seed              graine RNG                                 (défaut 42)
+//!
+//! Extensions façon "boid brain" (toutes à 0/off par défaut) :
+//!   k_neighbors      voisinage = k plus proches (0 = rayon)     (défaut 0)
+//!   wander           cap aléatoire persistant par agent (poids)  (défaut 0)
+//!   wander_freq      fréquence du wander, Hz                     (défaut 0.4)
+//!   min_speed        vitesse min — vol perpétuel                 (défaut 0)
+//!   max_acc          accélération max (0 = off)                  (défaut 0)
+//!   max_turn         virage max rad/s — virages inclinés         (défaut 0)
+//!   leader_weight    ressort vers l'origine locale (= leader
+//!                    sous anchor:follow)                        (défaut 0)
+//!   leader_standoff  distance préférée au leader (coquille)      (défaut 0)
+//!   inline_weight    file indienne — l'agent i suit i−1,
+//!                    l'agent 0 suit le leader                    (défaut 0)
+//!   inline_standoff  espacement dans la file                     (défaut 0.3)
 
 use crate::engines::{
     finite_or_zero, sim_window, Engine, EngineParams, MAX_OBJECTS, SIM_REWIND_EPS,
@@ -83,6 +97,19 @@ pub struct Swarm {
     cache: Mutex<SwarmCache>,
 }
 
+/// Direction de wander lisse par agent — fonction pure de `t` (hash + sommes
+/// de sinus comme `jitter`), donc déterministe et rewind-safe : re-simuler
+/// depuis t=0 redonne exactement la même trajectoire.
+fn wander_dir(i: usize, t: f64, freq: f64, seed: u64) -> Vector3<f64> {
+    let h =
+        |n: f64| (((i as f64) * 17.0 + seed as f64 * 12.9898 + n).sin() * 43758.5453).fract() * TAU;
+    Vector3::new(
+        (TAU * freq * t + h(0.0)).sin() + 0.5 * (TAU * freq * t * 1.3 + h(3.0)).sin(),
+        (TAU * freq * t * 1.1 + h(1.0)).sin() + 0.5 * (TAU * freq * t * 0.7 + h(4.0)).sin(),
+        (TAU * freq * t * 0.9 + h(2.0)).sin() + 0.5 * (TAU * freq * t * 1.7 + h(5.0)).sin(),
+    )
+}
+
 impl Engine for Swarm {
     fn position(&self, t: f64, object_index: usize, params: &EngineParams) -> Vector3<f64> {
         let separation = params
@@ -118,6 +145,25 @@ impl Engine for Swarm {
             .get("seed")
             .and_then(|v| v.as_i64())
             .unwrap_or(42) as u64;
+        let get = |k: &str, d: f64| params.extra.get(k).and_then(|v| v.as_f64()).unwrap_or(d);
+        // Voisinage k-plus-proches (0 = rayon fixe, comportement V1).
+        let k_neighbors = get("k_neighbors", 0.0).max(0.0) as usize;
+        // Wander — cap aléatoire persistant : sans lui le troupeau converge
+        // vers un équilibre géométrique (tore/boule) et s'y fige.
+        let wander = get("wander", 0.0);
+        let wander_freq = get("wander_freq", 0.4).max(0.0);
+        // Contraintes de vol — banking au lieu de snaps instantanés.
+        let min_speed = get("min_speed", 0.0).max(0.0);
+        let max_acc = get("max_acc", 0.0).max(0.0);
+        let max_turn = get("max_turn", 0.0).max(0.0);
+        // Leader — ressort vers la coquille `standoff` autour de l'origine
+        // locale (la position émise du leader sous anchor:follow).
+        let leader_weight = get("leader_weight", 0.0);
+        let leader_standoff = get("leader_standoff", 0.0).max(0.0);
+        // File indienne — l'agent i suit l'agent i−1, l'agent 0 suit le
+        // leader (origine). Formation V/ligne émergente.
+        let inline_weight = get("inline_weight", 0.0);
+        let inline_standoff = get("inline_standoff", 0.3).max(0.0);
 
         // object_index peut dépasser n_objects (hot-swap d'osc_id) : on dimensionne
         // le troupeau pour l'inclure plutôt que de paniquer. MAX_OBJECTS borne le
@@ -129,6 +175,11 @@ impl Engine for Swarm {
             .max(object_index.saturating_add(1))
             .min(MAX_OBJECTS);
         let queried = object_index.min(n_objects - 1);
+        let k_take = if k_neighbors == 0 {
+            0
+        } else {
+            k_neighbors.min(n_objects.saturating_sub(1)).max(1)
+        };
 
         let mut c = self.cache.lock().unwrap_or_else(|e| e.into_inner());
         // Seek arrière (sampling arbitraire) ou changement de population →
@@ -139,8 +190,13 @@ impl Engine for Swarm {
 
         let cost = (n_objects as u64).saturating_mul(n_objects as u64);
         let (n_steps, dt, new_t) = sim_window(c.sim_t, t, params.fps, cost);
+        let sim_t0 = c.sim_t;
+        // Buffer réutilisé pour la sélection des k voisins — évite une alloc
+        // par agent par pas.
+        let mut scratch: Vec<(f64, usize)> = Vec::with_capacity(n_objects);
 
-        for _ in 0..n_steps {
+        for step in 0..n_steps {
+            let tau = sim_t0 + step as f64 * dt;
             for i in 0..n_objects {
                 let pos_i = c.positions[i];
                 let mut sep = Vector3::zeros();
@@ -148,21 +204,46 @@ impl Engine for Swarm {
                 let mut coh = Vector3::zeros();
                 let mut neighbors = 0;
 
-                for j in 0..n_objects {
-                    if j == i {
-                        continue;
+                if k_take > 0 {
+                    // k plus proches — la densité locale s'adapte toute seule
+                    // (pas de trou dans le voisinage quand le troupeau se dilate).
+                    scratch.clear();
+                    for j in 0..n_objects {
+                        if j == i {
+                            continue;
+                        }
+                        let diff = pos_i - c.positions[j];
+                        let dist = diff.norm();
+                        if dist < separation {
+                            sep += diff / (dist + 1e-9);
+                        }
+                        scratch.push((dist, j));
                     }
-                    let diff = pos_i - c.positions[j];
-                    let dist = diff.norm();
-
-                    if dist < separation {
-                        sep += diff / (dist + 1e-9);
-                    }
-
-                    if dist < neighbor_radius {
+                    scratch.sort_unstable_by(|a, b| {
+                        a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    for &(_, j) in scratch.iter().take(k_take) {
                         align += c.velocities[j];
                         coh += c.positions[j];
                         neighbors += 1;
+                    }
+                } else {
+                    for j in 0..n_objects {
+                        if j == i {
+                            continue;
+                        }
+                        let diff = pos_i - c.positions[j];
+                        let dist = diff.norm();
+
+                        if dist < separation {
+                            sep += diff / (dist + 1e-9);
+                        }
+
+                        if dist < neighbor_radius {
+                            align += c.velocities[j];
+                            coh += c.positions[j];
+                            neighbors += 1;
+                        }
                     }
                 }
 
@@ -172,17 +253,74 @@ impl Engine for Swarm {
                     coh = (coh - pos_i) * 0.1;
                 }
 
-                c.acc[i] = sep * separation + align * alignment + coh * cohesion;
+                let mut acc = sep * separation + align * alignment + coh * cohesion;
+
+                if wander != 0.0 {
+                    acc += wander_dir(i, tau, wander_freq, seed) * wander;
+                }
+
+                if leader_weight != 0.0 {
+                    // Ressort vers la coquille `standoff` autour de l'origine —
+                    // standoff 0 = attraction pure vers le point-leader.
+                    let d = pos_i.norm();
+                    acc += pos_i * (-(d - leader_standoff) * leader_weight / (d + 1e-9));
+                }
+
+                if inline_weight != 0.0 && n_objects > 1 {
+                    // File indienne — i suit i−1 ; l'agent 0 suit l'origine
+                    // (le leader sous anchor:follow).
+                    let ahead = if i == 0 {
+                        Vector3::zeros()
+                    } else {
+                        c.positions[i - 1]
+                    };
+                    let to_ahead = ahead - pos_i;
+                    let d = to_ahead.norm();
+                    acc += to_ahead * ((d - inline_standoff) * inline_weight / (d + 1e-9));
+                }
+
+                c.acc[i] = acc;
             }
 
             for i in 0..n_objects {
                 // Kick d'accélération normalisé au pas nominal (60 Hz) :
                 // sans ça la dynamique dépend du param fps (2× les steps =
                 // 2× plus de kicks par seconde simulée).
-                let mut vel = c.velocities[i] + c.acc[i] * (dt * 60.0);
+                let old = c.velocities[i];
+                let mut vel = old + c.acc[i] * (dt * 60.0);
+
+                if max_acc > 0.0 {
+                    let dv = vel - old;
+                    let m = dv.norm();
+                    let cap = max_acc * dt * 60.0;
+                    if m > cap {
+                        vel = old + dv * (cap / m);
+                    }
+                }
+
+                if max_turn > 0.0 {
+                    let os = old.norm();
+                    let ns = vel.norm();
+                    if os > 1e-9 && ns > 1e-9 {
+                        let od = old / os;
+                        let nd = vel / ns;
+                        let angle = od.dot(&nd).clamp(-1.0, 1.0).acos();
+                        let max_a = max_turn * dt;
+                        if angle > max_a {
+                            // Slerp linéaire vers la direction désirée,
+                            // bornée au virage max du pas.
+                            let k = max_a / angle;
+                            let dir = (od * (1.0 - k) + nd * k).normalize();
+                            vel = dir * ns;
+                        }
+                    }
+                }
+
                 let speed = vel.norm();
                 if speed > max_speed {
                     vel *= max_speed / speed;
+                } else if speed < min_speed && speed > 1e-9 {
+                    vel *= min_speed / speed;
                 }
                 c.velocities[i] = vel;
                 c.positions[i] = (c.positions[i] + vel * dt).map(|v| v.clamp(-1.0, 1.0));
@@ -342,5 +480,122 @@ mod tests {
         let fresh = Swarm::default().position(0.5, 0, &p);
         assert_eq!(back, fresh, "seek arrière doit re-simuler depuis t=0");
         assert_ne!(back, far);
+    }
+
+    #[test]
+    fn swarm_leader_weight_pulls_toward_origin() {
+        // leader_weight > 0 → le troupeau doit se resserrer sur l'origine
+        // locale (= le leader sous anchor:follow), vs sans attraction.
+        let e = Swarm::default();
+        let p = params(
+            8,
+            json!({"separation": 0.1, "alignment": 0.0, "cohesion": 0.0,
+                   "leader_weight": 3.0, "leader_standoff": 0.2,
+                   "max_speed": 1.0, "seed": 7}),
+        );
+        let positions: Vec<Vector3<f64>> = (0..8).map(|i| e.position(2.5, i, &p)).collect();
+        let mean_d: f64 = positions.iter().map(|v| v.norm()).sum::<f64>() / positions.len() as f64;
+        assert!(
+            mean_d < 0.45,
+            "leader_weight devrait rapprocher du standoff 0.2, mean={mean_d}"
+        );
+    }
+
+    #[test]
+    fn swarm_leader_weight_negative_scatters() {
+        // leader_weight < 0 → dispersion loin du leader (mode prédateur).
+        let e = Swarm::default();
+        let p = params(
+            8,
+            json!({"separation": 0.1, "alignment": 0.0, "cohesion": 0.0,
+                   "leader_weight": -2.0, "max_speed": 1.0, "seed": 7}),
+        );
+        let positions: Vec<Vector3<f64>> = (0..8).map(|i| e.position(2.0, i, &p)).collect();
+        let mean_d: f64 = positions.iter().map(|v| v.norm()).sum::<f64>() / positions.len() as f64;
+        assert!(
+            mean_d > 0.5,
+            "leader_weight négatif devrait disperser, mean={mean_d}"
+        );
+    }
+
+    #[test]
+    fn swarm_wander_keeps_agents_unsettled() {
+        // wander > 0 : perturbation perpétuelle — les agents ne se figent
+        // jamais même sans interactions.
+        let e = Swarm::default();
+        let p = params(
+            4,
+            json!({"separation": 0.0, "alignment": 0.0, "cohesion": 0.0,
+                   "wander": 0.5, "min_speed": 0.2, "max_speed": 1.0, "seed": 42}),
+        );
+        // Deux lectures éloignées : les agents continuent de bouger.
+        let a: Vec<Vector3<f64>> = (0..4).map(|i| e.position(3.0, i, &p)).collect();
+        let b: Vec<Vector3<f64>> = (0..4).map(|i| e.position(5.0, i, &p)).collect();
+        for i in 0..4 {
+            assert!(
+                (b[i] - a[i]).norm() > 1e-3,
+                "agent {i} figé malgré wander: {a:?} -> {b:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn swarm_min_speed_prevents_stall() {
+        // min_speed > 0 : la vitesse reste ≥ min_speed — aucun agent ne
+        // s'arrête (contrainte de vol Blender).
+        let e = Swarm::default();
+        let p = params(
+            4,
+            json!({"separation": 0.0, "alignment": 0.0, "cohesion": 0.0,
+                   "min_speed": 0.3, "max_speed": 1.0, "seed": 5}),
+        );
+        let a: Vec<Vector3<f64>> = (0..4).map(|i| e.position(2.0, i, &p)).collect();
+        let b: Vec<Vector3<f64>> = (0..4).map(|i| e.position(3.0, i, &p)).collect();
+        for i in 0..4 {
+            assert!(
+                (b[i] - a[i]).norm() > 1e-4,
+                "agent {i} devrait garder une vitesse résiduelle"
+            );
+        }
+    }
+
+    #[test]
+    fn swarm_inline_chains_agents() {
+        // inline_weight : l'agent i suit i−1 → distances entre voisins
+        // consécutifs proches de inline_standoff, pas de collapse global.
+        let e = Swarm::default();
+        let p = params(
+            6,
+            json!({"separation": 0.0, "alignment": 0.0, "cohesion": 0.0,
+                   "inline_weight": 3.0, "inline_standoff": 0.3,
+                   "max_speed": 1.0, "seed": 9}),
+        );
+        let positions: Vec<Vector3<f64>> = (0..6).map(|i| e.position(3.0, i, &p)).collect();
+        let gaps: Vec<f64> = (1..6)
+            .map(|i| (positions[i] - positions[i - 1]).norm())
+            .collect();
+        let mean_gap: f64 = gaps.iter().sum::<f64>() / gaps.len() as f64;
+        assert!(
+            (mean_gap - 0.3).abs() < 0.25,
+            "les espacements en file devraient ~0.3, mean_gap={mean_gap}"
+        );
+    }
+
+    #[test]
+    fn swarm_extensions_are_deterministic() {
+        // Wander + leader + inline restent des fonctions déterministes
+        // de t (re-sim identique).
+        let e = Swarm::default();
+        let p = params(
+            5,
+            json!({"wander": 0.4, "leader_weight": 1.0, "inline_weight": 1.0,
+                   "k_neighbors": 3, "min_speed": 0.1, "max_turn": 2.0,
+                   "max_acc": 3.0, "seed": 11}),
+        );
+        for i in 0..5 {
+            let a = e.position(2.0, i, &p);
+            let b = e.position(2.0, i, &p);
+            assert_eq!(a, b, "agent {i}: non déterministe");
+        }
     }
 }

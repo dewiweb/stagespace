@@ -449,6 +449,16 @@ mod tests {
                     serde_json::json!({"field": "drawn", "points": [[0.0, 0.0, 0.5, 0.0], [0.5, 0.0, -0.5, 0.0]]}),
                 ],
                 NodeType::Avoidance => vec![serde_json::json!({"repulsion_radius": 3.0})],
+                NodeType::Swarm => vec![
+                    serde_json::json!({}),
+                    // Régime leader/wander activé — rend observables les
+                    // params conditionnels (freq, standoffs, max_acc).
+                    serde_json::json!({"wander": 0.5, "leader_weight": 2.0,
+                                       "leader_standoff": 0.5, "inline_weight": 1.5,
+                                       "inline_standoff": 0.4, "max_acc": 1.0,
+                                       "k_neighbors": 3, "min_speed": 0.1,
+                                       "max_turn": 2.0}),
+                ],
                 NodeType::PointDistanceFalloff => {
                     vec![serde_json::json!({"center": [0.5, 0.0, 0.0], "max_distance": 0.6})]
                 }
