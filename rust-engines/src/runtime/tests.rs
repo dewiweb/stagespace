@@ -683,3 +683,23 @@ fn test_no_prewarm_at_t_zero() {
     }));
     assert!(calls.lock().unwrap().is_empty());
 }
+
+#[test]
+fn test_rebase_duration_epoch_preserves_cycle_phase() {
+    // t=75s, duration 8 → phase 3.0 (75 % 8). Passage à 1200 : l'epoch
+    // rebasé doit rendre (75 - epoch) % 1200 == 3.0 — pas de saut de phase.
+    let epoch = rebase_duration_epoch(75.0, 0.0, 8.0);
+    assert!(((75.0 - epoch) % 1200.0 - 3.0).abs() < 1e-9);
+
+    // Rebase successif : 1200 → 30 à t=80 (phase courante 3 + 5 = 8)
+    let epoch2 = rebase_duration_epoch(80.0, epoch, 1200.0);
+    assert!(((80.0 - epoch2) % 30.0 - 8.0).abs() < 1e-9);
+}
+
+#[test]
+fn test_rebase_duration_epoch_shrink_wraps_phase() {
+    // Shrink : phase 75 dans un cycle 1200 → duration 8 : phase % 8 = 3.
+    // L'epoch choisit de rester continu au point de bascule (phase 75 % 8).
+    let epoch = rebase_duration_epoch(75.0, 0.0, 1200.0);
+    assert!(((75.0 - epoch) % 8.0 - 3.0).abs() < 1e-9);
+}

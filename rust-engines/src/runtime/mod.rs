@@ -154,6 +154,16 @@ impl VirtualClock {
     }
 }
 
+/// Rebase l'epoch de boucle quand `duration` change à chaud :
+/// `(v - epoch') % dur_new` doit rester continu — on conserve la phase
+/// courante `(v - epoch) % dur_old`. Sans ça `t_looped = t % duration`
+/// saute (8→1200 à t=75 : 7.5→75) — les engines à état payaient un
+/// rattrapage géant (freeze → stale-kill) et les engines analytiques
+/// téléportaient leurs tracks.
+fn rebase_duration_epoch(v: f64, epoch: f64, dur_old: f64) -> f64 {
+    v - (v - epoch).rem_euclid(dur_old)
+}
+
 impl Runtime {
     /// Crée un nouveau worker de move
     pub fn new() -> Self {
@@ -731,6 +741,13 @@ impl Runtime {
             let _clear_running = ClearRunning(running.clone());
 
             let mut vclock = VirtualClock::new();
+            // Rebase de phase à chaud : `t_looped = t % duration` saute
+            // quand duration change (8→1200 à t=75 : 7.5→75 → rattrapage
+            // géant des engines à état, téléport des engines analytiques).
+            // `dur_epoch` décale la base du modulo pour garder la phase
+            // du cycle continue. N'a de sens qu'en mode loop.
+            let mut dur_epoch = 0.0f64;
+            let mut prev_duration = 0.0f64;
             let start = Instant::now();
             let frame_duration = Duration::from_secs_f64(1.0 / params.fps);
             let mut frame_count = 0u64;
@@ -920,13 +937,23 @@ impl Runtime {
                     effective_speed,
                     f64::from_bits(time_offset_arc.load(Ordering::Relaxed)),
                 );
+                // Duration changée à chaud en mode loop → rebase l'epoch :
+                // la phase du cycle `(v - epoch) % duration` reste continue
+                // (shrink : `phase_old % new_dur` — recul borné, rattrapé
+                // par la fenêtre de catch-up sans kill).
+                if loop_is_on && duration > 0.0 && prev_duration > 0.0 && duration != prev_duration
+                {
+                    dur_epoch = rebase_duration_epoch(t_virtual_eff, dur_epoch, prev_duration);
+                }
+                prev_duration = duration;
+                let t_cyclic = t_virtual_eff - dur_epoch;
                 let t_eff = if loop_is_on && duration > 0.0 {
-                    let t_mod = t_virtual_eff % duration;
+                    let t_mod = t_cyclic % duration;
                     // Appliquer la direction (Forward/Backward/PingPong)
                     match dir {
                         PlayDirection::Backward => duration - t_mod,
                         PlayDirection::PingPong => {
-                            let cycle = (t_virtual_eff / duration) as u64;
+                            let cycle = (t_cyclic / duration) as u64;
                             if cycle.is_multiple_of(2) {
                                 t_mod
                             } else {

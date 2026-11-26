@@ -59,6 +59,12 @@ pub const MAX_INTERACTION_AGENTS: usize = 256;
 /// pas geler une frame (4M pas ≈ 18.5h à 60 fps en pas fins).
 pub const MAX_SIM_STEPS: u64 = 4_000_000;
 
+/// Fenêtre max intégrée par APPEL de `sim_window` (en secondes de temps
+/// simulé) — au-delà, l'horloge sim saute à `t` sans intégrer (voir la doc
+/// de [`sim_window`]). 4 s ≈ 240 pas à 60 fps : absorbe les hitchs
+/// ordinaires, borne chaque eval bien sous le seuil stale-kill (~0.5 s).
+pub const MAX_CATCHUP_S: f64 = 4.0;
+
 /// Nombre de pas de re-simulation et pas de temps effectif pour les moteurs
 /// dont le coût par pas est O(1) par objet (bouncing, spring, follow,
 /// pendulum, vector_field).
@@ -116,8 +122,18 @@ pub fn sim_steps_n2(t: f64, fps: f64, n_agents: usize) -> (u64, f64) {
 ///   seul à savoir ré-initialiser son état) ;
 /// - fenêtre nominale → pas de `dt = 1/fps` : même discrétisation que la
 ///   re-simulation, trajectoires identiques à fps constant ;
-/// - fenêtre > `MAX_SIM_STEPS / cost` → `dt` dilaté pour couvrir `t`
-///   exactement (`new_sim_t = t`), dégradation douce.
+/// - fenêtre > `cap` → `(0, 1/fps, t)` : **saut de l'horloge sim** —
+///   `sim_t` rejoint `t` SANS intégrer, l'état gardé tel quel.
+///
+/// Un saut géant de `t` n'est pas du temps à simuler, c'est un changement
+/// de référentiel (changement de duration : `t_looped = t_eff % duration`,
+/// seek, hot-swap à `t` élevé). L'ancien comportement dilatait `dt`
+/// (`window/cap`) pour couvrir `t` en une passe : l'eval unique coûtait
+/// ~4M ops → worker gelé >0.5 s → stale-kill (observé live sur duration
+/// 8→1200) et les pas géants explosaient la physique (agents téléportés
+/// /NaN). Le skip préserve la continuité des positions (l'état interne ne
+/// bouge pas), le déterminisme de `position(t)` et ne coûte rien — les
+/// evals suivants intègrent des fenêtres ordinaires depuis l'état courant.
 pub fn sim_window(sim_t: f64, t: f64, fps: f64, cost: u64) -> (u64, f64, f64) {
     let fps = fps.max(1.0);
     let window = t - sim_t;
@@ -125,7 +141,9 @@ pub fn sim_window(sim_t: f64, t: f64, fps: f64, cost: u64) -> (u64, f64, f64) {
     if !window.is_finite() || window <= 0.0 {
         return (0, 1.0 / fps, sim_t);
     }
-    let cap = (MAX_SIM_STEPS / cost.max(1)).max(1);
+    let cap = (MAX_SIM_STEPS / cost.max(1))
+        .max(1)
+        .min((MAX_CATCHUP_S * fps) as u64);
     // `+ 1e-9` : `sim_t` est accumulé en sommes de 1/fps — sa dérive d'un
     // ulp pouvait ramener `window*fps` à `k - ε` et sauter un pas entier
     // (~1/60 s de mouvement, amplifié par les dynamiques chaotiques).
@@ -133,7 +151,7 @@ pub fn sim_window(sim_t: f64, t: f64, fps: f64, cost: u64) -> (u64, f64, f64) {
     if steps <= cap {
         (steps, 1.0 / fps, sim_t + steps as f64 / fps)
     } else {
-        (cap, window / cap as f64, t)
+        (0, 1.0 / fps, t)
     }
 }
 
@@ -447,6 +465,39 @@ mod tests {
         let (steps, dt) = sim_steps_n2(1000.0, 60.0, 1024);
         assert!(steps <= MAX_SIM_STEPS / (1024 * 1024) + 1);
         assert!(dt > 1.0 / 60.0); // pas dilaté
+    }
+
+    #[test]
+    fn test_sim_window_giant_window_skips_instead_of_freezing() {
+        // Régression : saut de `t` (duration 8→1200 → t_looped 7.5→75+).
+        // Avant : dt dilaté (window/cap) couvrant t en UN appel → l'eval
+        // gelait le worker >0.5 s → stale-kill, et la physique explosait.
+        // Maintenant : skip — 0 pas, sim_t rejoint t, état conservé.
+        let (steps, dt, new_t) = sim_window(7.5, 1007.5, 60.0, 60 * 60);
+        assert_eq!(steps, 0);
+        assert!((dt - 1.0 / 60.0).abs() < 1e-12);
+        assert!((new_t - 1007.5).abs() < 1e-12);
+        // Déterministe : même appel → même résultat.
+        assert_eq!(sim_window(7.5, 1007.5, 60.0, 3600), (0, 1.0 / 60.0, 1007.5));
+    }
+
+    #[test]
+    fn test_sim_window_moderate_window_integrates_exactly() {
+        // Fenêtre raisonnable (2 s à 60 fps = 120 pas ≤ 240) → intégration
+        // exacte à dt réel — le skip ne s'applique qu'aux sauts géants.
+        let (steps, dt, new_t) = sim_window(3.0, 5.0, 60.0, 60 * 60);
+        assert_eq!(steps, 120);
+        assert!((dt - 1.0 / 60.0).abs() < 1e-12);
+        assert!((new_t - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_sim_window_normal_frame_unaffected() {
+        // Fenêtre d'une frame ordinaire : inchangée
+        let (steps, dt, new_t) = sim_window(3.0, 3.0 + 1.0 / 60.0, 60.0, 3600);
+        assert_eq!(steps, 1);
+        assert!((dt - 1.0 / 60.0).abs() < 1e-12);
+        assert!((new_t - (3.0 + 1.0 / 60.0)).abs() < 1e-9);
     }
 
     #[test]
