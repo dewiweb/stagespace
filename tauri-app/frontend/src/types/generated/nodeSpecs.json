@@ -2161,13 +2161,13 @@
       },
       {
         "key": "avoid_object",
-        "label": "Repulsor Object Idx (−1=xyz)",
-        "kind": "number",
+        "label": "Repulsor Object (live)",
+        "kind": "objectref",
         "options": null,
-        "step": 1.0,
+        "step": null,
         "min": null,
         "max": null,
-        "default_json": "-1.0",
+        "default_json": "-1",
         "modulable": false
       },
       {

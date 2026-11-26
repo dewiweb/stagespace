@@ -6,7 +6,7 @@ import type { NodeCategory } from '../types/generated/NodeCategory';
 import type { ParamSpec } from '../types/generated/ParamSpec';
 import type { PluginManifest } from '../types/generated/PluginManifest';
 
-export type ParamType = 'number' | 'boolean' | 'string' | 'vec3' | 'enum' | 'text';
+export type ParamType = 'number' | 'boolean' | 'string' | 'vec3' | 'enum' | 'text' | 'objectref';
 
 /// Valeur d'un paramètre de node — union des types produits par les ParamDef
 /// (number, booléen, enum/text string, vec3 ou liste d'ids en number[]…)

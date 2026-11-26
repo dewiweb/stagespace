@@ -148,6 +148,10 @@ pub enum ParamKind {
     Vec3,
     Enum,
     Text,
+    /// Sélecteur d'objet externe — valeur = index objet (i64), `−1` = off.
+    /// Le frontend rend un dropdown des tracks HORS du move (obj_index =
+    /// position dans manualOscIds), ex. `avoid_object` d'Avoidance.
+    ObjectRef,
 }
 
 /// Déclaration d'un paramètre de node — miroir structuré de `ParamDef`
@@ -313,6 +317,9 @@ fn enm(key: &str, label: &str, options: &[&str]) -> ParamSpec {
     let mut d = p(key, label, ParamKind::Enum);
     d.options = Some(options.iter().map(|s| s.to_string()).collect());
     d
+}
+fn oref(key: &str, label: &str) -> ParamSpec {
+    p(key, label, ParamKind::ObjectRef)
 }
 
 /// Attache un défaut (JSON-encodé) à un ParamSpec — builder postfixe.
@@ -764,7 +771,7 @@ fn build_catalog() -> Vec<NodeSpec> {
                 ns("avoid_x", "Repulsor X (local)", 0.1).d(0.0),
                 ns("avoid_y", "Repulsor Y (local)", 0.1).d(0.0),
                 ns("avoid_z", "Repulsor Z (local)", 0.1).d(0.0),
-                ns("avoid_object", "Repulsor Object Idx (−1=xyz)", 1.0).d(-1.0).fixed(),
+                oref("avoid_object", "Repulsor Object (live)").d(-1),
                 ns("seed", "Seed", 1.0).d(42).fixed(),
             ],
         ),
