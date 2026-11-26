@@ -86,6 +86,11 @@ pub struct Runtime {
     /// Offset temporel (seek timecode) — déplacement additif sur le
     /// temps virtuel à chaque frame, avant le modulo de boucle.
     time_offset_secs: Arc<std::sync::atomic::AtomicU64>,
+    /// Dernier `t` vu par les engines (post-modulo, obj 0) — bits d'un f64.
+    /// Sert à pré-chauffer le cache d'un engine à état LORS DU SWAP
+    /// (resim payée par le thread de la commande, pas par la boucle
+    /// worker — sinon le buffer gèle au-delà du seuil stale-kill).
+    last_engine_t: Arc<std::sync::atomic::AtomicU64>,
     /// OSC ids du move — hot-swappable en live via set_osc_ids.
     /// Le worker thread lit cette valeur à chaque frame pour savoir
     /// combien de positions calculer.
@@ -174,6 +179,7 @@ impl Runtime {
             duration_ms: Arc::new(std::sync::atomic::AtomicU64::new(4000)),
             osc_ids_arc: Arc::new(std::sync::RwLock::new(Vec::new())),
             time_offset_secs: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            last_engine_t: Arc::new(std::sync::atomic::AtomicU64::new(0.0f64.to_bits())),
             signal_fn: Arc::new(Mutex::new(crate::signal_compiler::empty_signal_fn())),
             osc_values: Arc::new(std::sync::RwLock::new(Arc::new(Mutex::new(HashMap::new())))),
             thread_handle: Mutex::new(None),
@@ -327,6 +333,25 @@ impl Runtime {
         *self.param_slots.lock().unwrap_or_else(|e| e.into_inner()) = slots;
     }
 
+    /// Pré-chauffe le cache d'un engine à état (Swarm…) au dernier `t` vu
+    /// par le worker. Le premier eval d'une instance fraîche re-simule
+    /// l'historique 0→t — si ça arrivait dans la boucle worker (après un
+    /// hot-swap à t élevé), le buffer de positions gèlerait au-delà du
+    /// seuil stale-kill du superviseur et le move serait tué. En le
+    /// faisant ICI (thread de la commande, déjà hors worker via
+    /// spawn_blocking), la resim est payée par l'appelant — le premier
+    /// eval worker retombe sur un cache chaud = fenêtre incrémentale
+    /// d'une frame. No-op pour les engines sans état (eval direct) et
+    /// quand le worker n'a jamais tourné (t=0 → resim vide).
+    fn prewarm_stateful(&self, position_fn: &PositionFn) {
+        let t = f64::from_bits(self.last_engine_t.load(Ordering::Relaxed));
+        if t > 0.0 {
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                position_fn(t, 0);
+            }));
+        }
+    }
+
     /// Swap atomique d'un move recompilé : position_fn + sample_fn +
     /// signal_fn + leur ParamSlots commune — le worker ne peut jamais
     /// apparier une signal_fn avec une position_fn d'un autre compile
@@ -340,6 +365,7 @@ impl Runtime {
         signal_fn: crate::signal_compiler::SignalFn,
         slots: Arc<crate::param_slots::ParamSlots>,
     ) {
+        self.prewarm_stateful(&position_fn);
         let mut sig = self.signal_fn.lock().unwrap_or_else(|e| e.into_inner());
         *sig = signal_fn;
         *self.param_slots.lock().unwrap_or_else(|e| e.into_inner()) = slots;
@@ -361,6 +387,10 @@ impl Runtime {
         slots: Arc<crate::param_slots::ParamSlots>,
         fade_duration: f64,
     ) {
+        // Pré-chauffe AVANT tout lock : une resim longue sous le lock
+        // signal gèlerait quand même le worker (il prend ce lock à
+        // chaque frame) → même stale-kill qu'on cherche à éviter.
+        self.prewarm_stateful(&position_fn);
         let mut sig = self.signal_fn.lock().unwrap_or_else(|e| e.into_inner());
         *sig = signal_fn;
         *self.param_slots.lock().unwrap_or_else(|e| e.into_inner()) = slots;
@@ -408,6 +438,7 @@ impl Runtime {
     }
 
     pub fn swap_position_fn(&self, new_fn: PositionFn) {
+        self.prewarm_stateful(&new_fn);
         let mut old = self.position_fn.lock().unwrap_or_else(|e| e.into_inner());
         *old = new_fn;
     }
@@ -651,6 +682,7 @@ impl Runtime {
         let external_deltas_arc = self.external_param_deltas.clone();
         let signal_fn_arc = self.signal_fn.clone();
         let osc_values_arc = self.osc_values.clone();
+        let last_engine_t_arc = self.last_engine_t.clone();
 
         let handle = std::thread::spawn(move || {
             // RAII : si la closure panique (bug engine, poison critique),
@@ -960,6 +992,11 @@ impl Runtime {
                                 } else {
                                     t_with_phase
                                 };
+                                // Dernier t vu par l'engine (obj 0) — sert de
+                                // cible de pré-chauffe du cache stateful au swap.
+                                if obj_idx == 0 {
+                                    last_engine_t_arc.store(t_looped.to_bits(), Ordering::Relaxed);
+                                }
                                 // catch_unwind: la position_fn peut panic si obj_idx
                                 // dépasse le n_objects pour lequel elle a été compilée
                                 // (race condition lors du hot-swap des osc_ids avant
