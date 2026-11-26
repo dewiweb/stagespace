@@ -51,6 +51,11 @@ pub struct Runtime {
     /// Handle partagé vers les dernières positions monde du merge —
     /// injecté au spawn quand anchor_mode = Follow.
     last_positions_handle: Arc<RwLock<std::collections::HashMap<usize, [f64; 3]>>>,
+    /// Positions des objets externes vues dans le repère LOCAL du move —
+    /// le worker y écrit chaque frame l'inverse de move_transform des
+    /// positions canoniques émises. Les engines qui réagissent à un objet
+    /// animé (évitement…) lisent cette map (compilée via LiveInputs).
+    external_positions: Arc<RwLock<std::collections::HashMap<usize, nalgebra::Vector3<f64>>>>,
     /// Animation state — depth + phase_offset par track + audio mods
     animation_state: Arc<Mutex<Option<AnimationState>>>,
     /// Audio state — partagé avec l'app, lu à chaque frame pour les audio mods
@@ -176,6 +181,7 @@ impl Runtime {
             anchor_capture: Arc::new(RwLock::new(std::collections::HashMap::new())),
             anchor_follow_target: Arc::new(RwLock::new(None)),
             last_positions_handle: Arc::new(RwLock::new(std::collections::HashMap::new())),
+            external_positions: Arc::new(RwLock::new(std::collections::HashMap::new())),
             animation_state: Arc::new(Mutex::new(None)),
             audio_state,
             audio_param_overrides: Arc::new(Mutex::new(HashMap::new())),
@@ -329,6 +335,16 @@ impl Runtime {
     /// avancer le sim_t partagé avec la live.
     pub fn engine_states(&self) -> crate::compiler::EngineStateStore {
         self.engine_state_store.clone()
+    }
+
+    /// Positions des objets externes en repère LOCAL du move — remplies
+    /// par le worker chaque frame (inverse de move_transform). À passer
+    /// à la compile via `LiveInputs.external_positions` : les engines qui
+    /// réagissent à un objet animé (avoidance.avoid_object…) la lisent.
+    /// Partageable à la sample_fn — donnée live en lecture seule, sans
+    /// état de simulation contrairement à engine_states.
+    pub fn external_positions(&self) -> crate::engines::avoidance::ExternalPositions {
+        self.external_positions.clone()
     }
 
     /// Récupère l'Arc de l'audio state — permet de mettre à jour sans locker state.movements
@@ -686,6 +702,7 @@ impl Runtime {
         let origin_arc = self.origin.clone();
         let anchor_follow_arc = self.anchor_follow_target.clone();
         let last_positions_arc = self.last_positions_handle.clone();
+        let external_positions_arc = self.external_positions.clone();
         let anchor_capture_arc = self.anchor_capture.clone();
         // Offsets d'ancre par objet — calculés à la première frame :
         // delta[obj] = capturée[obj] − pos(t0, obj), ensuite pos += delta.
@@ -985,6 +1002,37 @@ impl Runtime {
                     eff_yaw.to_radians(),
                     eff_roll.to_radians(),
                 );
+                // Positions externes → repère LOCAL du move (inverse de
+                // move_transform) — les engines qui réagissent à un objet
+                // animé (ex. avoidance.avoid_object) lisent cette map.
+                // ~64 inversions par frame, négligeable.
+                {
+                    let lp = last_positions_arc.read().unwrap_or_else(|e| e.into_inner());
+                    let mut ext = external_positions_arc
+                        .write()
+                        .unwrap_or_else(|e| e.into_inner());
+                    ext.clear();
+                    if fade_factor.abs() > 1e-9
+                        && effective_scale.abs() > 1e-9
+                        && effective_radius_scale.abs() > 1e-9
+                    {
+                        ext.reserve(lp.len());
+                        let inv_rot = rot_matrix.map(|r| r.inverse());
+                        for (&obj, wp) in lp.iter() {
+                            let mut p = nalgebra::Vector3::new(wp[0], wp[1], wp[2])
+                                - move_origin
+                                - eff_shift;
+                            if let Some(r) = inv_rot.as_ref() {
+                                p = r * p;
+                            }
+                            p /= effective_scale;
+                            p /= fade_factor;
+                            p.y -= effective_height_offset;
+                            p /= effective_radius_scale;
+                            ext.insert(obj, p);
+                        }
+                    }
+                }
                 let positions: Vec<(usize, nalgebra::Vector3<f64>)> = {
                     // Snapshot pris sous le lock signal (appariement
                     // signal↔position du même compile) — l'évaluation de

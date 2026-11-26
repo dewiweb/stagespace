@@ -56,10 +56,20 @@ impl Compiler {
                 Some(c) => Box::new(crate::engines::bouncing::Bouncing::with_cache(c)),
                 None => Box::new(crate::engines::bouncing::Bouncing::default()),
             },
-            NodeType::Avoidance => match shared_state(live, "avoidance", &params, node) {
-                Some(c) => Box::new(crate::engines::avoidance::Avoidance::with_cache(c)),
-                None => Box::new(crate::engines::avoidance::Avoidance::default()),
-            },
+            // Avoidance lit aussi `live.external_positions` (répulseur
+            // externe `avoid_object` — position live d'un objet animé en
+            // repère local). Partageable à la sample_fn : lecture seule.
+            NodeType::Avoidance => {
+                let ext = live.external_positions.clone().unwrap_or_default();
+                match shared_state(live, "avoidance", &params, node) {
+                    Some(c) => Box::new(
+                        crate::engines::avoidance::Avoidance::with_cache(c).with_external(ext),
+                    ),
+                    None => {
+                        Box::new(crate::engines::avoidance::Avoidance::default().with_external(ext))
+                    }
+                }
+            }
             NodeType::Spring => match shared_state(live, "spring", &params, node) {
                 Some(c) => Box::new(crate::engines::spring::Spring::with_cache(c)),
                 None => Box::new(crate::engines::spring::Spring::default()),

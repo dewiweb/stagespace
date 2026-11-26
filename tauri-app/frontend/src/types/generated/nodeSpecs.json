@@ -2056,7 +2056,7 @@
         "label": "out"
       }
     ],
-    "description": "Inter-object repulsion — mutual avoidance",
+    "description": "Inter-object repulsion — mutual avoidance, optional external repulsor",
     "object_distribution": "Agent",
     "stateful": true,
     "params": [
@@ -2103,6 +2103,72 @@
         "max": null,
         "default_json": "0.9",
         "modulable": true
+      },
+      {
+        "key": "avoid_strength",
+        "label": "External Repulsor Strength (0=off)",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0",
+        "modulable": true
+      },
+      {
+        "key": "avoid_radius",
+        "label": "External Repulsor Radius",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": 0.0,
+        "max": null,
+        "default_json": "0.5",
+        "modulable": true
+      },
+      {
+        "key": "avoid_x",
+        "label": "Repulsor X (local)",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0",
+        "modulable": true
+      },
+      {
+        "key": "avoid_y",
+        "label": "Repulsor Y (local)",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0",
+        "modulable": true
+      },
+      {
+        "key": "avoid_z",
+        "label": "Repulsor Z (local)",
+        "kind": "number",
+        "options": null,
+        "step": 0.1,
+        "min": null,
+        "max": null,
+        "default_json": "0.0",
+        "modulable": true
+      },
+      {
+        "key": "avoid_object",
+        "label": "Repulsor Object Idx (−1=xyz)",
+        "kind": "number",
+        "options": null,
+        "step": 1.0,
+        "min": null,
+        "max": null,
+        "default_json": "-1.0",
+        "modulable": false
       },
       {
         "key": "seed",

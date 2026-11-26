@@ -70,6 +70,9 @@ pub fn compile_graph_with_audio_osc(
 /// au hot-swap : la nouvelle instance adopte le cache de la précédente,
 /// pas de resim 0→t). `None` OBLIGATOIRE pour la sample_fn — ses evals
 /// ne doivent jamais avancer le sim_t partagé avec la live.
+/// `external_positions` : positions monde des objets vues en repère local
+/// du move (écrites par le worker chaque frame) — `Some(rt.external_positions())`
+/// pour live ET sample (lecture seule, sans état de sim). `None` hors move.
 #[allow(clippy::too_many_arguments)]
 pub fn compile_graph_live(
     graph: &Graph,
@@ -78,6 +81,7 @@ pub fn compile_graph_live(
     held_positions: Option<stagespace_engines::compiler::HeldPositions>,
     pose_ctx: Option<(&[u32], &[usize])>,
     engine_states: Option<stagespace_engines::compiler::EngineStateStore>,
+    external_positions: Option<stagespace_engines::ExternalPositions>,
 ) -> Result<PositionFn, String> {
     let osc_values = lock_or_recover(&sh.osc_receiver).address_values_handle();
     let pose_resolver = pose_ctx.and_then(|(ids, idx)| build_pose_resolver(graph, ids, idx, sh));
@@ -89,6 +93,7 @@ pub fn compile_graph_live(
         held_positions,
         pose_resolver: pose_resolver.clone(),
         engine_states,
+        external_positions,
     };
     let result = Compiler::compile_with_live_inputs(graph, live)
         .map_err(|e| format!("Compilation failed: {e:?}"))

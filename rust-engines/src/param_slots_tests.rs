@@ -448,7 +448,10 @@ mod tests {
                     serde_json::json!({"field": "vortex"}),
                     serde_json::json!({"field": "drawn", "points": [[0.0, 0.0, 0.5, 0.0], [0.5, 0.0, -0.5, 0.0]]}),
                 ],
-                NodeType::Avoidance => vec![serde_json::json!({"repulsion_radius": 3.0})],
+                // Régime répulseur externe actif — rend observables les
+                // params avoid_* (sans strength ils sont inertes).
+                NodeType::Avoidance => vec![serde_json::json!({"repulsion_radius": 3.0,
+                                       "avoid_strength": 5.0, "avoid_radius": 3.0})],
                 NodeType::Swarm => vec![
                     serde_json::json!({}),
                     // Régime leader/wander activé — rend observables les

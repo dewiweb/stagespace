@@ -169,6 +169,7 @@ pub async fn update_animation_state(
         Some(held_positions.clone()),
         pose_ctx,
         Some(movement.runtime.engine_states()),
+        Some(movement.runtime.external_positions()),
     )
     .map_err(IpcError::validation)?;
     // engine_states = None : le sampler ne partage jamais le cache des
@@ -180,6 +181,7 @@ pub async fn update_animation_state(
         Some(held_positions),
         pose_ctx,
         None,
+        Some(movement.runtime.external_positions()),
     )
     .map_err(IpcError::validation)?;
     movement

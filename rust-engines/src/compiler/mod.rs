@@ -96,6 +96,13 @@ pub struct LiveInputs {
     /// `None` pour la sample_fn (ne doit pas partager le sim_t live)
     /// et les compiles hors contexte move (tests, previews froides).
     pub engine_states: Option<EngineStateStore>,
+    /// Positions des objets externes vues dans le repère LOCAL du move
+    /// (le worker y écrit chaque frame l'inverse de move_transform des
+    /// positions canoniques émises). Lecture seule côté engine —
+    /// partageable aussi à la sample_fn (donnée live, pas état de sim).
+    /// `None` hors contexte move (tests) → `avoid_object` retombe sur
+    /// `avoid_point`.
+    pub external_positions: Option<crate::engines::avoidance::ExternalPositions>,
 }
 
 /// Erreur de compilation
@@ -124,7 +131,7 @@ pub struct Compiler;
 impl Compiler {
     /// Compile un graphe en une fonction composite
     pub fn compile(graph: &Graph) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, None, None, None, None, None, None, None)
+        Self::compile_inner(graph, LiveInputs::default())
     }
 
     /// Compile un graphe avec accès à l'audio state temps réel
@@ -134,7 +141,13 @@ impl Compiler {
         graph: &Graph,
         audio_state: Arc<Mutex<AudioState>>,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), None, None, None, None, None, None)
+        Self::compile_inner(
+            graph,
+            LiveInputs {
+                audio: Some(audio_state),
+                ..Default::default()
+            },
+        )
     }
 
     /// Compile un graphe avec audio state + overrides de paramètres audio
@@ -146,7 +159,7 @@ impl Compiler {
         audio_state: Arc<Mutex<AudioState>>,
         _overrides: AudioParamOverrides,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(graph, Some(audio_state), None, None, None, None, None, None)
+        Self::compile_with_audio(graph, audio_state)
     }
 
     /// Compile un graphe avec un ensemble complet d'entrées live —
@@ -155,16 +168,7 @@ impl Compiler {
         graph: &Graph,
         live: LiveInputs,
     ) -> Result<CompiledFunction, CompilationError> {
-        Self::compile_inner(
-            graph,
-            live.audio,
-            live.osc_values,
-            live.plugins,
-            live.param_slots,
-            live.held_positions,
-            live.pose_resolver,
-            live.engine_states,
-        )
+        Self::compile_inner(graph, live)
     }
 
     /// Compile un graphe avec audio state + cache des valeurs OSC reçues.
@@ -179,36 +183,18 @@ impl Compiler {
     ) -> Result<CompiledFunction, CompilationError> {
         Self::compile_inner(
             graph,
-            Some(audio_state),
-            Some(osc_values),
-            None,
-            None,
-            None,
-            None,
-            None,
+            LiveInputs {
+                audio: Some(audio_state),
+                osc_values: Some(osc_values),
+                ..Default::default()
+            },
         )
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn compile_inner(
         graph: &Graph,
-        audio_state: Option<Arc<Mutex<AudioState>>>,
-        osc_values: Option<OscValueMap>,
-        plugins: Option<Arc<Mutex<PluginRegistry>>>,
-        param_slots: Option<Arc<crate::param_slots::ParamSlots>>,
-        held_positions: Option<HeldPositions>,
-        pose_resolver: Option<Arc<crate::poses::PoseResolver>>,
-        engine_states: Option<EngineStateStore>,
+        live: LiveInputs,
     ) -> Result<CompiledFunction, CompilationError> {
-        let live = LiveInputs {
-            audio: audio_state,
-            osc_values,
-            plugins,
-            param_slots,
-            held_positions,
-            pose_resolver,
-            engine_states,
-        };
         let start = Instant::now();
         log_graph_compilation(graph.nodes.len(), graph.edges.len());
 

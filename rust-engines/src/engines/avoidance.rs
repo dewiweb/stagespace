@@ -14,6 +14,11 @@
 //!   damping            amortissement par pas (0..1)              (défaut 0.95)
 //!   container_size     demi-côté de la boîte de confinement      (défaut 0.9)
 //!   seed               graine RNG                                (défaut 42)
+//!   avoid_strength     répulseur externe — force/d²              (défaut 0 = off)
+//!   avoid_radius       portée du répulseur externe               (défaut 0.5)
+//!   avoid_x/y/z        position du répulseur (repère local)      (défaut origine)
+//!   avoid_object       index objet → position LIVE via
+//!                      `external_positions` (override avoid_xyz)
 
 use crate::engines::{
     finite_or_zero, sim_window, Engine, EngineParams, MAX_OBJECTS, SIM_REWIND_EPS,
@@ -80,16 +85,34 @@ impl AvoidanceCache {
     }
 }
 
+/// Positions d'objets externes vues dans le repère LOCAL du move —
+/// remplies par le worker à chaque frame (inverse du move_transform
+/// appliqué aux positions canoniques émises). Permet aux engines de
+/// réagir à un objet animé par un autre move (évitement, poursuite).
+pub type ExternalPositions = Arc<std::sync::RwLock<std::collections::HashMap<usize, Vector3<f64>>>>;
+
 /// Engine à état — `Default` produit un cache vide (premier appel = init).
 #[derive(Default)]
 pub struct Avoidance {
     cache: Arc<Mutex<AvoidanceCache>>,
+    /// Répulseur live : index objet → position en repère local.
+    /// Map vide (défaut) → `avoid_object` retombe sur `avoid_point`.
+    external: ExternalPositions,
 }
 
 impl Avoidance {
     /// Cache partagé via `EngineStateStore` — warm-start au hot-swap.
     pub(crate) fn with_cache(cache: Arc<Mutex<AvoidanceCache>>) -> Self {
-        Self { cache }
+        Self {
+            cache,
+            external: ExternalPositions::default(),
+        }
+    }
+
+    /// Canal positions externes (chemin live — move worker).
+    pub(crate) fn with_external(mut self, external: ExternalPositions) -> Self {
+        self.external = external;
+        self
     }
 }
 
@@ -123,6 +146,55 @@ impl Engine for Avoidance {
             .get("seed")
             .and_then(|v| v.as_i64())
             .unwrap_or(42) as u64;
+        // Répulseur externe — `avoid_object` : position live d'un objet
+        // animé (repère local via `external_positions`), sinon `avoid_point`.
+        let avoid_strength = params
+            .extra
+            .get("avoid_strength")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let avoid_radius = params
+            .extra
+            .get("avoid_radius")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.5)
+            .max(0.0);
+        let avoid_point = Vector3::new(
+            params
+                .extra
+                .get("avoid_x")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0),
+            params
+                .extra
+                .get("avoid_y")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0),
+            params
+                .extra
+                .get("avoid_z")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0),
+        );
+        let avoid_object = params
+            .extra
+            .get("avoid_object")
+            .and_then(|v| v.as_i64())
+            .filter(|&o| o >= 0)
+            .map(|o| o as usize);
+        let repulsor = if avoid_strength != 0.0 {
+            avoid_object
+                .and_then(|o| {
+                    self.external
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .get(&o)
+                        .copied()
+                })
+                .or(Some(avoid_point))
+        } else {
+            None
+        };
 
         // `declared` = le param Objects (stable dans un compile) ;
         // `need` = la couverture requise CETTE eval (≥ object_index+1).
@@ -164,6 +236,15 @@ impl Engine for Avoidance {
                     let dist = diff.norm() + 1e-9;
                     if dist < repulsion_radius {
                         f += (diff / dist) * (repulsion_strength / (dist * dist));
+                    }
+                }
+                // Répulseur externe — même famille 1/d² ; sa position est
+                // constante dans la fenêtre (rafraîchie par frame, pas par pas).
+                if let Some(rep) = repulsor {
+                    let diff = pos_i - rep;
+                    let dist = diff.norm() + 1e-9;
+                    if dist < avoid_radius {
+                        f += (diff / dist) * (avoid_strength / (dist * dist));
                     }
                 }
                 c.forces[i] = f;
@@ -285,5 +366,82 @@ mod tests {
         for i in 0..4 {
             assert_eq!(e.position(1.5, i, &p), e.position(1.5, i, &p));
         }
+    }
+
+    #[test]
+    fn avoidance_external_repulsor_point_pushes_agents_out() {
+        // Répulseur statique à l'origine (anneau initial r=0.6 dedans) :
+        // les agents doivent s'en écarter nettement vs sans répulseur.
+        let e_off = Avoidance::default();
+        let e_on = Avoidance::default();
+        let p_off = params(8, json!({"damping": 0.98, "seed": 3}));
+        let p_on = params(
+            8,
+            json!({"damping": 0.98, "seed": 3,
+                   "avoid_strength": 3.0, "avoid_radius": 2.0,
+                   "avoid_x": 0.0, "avoid_y": 0.0, "avoid_z": 0.0}),
+        );
+        let r_off: f64 = (0..8)
+            .map(|i| e_off.position(2.0, i, &p_off).norm())
+            .sum::<f64>()
+            / 8.0;
+        let r_on: f64 = (0..8)
+            .map(|i| e_on.position(2.0, i, &p_on).norm())
+            .sum::<f64>()
+            / 8.0;
+        assert!(
+            r_on > r_off + 0.3,
+            "le répulseur doit écarter les agents de l'origine: off={r_off} on={r_on}"
+        );
+    }
+
+    #[test]
+    fn avoidance_external_repulsor_object_reads_live_map() {
+        // avoid_object : la position vient de `external_positions` — lue à
+        // chaque eval. Trois cas sur des engines frais (même sim deterministe) :
+        let p = json!({"damping": 0.98, "seed": 3,
+                       "avoid_strength": 3.0, "avoid_radius": 2.0,
+                       "avoid_x": 0.0, "avoid_y": 0.0, "avoid_z": 0.0,
+                       "avoid_object": 7});
+        let mean_r = |e: &Avoidance, p: &super::EngineParams| {
+            (0..8).map(|i| e.position(2.0, i, p).norm()).sum::<f64>() / 8.0
+        };
+        // Référence : pas de répulseur.
+        let e_ref = Avoidance::default();
+        let r_ref = mean_r(&e_ref, &params(8, json!({"damping": 0.98, "seed": 3})));
+
+        // a) objet 7 LOIN du champ → pas de répulsion ≈ référence.
+        let ext_far = ExternalPositions::default();
+        ext_far
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(7, Vector3::new(50.0, 50.0, 50.0));
+        let e_far = Avoidance::default().with_external(ext_far);
+        let r_far = mean_r(&e_far, &params(8, p.clone()));
+        assert!(
+            (r_far - r_ref).abs() < 0.1,
+            "objet lointain → pas de répulsion: {r_far} vs ref {r_ref}"
+        );
+
+        // b) objet 7 au CENTRE → agents écartés.
+        let ext_mid = ExternalPositions::default();
+        ext_mid
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(7, Vector3::zeros());
+        let e_mid = Avoidance::default().with_external(ext_mid);
+        let r_mid = mean_r(&e_mid, &params(8, p.clone()));
+        assert!(
+            r_mid > r_ref + 0.3,
+            "objet au centre → agents repoussés: {r_mid} vs ref {r_ref}"
+        );
+
+        // c) map VIDE → fallback avoid_xyz (= origine) → pareil que b).
+        let e_empty = Avoidance::default().with_external(ExternalPositions::default());
+        let r_empty = mean_r(&e_empty, &params(8, p));
+        assert!(
+            r_empty > r_ref + 0.3,
+            "map vide → fallback avoid_xyz: {r_empty} vs ref {r_ref}"
+        );
     }
 }
