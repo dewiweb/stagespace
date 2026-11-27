@@ -409,3 +409,4 @@ d'audit sur branche mergée.
 
 | U1 re-attach orphelins | **fait** — reattachOrphanMovements (slots coquilles, movementId repris) + chip orphelin cliquable dans la top bar jeu ; graphJson null honnete, transport retrouve | ce commit |
 | U2 foyer répétition + soundcheck | **partiel** — tab panneau Score renommé Rec (collision de nommage résolue), soundcheck accessible dans les menus Show jeu+conduite (avant : zéro accès direct) ; bouton FOH avec état reste à faire (state machine module-privée à sortir en store) | ce commit |
+| U3 conduite habitée | **fait** — audition extraite en CueAuditionRadar partagé + rendue au centre de la conduite (interne et détachée via broadcast), rows enrichies (méta TRK/fade/pre-wait/follow/TC sans interaction), hint corrigé (jeu Store) | ce commit |

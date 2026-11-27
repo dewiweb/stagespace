@@ -7,7 +7,8 @@ import { useGraphStore } from '../../store/useGraphStore';
 import { useShowStatusStore } from '../../store/useShowStatusStore';
 import { doArm, doCueNext, doCueRecallById, doPanic, doGo, doUnpark, doUnsolo, doTcChase } from '../../utils/liveActions';
 import { detachWindow } from '../../utils/detachWindow';
-import { cueLabel, tcStr } from '../../utils/showFormat';
+import { cueLabel, cueMeta, tcStr } from '../../utils/showFormat';
+import { computeCueGhosts } from '../cues/CueAuditionRadar';
 import { ConduiteView } from './ConduiteView';
 import type { ConduiteViewState } from './types';
 
@@ -36,6 +37,7 @@ export const ConduiteSurface: React.FC = () => {
     cues: cues.map((c, i) => ({
       id: c.id,
       label: cueLabel(c, i),
+      meta: cueMeta(c),
       current: i === currentCueIndex,
       next: i === currentCueIndex + 1,
     })),
@@ -68,6 +70,18 @@ export const ConduiteSurface: React.FC = () => {
     })(),
     soloRestoreCount: soloSavedIds.length,
     armedCueId,
+    // Audition de la cue armée — habite le centre de la conduite (U3) :
+    // là où la cue va poser les objets, avant de la tirer.
+    audition: (() => {
+      const armedCue = armedCueId ? cues.find((c) => c.id === armedCueId) : undefined;
+      if (!armedCue) return null;
+      const ghosts = computeCueGhosts(armedCue);
+      if (ghosts.length === 0) return null;
+      return {
+        ghosts,
+        emitted: Object.values(useGraphStore.getState().emittedPositions),
+      };
+    })(),
   };
 
   return (

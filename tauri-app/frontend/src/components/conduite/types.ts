@@ -5,6 +5,9 @@
 export type ConduiteCue = {
   id: string;
   label: string;
+  /// Méta compacte (TRK · fade · pre-wait/follow · TC) — visible sans
+  /// interaction, l'opérateur sait ce qu'il tire.
+  meta: string;
   current: boolean;
   next: boolean;
 };
@@ -38,6 +41,13 @@ export type ConduiteViewState = {
   /// vue ne porte plus d'arm local : tous les chemins de contrôle
   /// (clic, OSC, menu, fenêtre détachée) visent la même cible.
   armedCueId: string | null;
+  /// Audition de la cue armée — fantômes (positions + origines, scope-
+  /// filtrés) vs positions émises, précomputé par les adaptateurs (la
+  /// vue reste pure). null = pas d'arm ou cue sans contenu spatial.
+  audition: {
+    ghosts: { x: number; y: number; kind: 'pos' | 'origin' }[];
+    emitted: [number, number, number][];
+  } | null;
 };
 
 export type ConduiteHandlers = {

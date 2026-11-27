@@ -9,6 +9,7 @@ import { ShowTransport } from '../show/ShowTransport';
 import { formatLogLabel } from '../../utils/liveActionsShared';
 import type { ConduiteHandlers, ConduiteViewState } from './types';
 import { SOURCE_OUTLINE } from '../../utils/sourceColors';
+import { CueAuditionRadar } from '../cues/CueAuditionRadar';
 
 export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteHandlers> = ({
   st,
@@ -130,7 +131,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
                   setArmedCueId(null);
                   onRecallCue(c.id);
                 }}
-                className={`px-3 py-2.5 cursor-pointer text-sm truncate ${
+                className={`px-3 py-2.5 cursor-pointer text-sm flex items-center ${
                   c.current
                     ? 'bg-stagespace-conduite/15 border-l-2 border-stagespace-conduite font-bold'
                     : c.id === armedCueId
@@ -142,11 +143,12 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
                 title={c.current ? 'Current cue' : 'Click = arm · double-click = RECALL (replaces the whole scene)'}
               >
                 {c.next && <span className="text-gray-600 mr-1">→</span>}
-                {c.label}
+                <span className="truncate">{c.label}</span>
+                {c.meta && <span className="ml-2 text-[10px] text-gray-500 font-normal flex-shrink-0">{c.meta}</span>}
               </div>
             ))}
             {st && st.cues.length === 0 && (
-              <div className="px-3 py-4 text-gray-600 text-xs">Aucune cue — créez-en dans l'atelier.</div>
+              <div className="px-3 py-4 text-gray-600 text-xs">Aucune cue — capturez la scène live avec ★ Store (jeu, onglet Cues) ou construisez-en dans l'atelier.</div>
             )}
           </div>
         </div>
@@ -199,6 +201,18 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
               </span>
             )}
           </div>
+          {/* Audition de la cue armée — habite le centre mort de la
+              console (U3) : où la cue va poser les objets, AVANT de
+              tirer. Rien n'est émis. */}
+          {st?.audition && (
+            <div className="w-72">
+              <CueAuditionRadar
+                ghosts={st.audition.ghosts}
+                emitted={st.audition.emitted}
+                heightClass="h-44"
+              />
+            </div>
+          )}
 
           <ShowTransport
             onPrev={() => moveArmed(-1)}

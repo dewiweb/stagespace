@@ -26,6 +26,7 @@ type BroadcastState = {
   nextSetlistName: string | null;
   soloRestoreCount: number;
   armedCueId: string | null;
+  audition: ConduiteViewState['audition'];
 };
 
 const cmd = (c: string) => void emit('conduite:cmd', c);

@@ -9,7 +9,8 @@ import { useCuelistStore } from '../store/useCuelistStore';
 import { useGraphStore } from '../store/useGraphStore';
 import { doArm, doCueNext, doCuePrev, doCueRecall, doCueRecallById, doCueArm, doCueGo, doGo, doMacro, doTcChase, doTcFps, doPanic, doSlot, doSlotStop, doSolo, doUnsolo, doUnpark } from '../utils/liveActions';
 import { useShowStatusStore } from '../store/useShowStatusStore';
-import { cueLabel, tcStr } from '../utils/showFormat';
+import { cueLabel, cueMeta, tcStr } from '../utils/showFormat';
+import { computeCueGhosts } from '../components/cues/CueAuditionRadar';
 
 
 export function useConduiteBroadcast() {
@@ -23,6 +24,7 @@ export function useConduiteBroadcast() {
         cues: cs.cues.map((c, i) => ({
           id: c.id,
           label: cueLabel(c, i),
+      meta: cueMeta(c),
           current: i === cs.currentCueIndex,
           next: i === cs.currentCueIndex + 1,
         })),
@@ -51,6 +53,15 @@ export function useConduiteBroadcast() {
         // Arm unifié — la fenêtre détachée affiche et navigue le MÊME
         // marqueur que la surface interne, l'OSC et le menu CUE GO.
         armedCueId: cs.armedCueId,
+        // Audition de la cue armée (U3) — la fenêtre FOH voit où la cue
+        // va poser les objets avant de la tirer.
+        audition: (() => {
+          const armedCue = cs.armedCueId ? cs.cues.find((c) => c.id === cs.armedCueId) : undefined;
+          if (!armedCue) return null;
+          const ghosts = computeCueGhosts(armedCue);
+          if (ghosts.length === 0) return null;
+          return { ghosts, emitted: Object.values(gs.emittedPositions) };
+        })(),
       }).catch(() => {});
     }, 500);
 
