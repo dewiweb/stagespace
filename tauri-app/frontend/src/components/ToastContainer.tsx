@@ -39,11 +39,42 @@ export default function ToastContainer() {
 
   if (toasts.length === 0) return null;
 
+  // Dedup — une rafale de toasts identiques (spam OSC, erreurs répétées)
+  // s'effondre en une entrée ×N au lieu d'une pile qui recouvre la
+  // télémétrie exactement quand il y a le plus à signaler (audit U4).
+  const grouped: { toast: Toast; count: number }[] = [];
+  for (const t of toasts) {
+    const last = grouped[grouped.length - 1];
+    if (last && last.toast.type === t.type && last.toast.message === t.message) {
+      last.count += 1;
+      last.toast = t; // id le plus récent — dismiss purge le groupe
+    } else {
+      grouped.push({ toast: t, count: 1 });
+    }
+  }
+  // Cap visible — les plus anciens s'effondrent en « +N » plutôt que de
+  // monter la pile jusqu'au centre de l'écran.
+  const MAX_VISIBLE = 3;
+  const hidden = Math.max(0, grouped.length - MAX_VISIBLE);
+  const visible = grouped.slice(-MAX_VISIBLE);
+
   return (
-    <div role="alert" aria-live="assertive" className="fixed bottom-4 right-4 z-toast flex flex-col gap-2 pointer-events-none">
+    // bottom-16 : au-dessus de la statusbar (h-7) ET de la légende radar
+    // jeu — les deux zones que la pile recouvrait systématiquement.
+    <div role="alert" aria-live="assertive" className="fixed bottom-16 right-4 z-toast flex flex-col gap-2 pointer-events-none">
       <div className="flex flex-col gap-2 pointer-events-auto">
-        {toasts.map((t) => (
-          <ToastItem key={t.id} toast={t} onDismiss={dismiss} />
+        {hidden > 0 && (
+          <div className="text-gray-500 text-[10px] text-right pr-1">+{hidden} more…</div>
+        )}
+        {visible.map(({ toast: t, count }) => (
+          <div key={t.id} className="relative">
+            {count > 1 && (
+              <span className="absolute -top-1.5 -right-1.5 z-10 bg-gray-800 border border-gray-600 text-gray-300 text-[9px] font-bold rounded-full px-1.5 py-0.5 leading-none">
+                ×{count}
+              </span>
+            )}
+            <ToastItem toast={t} onDismiss={dismiss} />
+          </div>
         ))}
       </div>
     </div>
