@@ -30,51 +30,65 @@ these 4 words:
 
 ### Minimal setup
 
-1. Import your **`.hol`** project (*Import .hol* button in the toolbar) to
+1. Import your **`.hol`** project (*File → Import Holophonix project…*) to
    populate the tracks — or define **manual OSC ids** in Settings.
 2. Configure **OSC out**: address, port, renderer profile
-   (Holophonix / Spat / IEM / ADM / generic XYZ / generic AED).
+   (Holophonix / Spat / IEM / ADM / generic XYZ / generic AED) —
+   *Edit → Preferences…*, or click the OSC destination in the StatusBar.
 3. Positions stream at **60 fps** as soon as a move is playing.
 
 ---
 
 ## 2. The surfaces
 
-STAGESPACE is organized around a **base live view** (Perform) and two
-**full-screen focus surfaces** (Busking, Conduite), plus the
-**detachable conduite window**. **Edit** mode is for preparation.
+STAGESPACE is organized around **four first-class surfaces**, switched
+from the titlebar nav, the *View* menu, or `/stagespace/view` from a
+console: **Atelier** (composer — graphs, moves, cues, settings),
+**Jeu** (perform live — pads, gestures, radar), **Score** (timeline
+sequencer) and **Conduite** (run the show — cues, GO, monitoring).
+The Jeu and Conduite surfaces can each be **detached** into a dedicated
+window (⧉) for a second screen.
 
-### 2.1 Perform — the base live view
+### 2.1 Jeu — the live surface
 
 ![Play surface](screenshots/12-jeu.png)
 
 | Zone | Role |
 |------|------|
-| Topbar | PLAY ▶ (armed slot) · GO (setlist) · BUSKING · ⧉ · CONDUITE · LIVE · **PANIC** |
-| Left column | **Setlist** (GO advances here) + **Layers** (parallel) + **Cues** |
-| Center | 3D preview — orbit drag, scroll zoom, *Manipulate* / *Assign* buttons |
-| Bottom tabs | Params · Playback · Tracks · Audio · OSC IN · Global |
+| Topbar | LIVE count/IDLE · cue context · **PLAY ▶/STOP ■** (armed slot) · **SETLIST ▶** (GO) · TC · CONSOLE ● · **LIVE/DRY-RUN** · **PANIC** · ⧉ detach |
+| Gesture strip | **spatial k** compressor slider · EXPLODE/CONVERGE/ORBIT/FRONT gesture buttons · ATTN ✕ release · UNSOLO · STOP ALL |
+| Left column | tabs **SETLIST** (GO advances here) / **CUES** / **POSES** — layers (parallel) listed under the setlist |
+| Center | tabs **Pads** (busking wall, default) / **Poses** (pose-pads) / **3D** — the 3D preview stays mounted in the background |
+| Right | 2D radar — live positions colored by control source, **top/front/side** view selector, drag = grab & throw |
+| Bottom drawer | scoped panels: Params · Playback · Tracks · Audio · OSC IN · Global transform |
 | StatusBar | status · **LIVE/DRY-RUN** · **BACKEND ✕** · perf · errors · OSC destination |
 
 - **PLAY ▶** shows the armed move — tap = launch, tap again = stop.
-- **GO** advances the setlist with a crossfade; layers play in parallel.
-- The cue list shares the column with the setlist — click = **arm**,
-  double-click = **recall** (never a single-click recall).
+- **SETLIST ▶** (GO) advances the setlist with a crossfade; layers play
+  in parallel.
+- In the CUES tab — click = **arm**, double-click = **recall** (never a
+  single-click recall).
 - **Cue** shown in the topbar: `Cue n → next armed`.
+- On the **pads**: the pad body is pure transport — **tap** = play/stop,
+  **hold ≥350 ms** = momentary inversion (a stopped pad bumps while held,
+  a live pad punches out and re-fades on release). The **name strip** at
+  the bottom of the pad = selection for the drawer — it never plays.
 
 ![Play — live slot + radar](screenshots/14-jeu-live-radar.png)
 
-### 2.2 Edit — the preparation
+### 2.2 Atelier — the preparation
 
 ![Edit](screenshots/03-edit.png)
 
-- **Toolbar** (zoned): setup (Import .hol, OSC out) · editing (undo/redo,
-  save/load .hfg show) · **live safety on the right** (LIVE + PANIC).
-- **SHOW column**: Moves / Cues / FX tabs — template library
-  (ORBITS, GESTURES, …) below.
+- **Titlebar + menubar** (File / Edit / View / Show / Help): show files
+  (New/Save/Load `.hfg`, Import .hol, recent shows), undo/redo and
+  clipboard, surface and viewer toggles, contextual Show actions. Live
+  safety is always in the StatusBar instead (LIVE/DRY-RUN + PANIC).
+- **SHOW column**: Moves / Cues / **Poses** / FX / **Rec** / **Log** tabs
+  — template library (ORBITS, GESTURES, …) below the Moves tab.
 - **3D canvas** in the center.
-- **Inspector** (right): PARAMS, PERFORM (duration/fades/loop), MACROS,
-  AUDIO, TRACKS (pattern selection: All / None / 1 of 2 / Odd /
+- **Inspector** (right): Params, Playback (duration/fades/loop/end/anchor),
+  Transform, Audio, Tracks (pattern selection: All / None / 1 of 2 / Odd /
   Inverse / 1st half / 2nd half…).
 
 ### 2.3 Creating a move
@@ -140,31 +154,91 @@ The **Expert/Simple** toggle opens the node editor:
 
 ![Play — live pads](screenshots/14-jeu-live-radar.png)
 
-The **Jeu** surface is busking: numbered pads `#n`
-(= stable `oscIndex` — doesn't change on reordering), setlist on the
-left, 2D radar on the right.
+The pad wall (center, **Pads** tab) is the busking instrument: numbered
+pads `#n` (= stable `oscIndex` — doesn't change on reordering).
 
-- **Tap** = play/stop · **hold ≥350 ms** = momentary bump (plays while held)
+- **Pad body — tap** = play/stop · **hold ≥350 ms** = momentary inversion
+  (stopped pad = bump while held; live pad = punch-out, release re-fades)
+- **Name strip** (bottom of the pad) = select the move for the live
+  drawer — touching it never affects the transport
 - **S** = solo · `/stagespace/slot <n>` · `/solo` · `/unsolo` from the console
-- Per-slot fades (configured in Edit/PERFORM)
+- Per-slot fades (configured in the Playback scope)
+- Control-source badges per track: **P** parked, **H** held
 
-### 2.6 Conduite — the FOH view
+### 2.6 Poses — position presets
+
+A **pose** is a named snapshot of track positions (backend-owned,
+saved in the `.hfg`). Poses are busking material: instant or animated
+recall, partial by nature — tracks outside the pose don't move.
+
+- **Capture**: type a name in the left-column **POSES** tab (`● cap`) or
+  hit **+ capture** in the pad wall header — the capture modal embeds a
+  track picker (all checked = capture every known position, including
+  tracks added later). Captured positions are the live ones: manual,
+  move holds, or moving objects.
+- **Recall** per pose row (Poses panel): **snap** = instant (manual
+  positions) · **goto** = animated ramp, duration and easing chosen in
+  the panel header · **A→B morph** = pick a source pose `A`, then morph
+  it into any other pose (objects absent from the source start from
+  their live positions).
+- **Pose-pads wall** (center, **Poses** tab — console-light palette
+  spirit): **tap** = snap · **hold ≥350 ms** = goto with the wall's
+  duration · **name strip** = ghost preview (targets shown as dotted
+  circles in the 3D and radar viewers — requires the *Fantômes* viewer
+  setting, on by default).
+- **Easings** for goto/morph: 8 curves selectable in the pad wall header
+  and the Poses panel — `smooth` (default, zero velocity at both ends),
+  `linear`, `ease_in`, `ease_out`, `ease_in_out`, `expo_in`, `expo_out`,
+  `overshoot` (elastic arrival — overshoots the target).
+- A pad/row warns `patched/total ⚠` when some of the pose's tracks are no
+  longer patched — those are skipped at recall.
+- Composing poses with nothing playing: enable **Idle tracks** in the
+  *View* menu — objects without a move stay visible (ghosted at their
+  origin) so you can drag them into place before capturing.
+- OSC: `/stagespace/pose/capture|snap|goto|morph|list` (see section 8).
+
+### 2.7 Conduite — the FOH view
 
 ![Conduite — armed cue + OSC log](screenshots/15-conduite-armed.png)
 
-**CONDUITE** button: NOW (current cue, amber), NEXT (armed), *then*,
-`pre_wait`/`follow` timers, TC, status. The **Prev | GO | Next |
-PANIC** transport at the bottom — `GO` = setlist crossfade, `Prev/Next`
-= cue recall.
+NOW (current cue, amber — or the busked moves when no cue is current),
+NEXT (the cue GO will fire), `pre_wait`/`follow` timers, TC, status.
+Console arm/go model: click a cue = **arm**, **Prev/Next move the armed
+marker without firing** — **GO fires the armed cue** (or the next one if
+nothing is armed). Double-click a cue = immediate recall. The center shows
+the **audition radar** of the armed cue (where it will place objects,
+nothing emitted). **SETLIST ▶** is a separate button — setlist crossfade,
+distinct from CUE GO. TC chip toggles chase; UNSOLO appears when a solo
+is active; the operational log scrolls at the bottom.
 
-### 2.7 Detachable conduite — the second screen
+### 2.8 Detachable windows — the second screens
 
 ![Detached conduite](screenshots/10-conduite-detached.png)
 
-**⧉** button: the same conduite in a **dedicated window** for a separate
-FOH screen. If the main window isn't broadcasting yet, the page shows
-**"WAITING FOR MAIN WINDOW…"** — no blank page. DRY-RUN / PARKED /
-CONSOLE / TC chips identical to the overlay.
+**⧉** button (conduite header, or jeu topbar): the same surface in a
+**dedicated window** — the conduite for a FOH screen, the jeu
+(pads + radar) for a performer screen. If the main window isn't
+broadcasting yet, the detached conduite shows **"WAITING FOR MAIN
+WINDOW…"** — no blank page. DRY-RUN / PARKED / CONSOLE / TC chips
+identical to the overlay.
+
+### 2.9 Coordinates & viewers
+
+- **Coordinate convention**: the origin is the **sweet spot** in the
+  audience; **+y** points in the direction of the audience's gaze toward
+  the scene (upstage — the stage front is therefore at −y); **x** is the
+  lateral axis, **z** is height (up). Units are meters.
+- **Viewer orientation** (Settings → *Show* → *Visualiseurs*): top and
+  side views can put **+Y at the top of the screen** (`upstage-up`,
+  default) or **−Y** (`downstage-up`) — the 3D viewer and the radar always
+  stay consistent with each other.
+- **View menu toggles**: **Trajectories** — sampled move paths in the 3D
+  viewers (off = clean scene, no backend sampling) · **Idle tracks** —
+  objects without a playing move stay visible (manual positions solid,
+  origins as ghosts) — needed to compose poses when nothing plays.
+- **Visualiseurs** settings: *Focus* dims objects outside the edited move
+  (instead of hiding them) · *Fantômes* shows resting objects at their
+  origin and the selected pose's targets as ghosts.
 
 ---
 
@@ -223,56 +297,78 @@ Direct expression commands — usable from the console or busking:
 | `/stagespace/spatial <k>` | global spatial compressor: `k<1` tightens the field, `k>1` expands it — live gesture |
 | `/stagespace/attention <obj>` | freezes all other objects — a single one moves (*change blindness*); `/attention/clear` releases |
 | `/stagespace/gesture <name> [strength]` | composed gesture in one command: `explode` · `converge` · `orbit` · `front` — velocity computed per object |
-| `/stagespace/soundcheck [stop]` | cyclic object probe (walks through each track — channel check) |
-| `/stagespace/rehearsal <action>` | rehearsal & pos-tape mode — alias `/stagespace/record` (see below) |
+| `/stagespace/soundcheck [start\|stop\|next\|prev]` | cyclic per-track probe — walks a ping through each track (spatial identification); default `start` |
+| `/stagespace/rehearsal <action>` | Score recorder — alias `/stagespace/record` (see below) |
 
 ![Explode gesture](screenshots/16-gesture-explode.png) ![Attention stasis](screenshots/17-attention.png)
 
-**Pos-tape** (`/stagespace/rehearsal <action>`) — position recording/replay:
+**Score recorder** (`/stagespace/rehearsal <action>`, UI in the **Rec**
+tab of the atelier SHOW column) — busking capture:
 
-- `record` — captures emitted positions @30 Hz (simulated play without actors)
-- `stop` — stops the capture
-- `play` — replays the tape at real pace (injected into the merge)
-- `export` — exports the tape as `.sstape.json`
+- `record` — starts capturing the live actions (slots, cues, gestures,
+  positions, macros) as timestamped references
+- `stop` — closes the take and **materializes it as clips/curves of the
+  Score timeline** (appended at the end of the partition, editable —
+  saved in the `.hfg`); outside a recording, `stop` stops the score
+- `play` — plays the partition (Score transport)
+- `clear` — empties the partition
+
+**Pos-tape** (same Rec panel, *Tape* row — UI-only, no OSC command) —
+raw position stream for a remote rehearsal or a renderer-side bounce:
+`rec` captures the positions actually emitted @30 Hz, `play` replays the
+tape at real pace (injected into the merge), `↓ export` writes a
+`.sstape.json`, `↑ import` replays a tape file.
 
 ## 6. Interactive controls (surfaces)
 
 Beyond buttons, several direct controls on the surfaces:
 
-- **2D radar** (Jeu view — right panel): top-down X/Y plan of live merged
-  positions, colored by control source (move/manual/hold/park/freeze).
+- **2D radar** (Jeu view — right panel): live merged positions in
+  **top** (X/Y), **front** (X/Z) or **side** (Y/Z) projection — selector
+  in the panel header — colored by control source
+  (move/manual/hold/park/freeze).
   **Drag an object = grab & throw** — you physically throw the source.
 - **GestureStrip** (Jeu view): **spatial compression** slider `k`
-  (tighten/expand the field live) + attention-stasis release —
-  shared with the `?view=run` window.
-- **LiveDrawer** (bottom of PerformView): scoped panels — Params /
-  Tracks / Audio of the selected move + Global merge — the 3D canvas
-  stays visible while tweaking (no modal).
-- **Manipulate / Macros** (canvas overlay): **global** merge macros
-  (speed, scale, shift, rotation — affects all live moves) +
-  *clear overrides* of manual positions.
-- **ManualReleaseBar** (floating, all surfaces): a dragged object is
-  **held manually** (merge-priority, it stays frozen) — the bar lets you
-  **release** each hold with one gesture.
+  (tighten/expand the field live) + EXPLODE/CONVERGE/ORBIT/FRONT gesture
+  buttons + attention-stasis release — shared with the `?view=run` window.
+- **LiveDrawer** (bottom of the Jeu view): scoped panels — Params /
+  Playback / Tracks / Audio of the selected move + OSC IN mappings +
+  Global transform — the canvas stays visible while tweaking (no modal).
+- **Manipulate / Transform** (3D viewer toolbar, manipulate mode):
+  **global** merge macros (speed, scale, shift, rotation, radius, height —
+  affects all live moves) + *clear overrides* of manual positions.
+- **OVERRIDE chip** (StatusBar, all surfaces): a dragged object is
+  **held manually** (merge-priority, it stays frozen) — the chip lists
+  every manual/hold/freeze override and lets you **release** each one
+  with a click. Ctrl+click an object releases it too.
 - **ObjectInspectBar**: clicking an object (3D or radar) → inspect —
   source state (manual/move/hold/park/freeze), position, per-mode
   release buttons. Per-object detail without opening the Inspector.
 
 ## 7. "Continuous" move semantics
 
-Two flags per move/slot (**Playback** tab):
+Two flags per move/slot (**Playback** scope of the live drawer, or
+Playback section of the atelier Inspector):
 
-- **`End: hold`** — at the end of a one-shot, the last positions become
-  manual positions: the object **stays where the move left it**
-  (`revert` by default = return to base position).
-- **`Anchor: current`** — at launch, each object captures its current
-  position as anchor (`delta = captured − traj(0)`): the move starts
-  **from where the object is**, no jump — move→move chaining,
-  release/peg-out style.
+- **`End: hold`** — at the end of a one-shot (or on operator stop), the
+  last positions become manual positions: the object **stays where the
+  move left it** (`revert` by default = return to base position). A hold
+  move never runs the fade-out contraction; panic bypasses end_mode
+  unconditionally.
+- **`Anchor`** — where the trajectory starts from, four modes:
+  - `origin` (default) — the move's own origin, as authored;
+  - `current` — at launch, each object captures its current position as
+    anchor (`delta = captured − traj(0)`): the move starts **from where
+    the object is**, no jump — move→move chaining, release/peg-out style;
+  - `follow` — the move's origin **continuously follows** a target track
+    (track number field), re-read every frame — the orbit stays centered
+    on a moving object (spatial follow-me);
+  - `pose` — starts where a named pose places the objects (pose picker;
+    objects absent from the pose fall back to their live position).
 
-Combined, `hold` freezes the object at the arrival point and `current`
-starts the next move from that point — "continuous" conduite without
-teleportations.
+Combined, `hold` freezes the object at the arrival point and `current` (or
+`pose`) starts the next move from that point — "continuous" conduite
+without teleportations.
 
 ---
 
@@ -292,12 +388,18 @@ before your user mappings.
 | `/stagespace/position <i> <x> <y> <z>` | manual position of object *i* (operator takeover) |
 | `/stagespace/position/clear <i>` · `/position/clearall` | removes the manual position |
 | `/stagespace/trackpos <t> <x> <y> <z>` | origin position of track *t* (where panic returns it) |
+| `/stagespace/pose/capture <name> [track…]` | capture live positions into a named pose (all known tracks if none passed) |
+| `/stagespace/pose/snap <name>` | instant pose recall (manual positions, partial — untouched tracks don't move) |
+| `/stagespace/pose/goto <name> [dur]` | animated ramp to the pose (default 2 s, holds the target at the end) |
+| `/stagespace/pose/morph <from> <to> [dur]` | animated morph pose A → pose B |
+| `/stagespace/pose/list` | dump poses → `/stagespace/pose/state <name> <ntracks>` per pose (backend-direct) |
 | `/stagespace/macro <name> <v>` | merge macro: speed, scale, shift_x/y/z, yaw/pitch/roll, radius_scale, height_offset |
 | `/stagespace/cue/arm <n>` · `/cue/go` | arm a cue without firing it · fire the armed one (console model) |
 | `/stagespace/positions` | dump emitted positions → `/stagespace/pos/state <obj> <x> <y> <z>` (backend-direct) |
-| `/stagespace/view <s>` | switch the operator surface: `atelier` · `conduite` · `jeu` |
+| `/stagespace/view <s>` | switch the operator surface: `atelier` · `jeu` · `score` · `conduite` |
 | `/stagespace/show/load <path>` | load a `.hfg` — **path local to the STAGESPACE machine** (alias `/stagespace/load`) |
 | `/stagespace/timecode/chase <0\|1>` · `/timecode/fps <n>` | chase on/off · fps of the string format (24/25/30, default 25) |
+| `/stagespace/score/chase <0\|1>` | score transport chases incoming timecode (locate/rebase/auto-start) |
 | `/stagespace/spatial` `attention` `throw` `gesture` `soundcheck` `rehearsal` | spatial & rehearsal actions |
 | `/stagespace/arm` · `/disarm` | OSC output / **dry-run** |
 | `/stagespace/status` | re-send current/next cue to the requester |
@@ -312,13 +414,16 @@ recent controllers receive feedback.
 
 `Space` play/stop selected slot · `Enter` setlist GO · `Shift+Enter`
 recall next cue · `Backspace` previous cue · `Esc` **panic** ·
-`Ctrl+Z`/`Y` undo/redo · `Ctrl+K` quick-add node · `Ctrl+C/X/V/D` node clipboard · `?` cheatsheet
+`Ctrl+S`/`Ctrl+O`/`Ctrl+N` save / load / new show (fire even while
+typing, blocked while a modal is open) ·
+`Ctrl+Z`/`Y` undo/redo · `Ctrl+K` quick-add node · `Ctrl+C/X/V/D` node clipboard ·
+`Ctrl+C`/`Ctrl+V` copy/paste the **position** of the selected object · `?` cheatsheet
 
 ---
 
 ## 9. OSC-IN mappings + Learn
 
-Wiring an external fader — *OSC IN* tab (PerformView):
+Wiring an external fader — *OSC IN* scope of the live drawer (Jeu view):
 
 | Destination | Effect |
 |-------------|-------|
@@ -344,7 +449,7 @@ Wiring an external fader — *OSC IN* tab (PerformView):
 - **BACKEND ✕**: a backend command failed silently — the engine is
   probably unresponsive. Returns to green on the first successful IPC.
 - **Park**: a hand-held object escapes recalls — **PARKED** chip
-  (topbar + conduite). `park` survives panic by design.
+  (StatusBar + conduite). `park` survives panic by design.
 - **Confirmations**: every destructive action (delete slot/template,
   clear-all zones/modulations/channels, per-item remove) goes through a
   confirmation box — no more single-click deletes.
@@ -373,7 +478,7 @@ validation, failed show load, panel crash. A rejected OSC command gets a
 | Move playing in silence | Tracks outside OSC list / dry-run | `LIVE` vs `DRY-RUN` + OSC destination in StatusBar |
 | Everything frozen, unresponsive | Dead backend | **BACKEND ✕** chip in StatusBar |
 | Black conduite window | Main window closed / not broadcasting | "WAITING FOR MAIN WINDOW…" |
-| Graph not applied to live | Failed hot-swap | Error pill in StatusBar/Toolbar (persists after the toast) |
+| Graph not applied to live | Failed hot-swap | Error pill in StatusBar (persists after the toast) |
 
 ---
 
@@ -381,11 +486,11 @@ validation, failed show load, panel crash. A rejected OSC command gets a
 
 | What | Where |
 |------|-----|
-| Full show (graphs, slots, cues, OSC, FX) | `.hfg` file — Toolbar save/load or `/stagespace/show/load <path>` |
+| Full show (graphs, slots, cues, poses, score, OSC, FX) | `.hfg` file — File menu save/load (`Ctrl+S`/`Ctrl+O`) or `/stagespace/show/load <path>` |
 | Holophonix project | `.hol` (import — source of truth for tracks) |
 | Graph auto-save while editing | on every structural change |
 | Slots | localStorage (persisted between sessions) |
-| UI preferences (legend, collapsed…) | localStorage `stagespace.*` |
+| UI & viewer preferences (legend, collapsed, orientation…) | localStorage `stagespace.*` |
 
 ---
 
@@ -430,7 +535,8 @@ Signal…) — only valid connections are accepted.
 `Circular` · `Elliptical` · `Spiral` · `Lissajous` · `Figure8` · `Linear` ·
 `Oscillation` · `PerlinNoise` · `Formation` (group formations:
 line/arc/grid) · `Converge` (convergence toward a point) · `Pendulum` ·
-`RoseCurve` · `Helix` · `Wave` · `CustomTrajectory`
+`RoseCurve` · `Helix` · `Wave` · `CustomTrajectory` · `PoseRamp`
+(per-object ramp to a named pose — the engine behind pose goto/morph)
 
 ### A.3 Physics engines — simulation
 
@@ -582,13 +688,14 @@ engines. SDK: `plugin-sdk/` + `plugin-examples/`.
 |--------------------|------|
 | **Venue mapping** (`set_venue_config`) | outgoing transform: `enabled` + `scale [x,y,z]` + `offset [x,y,z]` + `yaw` — canonical space → venue geometry mapping |
 | **Distance reality** (`set_distance_reality`) | perceptual effects by distance: exaggeration, gain_atten, air_loss — `None` = disabled |
-| **Media sync** (`set_media_sync`) | external media sync (TC/timecode source) |
+| **Media sync** (`set_media_sync`) | cue-change outbound feed to a light/video desk (`{prefix}/cue <num> <name>`) |
 | **Presets** (`preset_save/load/list/delete`) | saved named configurations — quick settings recall |
 | **Renderer discovery** | `Discover renderers` in Settings — scan available OSC outs |
 
 ## H. Monitoring panels
 
-- **Score** — the multitrack sequencer surface: clip timeline (move
+- **Score** — the multitrack sequencer surface (a first-class surface,
+  not a panel): clip timeline (move
   slots, cues, markers per lane), automation curves, transport
   (play/seek/loop/TC chase). Ruler interactions: drag = scrub
   (works while playing), loop region edges + body draggable,
@@ -600,16 +707,23 @@ engines. SDK: `plugin-sdk/` + `plugin-examples/`.
   fade-in/tail handles), slot playback params (editable when
   stopped, amber "applies at next play" indicator when the slot
   changes during playback).
-- **Log** — history of show commands (GUI + received OSC `/stagespace/*`) —
-  each entry timestamped. The **CONSOLE ●** indicator reflects activity.
+- **Rec** (atelier SHOW column) — the Score recorder (busking capture →
+  timeline clips) and the position tape (30 Hz stream, export/import) —
+  see section 5.
+- **Log** (atelier SHOW column) — history of show commands (GUI +
+  received OSC `/stagespace/*`) — each entry timestamped. The
+  **CONSOLE ●** indicator reflects activity.
 - **Audio** — audio capture state (device, level, detected BPM).
 
 ## I. Settings reference
 
-| Section | Contents |
-|---------|---------|
-| **OSC output** | renderer host:port + profile (Holophonix/Spat/IEM/ADM/XYZ/AED) + *Discover renderers* |
-| **OSC input** | command receive port (`oscInPort`, default 8001) |
-| **Merge** | default strategy — override · crossfade · blend · priority |
-| **Track IDs** | virtual IDs when no `.hol` is loaded (e.g. `1,2,3,…` or ranges `1-8,12`) |
-| **Audio input** | input device for audio-reactive trajectories (BPM, amplitude, spectrum) |
+The Settings modal (*Edit → Preferences…*, or click the OSC destination
+in the StatusBar) is organized in tabs:
+
+| Tab | Contents |
+|-----|----------|
+| **Réseau** | **OSC output** — renderer host:port + profile (Holophonix/IEM/Spat/ADM/generic XYZ/generic AED) + *Discover renderers* · **OSC input** — command receive port (`oscInPort`, default 8001) · **Media sync out** — sends `{prefix}/cue <num> <name>` to a light/video desk on every cue change · **Remote UI** — serve the UI to remote browsers over HTTP (no authentication — trusted networks only) |
+| **Tracking** | **PSN / RTTrP** — enable, multicast group + port, tracker→track map (`1:7, 2:8`), axis permutation (`x,-y,z`) |
+| **Salle** | **Venue adaptation** — scale/offset/yaw applied to the OSC payload only (trajectories stay canonical) · **Distance reality** — perceptual distance effects strength |
+| **Show** | **Merge** — default strategy: override · crossfade · blend · priority · **Track IDs** — virtual IDs when no `.hol` is loaded (comma-separated, e.g. `1,2,3,…`) · **Visualiseurs** — Focus dim, Fantômes (resting origins + pose ghosts), top/side orientation (+Y or −Y up — see section 2.9) |
+| **Audio** | input device for audio-reactive trajectories (BPM, amplitude, spectrum) |
