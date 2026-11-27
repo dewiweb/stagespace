@@ -375,3 +375,27 @@ d'export PNG/vidéo/log — non nécessaire mais à acter comme choix.
 | U15 | **Slider spatial** — binder au state backend réel | faible | faible |
 | U16 | **Gestes uniformes** — une seule force (3.0) ou exposer le paramètre | faible | trivial |
 | U17 | **OSC-IN en atelier** — dupliquer le panel mappings dans un onglet panneau (donnée de préparation) | moyen | faible |
+
+## L. Delta de version — périmètre exact de validité (ajout post-vérification)
+
+L'audit a été mené sur `feat/swarm-leader-rules` à `f83d4f3`. Cette branche
+est entièrement mergée dans `main` (`47defc2`) mais main porte 8 commits
+supplémentaires (0.6.6 → 0.6.7). Impact mesuré fichier par fichier :
+
+**Périmé (détails d'inventaire uniquement) :**
+- Picker tracks MovesTable — désormais réutilise TrackGrid (`2fb39c9`) :
+  l'inventaire « modal custom » est obsolète, et cette unification va
+  dans le sens des recommandations de cohérence de cet audit.
+- Playback drawer jeu — inclut désormais duration éditable, libre au-delà
+  de 30s, avec le nouveau mode Slider `editable` clic-pour-saisir
+  (`dc48eaf`). L'inventaire du scope Playback est à relire avec duration.
+- `Slider.tsx` a gagné un pattern d'interaction (valeur cliquable) qui
+  post-date l'audit.
+
+**Intact (vérifié par diff de fichiers) :** aucun des 8 commits ne touche
+ConduiteView, useCuelistStore, le soundcheck, la pos-tape, le trackpos,
+les menus objet, le radar ou les mappings OSC-IN. Les 17 recommandations
+U1-U17 sont donc toutes encore valides à l'état 0.6.7.
+
+**Règle pour la suite :** le travail UX repart de `main` — plus jamais
+d'audit sur branche mergée.
