@@ -23,6 +23,7 @@ import {
   doStop,
   doTcChase,
   doToggleSelectedSlot,
+  doUnsolo,
 } from '../utils/liveActions';
 import { useScoreStore } from '../store/useScoreStore';
 import { effectiveTrackIds } from '../utils/scoreResolve';
@@ -190,6 +191,10 @@ export const MenuBar: React.FC = () => {
               { label: 'Gesture: Orbit', onClick: () => doGesture('orbit', 1.0, 'menu') },
               { label: 'Gesture: Front', onClick: () => doGesture('front', 1.0, 'menu') },
               ...soundcheckEntries,
+              { separator: true },
+              // Unsolo — promis par le commentaire du menu mais absent :
+              // après un solo, le chemin de retour doit exister partout.
+              { label: 'Unsolo — replay slots stopped by solo', onClick: () => doUnsolo('menu') },
               { separator: true },
               { label: 'Stop all moves', onClick: () => doStop() },
               { separator: true },
@@ -440,6 +445,7 @@ export const MenuBar: React.FC = () => {
       entries: [
         { label: 'Atelier — composer', checked: surface === 'atelier', onClick: () => setSurface('atelier') },
         { label: 'Jeu — perform live', checked: surface === 'jeu', onClick: () => setSurface('jeu') },
+        { label: 'Score — séquencer dans le temps', checked: surface === 'score', onClick: () => setSurface('score') },
         { label: 'Conduite — run the show', checked: surface === 'conduite', onClick: () => setSurface('conduite') },
         { separator: true },
         {

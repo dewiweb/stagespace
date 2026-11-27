@@ -163,7 +163,7 @@ export const TrackGrid: React.FC<TrackGridProps> = ({
         <EmptyState
           size="sm"
           title="No tracks yet"
-          hint="Import a .hol project (toolbar) to see real track IDs, names and colours — or assign track IDs in the move's params."
+          hint="Import a .hol project (menu File) to see real track IDs, names and colours — or assign track IDs in the move's params."
         />
       )}
 

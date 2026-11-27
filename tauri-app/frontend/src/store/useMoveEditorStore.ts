@@ -478,7 +478,7 @@ export const useMoveEditorStore = create<MoveEditorStore>((set, get) => {
     }
 
     if (oscIds.length === 0) {
-      alert('No track available.\nImport a .hol (Toolbar → Import) or add manual tracks.');
+      alert('No track available.\nImport a .hol (File → Import Holophonix project) or add manual tracks.');
       return null;
     }
 

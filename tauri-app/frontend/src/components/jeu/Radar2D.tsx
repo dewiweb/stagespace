@@ -344,7 +344,14 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
                 </text>
               </>
             ) : (
-              <circle cx={cx} cy={cy} r="4" fill={sourceHex(src)}>
+              <circle
+                cx={cx}
+                cy={cy}
+                r="4"
+                fill={src === 'freeze' ? 'none' : sourceHex(src)}
+                stroke={src === 'freeze' ? sourceHex(src) : 'none'}
+                strokeWidth={src === 'freeze' ? 1.5 : 0}
+              >
                 <title>#{manualOscIds[t] ?? t + 1} · {SOURCE_LABEL[src] ?? src}</title>
               </circle>
             )}
@@ -442,7 +449,16 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
     <div className="flex flex-wrap gap-x-2 gap-y-0.5 px-1 mt-0.5 flex-shrink-0">
       {(['move', 'manual', 'hold', 'park', 'freeze', 'psn'] as const).map((src) => (
         <span key={src} className="flex items-center gap-0.5 text-[9px] text-gray-500">
-          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: SOURCE_HEX[src] }} />
+          {/* Freeze = stase pink comme park (doctrine) mais HOLLOW —
+              sinon les deux entrées de légende sont indiscernables (U6). */}
+          <span
+            className="w-1.5 h-1.5 rounded-full"
+            style={
+              src === 'freeze'
+                ? { border: `1.5px solid ${SOURCE_HEX[src]}`, backgroundColor: 'transparent', boxSizing: 'border-box' }
+                : { backgroundColor: SOURCE_HEX[src] }
+            }
+          />
           {src}
         </span>
       ))}

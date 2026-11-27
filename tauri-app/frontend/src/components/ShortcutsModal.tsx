@@ -48,7 +48,7 @@ const PAD_GESTURES: { gesture: string; action: string }[] = [
 /// Gestes souris — la moitié "live" de l'interface n'est pas au clavier.
 const MOUSE_GESTURES: { gesture: string; action: string }[] = [
   { gesture: 'Drag object (3D / radar)', action: 'Grab → manual position (engine loses control)' },
-  { gesture: 'MANUAL bar / radar × badge', action: 'Release object(s) — engine resumes trajectory' },
+  { gesture: 'OVERRIDE chip / radar × badge', action: 'Release object(s) — engine resumes trajectory' },
   { gesture: 'Ctrl+click object', action: 'Release a held object (same as the bar)' },
   { gesture: 'Ctrl+C / Ctrl+V (object selected)', action: 'Copy the emitted position / paste it as a manual position on the selected object' },
   { gesture: 'Ctrl+C / Ctrl+V (spline edit)', action: 'Copy selected control points (all if none selected) / paste at +0.3m' },
