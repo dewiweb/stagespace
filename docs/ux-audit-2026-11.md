@@ -399,3 +399,10 @@ U1-U17 sont donc toutes encore valides à l'état 0.6.7.
 
 **Règle pour la suite :** le travail UX repart de `main` — plus jamais
 d'audit sur branche mergée.
+
+## M. Suivi d'implémentation
+
+| Chantier | Statut | Commit |
+|---|---|---|
+| U9 unification arm | **fait** (feat/ux-finitions) — store unique, ConduiteView props-driven, broadcast détaché, arm consumée au recall/désarmée au delete ; 620/620 verts | `U9 — unification de l'arm de cue` |
+| U10 fenêtre détachée sûre | **fait** — bouton LIVE/DRY-RUN symétrique dans les deux états, chip TC cliquable (toggle chase — le routing tcchase: dormait sans émetteur), Esc/Enter/Shift+Enter/Backspace montés dans ConduitePage | en cours de vérif |

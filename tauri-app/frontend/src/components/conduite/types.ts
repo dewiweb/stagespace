@@ -50,6 +50,9 @@ export type ConduiteHandlers = {
   /// Arm/désarm une cue (null = désarmer) — écrit dans le store partagé
   /// (directement en surface interne, via `conduite:cmd` en détaché).
   onArmCue: (id: string | null) => void;
+  /// Toggle TC chase — la fenêtre détachée n'a pas de menu Show : le
+  /// chip TC du header est son seul contrôle timecode.
+  onTcChaseToggle: () => void;
   /// SETLIST GO — crossfade vers le prochain move (≠ onGo = cue recall).
   onGoSetlist: () => void;
   /// Dégèle un objet parké (obj_index backend).

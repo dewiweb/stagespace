@@ -5,7 +5,7 @@ import React from 'react';
 import { useCuelistStore } from '../../store/useCuelistStore';
 import { useGraphStore } from '../../store/useGraphStore';
 import { useShowStatusStore } from '../../store/useShowStatusStore';
-import { doArm, doCueNext, doCueRecallById, doPanic, doGo, doUnpark, doUnsolo } from '../../utils/liveActions';
+import { doArm, doCueNext, doCueRecallById, doPanic, doGo, doUnpark, doUnsolo, doTcChase } from '../../utils/liveActions';
 import { detachWindow } from '../../utils/detachWindow';
 import { cueLabel, tcStr } from '../../utils/showFormat';
 import { ConduiteView } from './ConduiteView';
@@ -79,6 +79,7 @@ export const ConduiteSurface: React.FC = () => {
       onPanic={() => doPanic()}
       onArmToggle={() => doArm(!armed)}
       onArmCue={(id) => useCuelistStore.getState().armCue(id)}
+      onTcChaseToggle={() => doTcChase(!tcChaseEnabled, 'conduite')}
       onRecallCue={(id) => doCueRecallById(id, undefined, 'conduite')}
       onGoSetlist={() => doGo('conduite')}
       onUnpark={(obj) => doUnpark(obj, 'conduite')}

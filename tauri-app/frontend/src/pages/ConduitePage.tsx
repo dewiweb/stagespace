@@ -44,6 +44,21 @@ export const ConduitePage: React.FC = () => {
     return () => { un?.(); };
   }, []);
 
+  // Raccourcis live de la fenêtre FOH — useLiveShortcuts n'est pas monté
+  // ici : sans ça, Esc/panic était INOPÉRANT au clavier dans la fenêtre
+  // détachée (trou de sécurité U10). Mêmes commandes que la surface
+  // interne, routées sur le fil conduite:cmd.
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') cmd('panic');
+      else if (e.key === 'Enter' && e.shiftKey) cmd('next');
+      else if (e.key === 'Enter') cmd('go');
+      else if (e.key === 'Backspace') { e.preventDefault(); cmd('prev'); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const st: ConduiteViewState | null = bc
     ? { ...bc, showLog, armed, parked, consoleAge }
     : null;
@@ -56,6 +71,7 @@ export const ConduitePage: React.FC = () => {
         onPanic={() => cmd('panic')}
         onArmToggle={() => cmd('arm')}
         onArmCue={(id) => cmd(id ? `armcue:${id}` : 'armcue:none')}
+        onTcChaseToggle={() => cmd(`tcchase:${bc?.tcChaseEnabled ? 0 : 1}`)}
         onRecallCue={(id) => cmd(`recall:${id}`)}
         onGoSetlist={() => cmd('go')}
         onUnpark={(obj) => cmd(`unpark:${obj}`)}

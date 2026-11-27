@@ -21,6 +21,7 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
   onUnsolo,
   onDetach,
   onArmCue,
+  onTcChaseToggle,
 }) => {
   // Arm unifié — lu depuis st (source unique : useCuelistStore, partagé
   // avec le fil OSC et le menu CUE GO), écrit via onArmCue. Click = arm
@@ -67,13 +68,20 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
           )}
         </div>
         <div className="flex items-center gap-3">
-          {st && !st.armed && (
+          {/* Arm symétrique — le bouton existe dans les DEUX états :
+              la fenêtre détachée FOH doit pouvoir repasser en dry-run
+              sans la fenêtre principale (trou de sécurité U10). */}
+          {st && (
             <button
               onClick={onArmToggle}
-              className="text-xl px-3 py-1 rounded font-bold border border-gray-700 text-gray-400 bg-gray-800 hover:text-gray-200 animate-pulse"
-              title="DRY-RUN — cliquer pour armer l'OSC"
+              className={`text-xl px-3 py-1 rounded font-bold border transition-colors ${
+                st.armed
+                  ? 'border-stagespace-danger/60 bg-stagespace-danger/30 text-white hover:bg-stagespace-danger/50'
+                  : 'border-gray-700 text-gray-400 bg-gray-800 hover:text-gray-200 animate-pulse'
+              }`}
+              title={st.armed ? 'LIVE — positions émises vers le renderer. Cliquer pour DRY-RUN' : 'DRY-RUN — cliquer pour armer l\'OSC'}
             >
-              DRY-RUN
+              {st.armed ? 'LIVE' : 'DRY-RUN'}
             </button>
           )}
           {st && st.parked.length > 0 && (
@@ -88,10 +96,21 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
               CONSOLE {st.consoleAge < 5 ? '●' : '○'}
             </StatusChip>
           )}
-          {st?.tcChaseEnabled && (
-            <span className={`font-mono text-3xl font-bold ${st.tcActive ? 'text-stagespace-live' : 'text-stagespace-warning'}`}>
-              {st.tcActive ? st.tcStr : 'TC lost'}
-            </span>
+          {/* TC — chip persistant et cliquable : toggle chase. Sans ça
+              la fenêtre détachée n'a AUCUN contrôle TC (le routing
+              tcchase: existait mais rien ne l'émettait — U10). */}
+          {st && (
+            <button
+              onClick={onTcChaseToggle}
+              className={`font-mono font-bold rounded px-2 py-1 border transition-colors ${
+                st.tcChaseEnabled
+                  ? `text-3xl border-transparent ${st.tcActive ? 'text-stagespace-live' : 'text-stagespace-warning'}`
+                  : 'text-lg border-gray-700 text-gray-600 hover:text-gray-400'
+              }`}
+              title={st.tcChaseEnabled ? 'TC chase ON — cliquer pour couper' : 'TC chase OFF — cliquer pour chaser le timecode'}
+            >
+              {st.tcChaseEnabled ? (st.tcActive ? st.tcStr : 'TC lost') : 'TC'}
+            </button>
           )}
         </div>
       </div>
