@@ -5,7 +5,7 @@
 import React from 'react';
 import { usePoseStore } from '../../store/usePoseStore';
 import { useGraphStore } from '../../store/useGraphStore';
-import { doPoseSnap, doPoseGoto } from '../../utils/liveActions';
+import { doPoseSnap, doPoseGoto, POSE_EASINGS } from '../../utils/liveActions';
 import { PoseTile } from '../show/PoseTile';
 import EmptyState from '../ui/EmptyState';
 
@@ -18,6 +18,9 @@ export const PosePadWall: React.FC = () => {
   // Durée du goto (hold) — réglage du mur, indépendant du panel. 2s est
   // le défaut du PosesPanel : même repère pour l'opérateur.
   const [gotoDuration, setGotoDuration] = React.useState(2.0);
+  // Courbe de la rampe — smooth (défaut backend) est le bon défaut musical :
+  // vélocité nulle aux deux bouts, pas d'à-coup à l'arrivée.
+  const [gotoEasing, setGotoEasing] = React.useState<string>('smooth');
 
   React.useEffect(() => {
     void refreshPoses();
@@ -41,6 +44,16 @@ export const PosePadWall: React.FC = () => {
           />
           <span>s</span>
         </label>
+        <select
+          value={gotoEasing}
+          onChange={(e) => setGotoEasing(e.target.value)}
+          className="px-1 py-0.5 bg-gray-900 border border-gray-700 rounded text-[10px] text-gray-300 focus:border-stagespace-accent focus:outline-none"
+          title="Courbe de la rampe goto — overshoot dépasse la cible (arrivée élastique)"
+        >
+          {POSE_EASINGS.map((ez) => (
+            <option key={ez} value={ez}>{ez.replace(/_/g, ' ')}</option>
+          ))}
+        </select>
       </div>
       <div
         className={`flex-1 overflow-y-auto p-3 grid gap-3 auto-rows-min content-start ${
@@ -58,7 +71,7 @@ export const PosePadWall: React.FC = () => {
               patchedCount={patched}
               isSelected={selectedPoseName === pose.name}
               onSnap={() => doPoseSnap(pose.name, 'posepad')}
-              onGoto={() => doPoseGoto(pose.name, gotoDuration, 'posepad')}
+              onGoto={() => doPoseGoto(pose.name, gotoDuration, gotoEasing, 'posepad')}
               onSelect={() => selectPose(selectedPoseName === pose.name ? null : pose.name)}
             />
           );

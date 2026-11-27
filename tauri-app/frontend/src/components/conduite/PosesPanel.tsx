@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import { usePoseStore } from '../../store/usePoseStore';
 import { useGraphStore } from '../../store/useGraphStore';
-import { doPoseCapture, doPoseSnap, doPoseGoto, doPoseMorph } from '../../utils/liveActions';
+import { doPoseCapture, doPoseSnap, doPoseGoto, doPoseMorph, POSE_EASINGS } from '../../utils/liveActions';
 import Modal from '../ui/Modal';
 import { TrackGrid } from '../TrackGrid';
 
@@ -23,6 +23,7 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
   const holProject = useGraphStore((s) => s.holProject);
   const [newName, setNewName] = useState('');
   const [gotoDuration, setGotoDuration] = useState(2.0);
+  const [gotoEasing, setGotoEasing] = useState<string>('smooth');
   // Source du morph — une seule pose « A » à la fois ; chaque autre
   // row expose alors son bouton morph A→elle.
   const [morphSource, setMorphSource] = useState<string | null>(null);
@@ -85,6 +86,16 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
           />
           <span className="text-gray-600">s</span>
         </label>
+        <select
+          value={gotoEasing}
+          onChange={(e) => setGotoEasing(e.target.value)}
+          className="px-1 py-0.5 bg-gray-900 border border-gray-700 rounded text-[10px] text-gray-300 focus:border-stagespace-accent focus:outline-none"
+          title="Courbe des rampes goto/morph — overshoot dépasse la cible (arrivée élastique)"
+        >
+          {POSE_EASINGS.map((ez) => (
+            <option key={ez} value={ez}>{ez.replace(/_/g, ' ')}</option>
+          ))}
+        </select>
       </div>
 
       {/* Capture — nom + distribution (picker tracks) + cap. */}
@@ -212,7 +223,7 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
               </button>
               {morphSource && morphSource !== p.name && (
                 <button
-                  onClick={() => doPoseMorph(morphSource, p.name, gotoDuration)}
+                  onClick={() => doPoseMorph(morphSource, p.name, gotoDuration, gotoEasing)}
                   className="px-1.5 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs"
                   title={`Morph '${morphSource}' → '${p.name}' in ${gotoDuration}s — objects absent from the source start from their live positions`}
                 >
@@ -220,7 +231,7 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
                 </button>
               )}
               <button
-                onClick={() => doPoseGoto(p.name, gotoDuration)}
+                onClick={() => doPoseGoto(p.name, gotoDuration, gotoEasing)}
                 className="px-2 py-0.5 rounded bg-gray-800 hover:bg-stagespace-target/15 text-gray-400 hover:text-stagespace-target text-xs opacity-70 group-hover:opacity-100"
                 title={`Goto — ramp objects to this pose in ${gotoDuration}s (smooth, holds the target at the end)`}
               >

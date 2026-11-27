@@ -210,16 +210,31 @@ export function doPoseSnap(name: string, from?: string) {
   void usePoseStore.getState().snapPose(name);
 }
 
+/// Courbes d'easing du poseramp backend — vocabulaire standard Penner.
+/// `smooth` (défaut) = smoothstep vélocité nulle aux deux bouts ;
+/// `overshoot` dépasse la cible en cours de rampe (arrivée élastique).
+export const POSE_EASINGS = [
+  'smooth',
+  'linear',
+  'ease_in',
+  'ease_out',
+  'ease_in_out',
+  'expo_in',
+  'expo_out',
+  'overshoot',
+] as const;
+export type PoseEasing = (typeof POSE_EASINGS)[number];
+
 /** /stagespace/pose/goto <name> [duration] — rampe animée vers la pose
  *  (oneshot + hold : la cible est tenue exactement, enchaînable). */
-export function doPoseGoto(name: string, duration?: number, from?: string) {
+export function doPoseGoto(name: string, duration?: number, easing?: string, from?: string) {
   logAction('doPoseGoto', from);
-  void usePoseStore.getState().gotoPose(name, duration);
+  void usePoseStore.getState().gotoPose(name, duration, easing);
 }
 
 /** /stagespace/pose/morph <from> <to> [duration] — morph animé A → B :
  *  départ depuis la pose A (fallback live hors de A), distribution = B. */
-export function doPoseMorph(fromPose: string, toPose: string, duration?: number, from?: string) {
+export function doPoseMorph(fromPose: string, toPose: string, duration?: number, easing?: string, from?: string) {
   logAction('doPoseMorph', from);
-  void usePoseStore.getState().morphPose(fromPose, toPose, duration);
+  void usePoseStore.getState().morphPose(fromPose, toPose, duration, easing);
 }

@@ -142,10 +142,10 @@ export function useShowControl() {
               if (cmd.value != null) doPoseSnap(String(cmd.value), from);
               break;
             case 'PoseGoto':
-              if (cmd.value != null) doPoseGoto(cmd.value[0], cmd.value[1] ?? undefined, from);
+              if (cmd.value != null) doPoseGoto(cmd.value[0], cmd.value[1] ?? undefined, undefined, from);
               break;
             case 'PoseMorph':
-              if (cmd.value != null) doPoseMorph(cmd.value[0], cmd.value[1], cmd.value[2] ?? undefined, from);
+              if (cmd.value != null) doPoseMorph(cmd.value[0], cmd.value[1], cmd.value[2] ?? undefined, undefined, from);
               break;
             // PositionsQuery + PoseList : répondus côté backend (sink) — rien ici.
           }
