@@ -413,3 +413,4 @@ d'audit sur branche mergée.
 | U5 menu View+Score / unsolo | **fait** — Score ajouté au menu View (titlebar-only avant), unsolo dans le menu Show jeu (promis par le commentaire, absent) | batch |
 | U12 strings stales | **fait** — Toolbar inexistante (TrackGrid, useMoveEditorStore), MANUAL bar (ShortcutsModal) corrigés | batch |
 | U6 legend radar | **fait** — freeze hollow (ring) vs park plein, points radar ET légende cohérents | batch |
+| U11 trackpos UI | **fait** — « Set origin here » dans le menu objet (radar/3D/TrackGrid) : capture la position actuelle comme origine de track (où panic/revert ramènent) ; avant : OSC ou import .hol uniquement | ce commit |

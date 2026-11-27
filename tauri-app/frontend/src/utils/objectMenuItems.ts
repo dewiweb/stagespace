@@ -2,7 +2,8 @@
 /// que le clic-droit historique (release), Ctrl+C/V position et l'inspect
 /// bar (park). Un seul endroit : les deux surfaces restent synchrones.
 import type { ContextMenuItem } from '../components/ui/ContextMenu';
-import { doClearPosition, doSetPosition, doPark, doUnpark, doAttention } from './liveActionsSpatial';
+import { doClearPosition, doSetPosition, doPark, doUnpark, doAttention, doSetTrackPosition } from './liveActionsSpatial';
+import { useGraphStore } from '../store/useGraphStore';
 import {
   writePositionClipboard, readPositionClipboard,
   serializePositionClipboard, parsePositionClipboard,
@@ -71,6 +72,24 @@ export function buildObjectMenuItems(
           const parsed = parsePositionClipboard(t);
           if (parsed) apply(parsed);
         }).catch(() => {});
+      },
+    },
+    { separator: true },
+    {
+      // Set origin here — l'origine de la track (où panic la ramène)
+      // n'avait AUCUN accès UI (OSC /stagespace/trackpos ou import .hol
+      // uniquement — audit U11). Le workflow setup naturel : placer les
+      // objets manuellement, puis figer leurs origines ici.
+      label: `Set origin here — obj ${obj + 1}`,
+      disabled: !pos,
+      title: pos
+        ? 'Make the current position the track origin — where panic and revert return this object'
+        : 'No emitted position yet',
+      onClick: () => {
+        if (!pos) return;
+        const tid = useGraphStore.getState().manualOscIds[obj];
+        if (tid == null) return;
+        doSetTrackPosition(tid, pos[0], pos[1], pos[2]);
       },
     },
   ];
