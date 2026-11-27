@@ -34,8 +34,11 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; cue: CueData } | null>(null);
   // Arm-before-recall : un simple clic sur un cue l'arme (outline), le
   // double-clic déclenche le recall. Un recall tue TOUS les moves actifs —
-  // un misclick en live viderait la scène.
-  const [armedCueId, setArmedCueId] = useState<string | null>(null);
+  // un misclick en live viderait la scène. Store partagé (pas de state
+  // local) : le fil OSC /stagespace/cue/arm|go, le menu CUE GO et la
+  // conduite visent la même cue armée.
+  const armedCueId = useCuelistStore((s) => s.armedCueId);
+  const setArmedCueId = useCuelistStore((s) => s.armCue);
 
   // Récupérer l'état actuel pour le store
   const nodes = useGraphStore((s) => s.nodes);

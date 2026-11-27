@@ -151,6 +151,9 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
     if (get().isRecalling) return; // empêche les recalls concurrents
     const cue = get().cues.find((c) => c.id === cueId);
     if (!cue) return;
+    // Le recall d'une cue armée consomme l'arm — sinon le GO suivant
+    // re-tirerait la cue déjà courante (piège console classique).
+    if (get().armedCueId === cueId) set({ armedCueId: null });
     // Toute nouvelle recall annule les timers pendus (pre_wait/follow) —
     // sinon un timer armé pour une autre cue tirerait au milieu de ce
     // recall, même si la nouvelle cue n'a pas de pre_wait.
@@ -227,6 +230,10 @@ export const useCuelistStore = create<CuelistState>((set, get) => ({
         : filtered.findIndex((c) => c.id === currentCue.id);
     }
     set({ cues: filtered, currentCueIndex: newIndex });
+    // Une cue supprimée ne peut plus être tirée — l'arm ne doit pas
+    // pointer une cible fantôme (le GO retomberait sur la séquentielle,
+    // surprise en live).
+    if (get().armedCueId === cueId) set({ armedCueId: null });
     saveToStorage(filtered);
   },
 

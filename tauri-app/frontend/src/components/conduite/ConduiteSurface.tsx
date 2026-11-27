@@ -19,6 +19,7 @@ export const ConduiteSurface: React.FC = () => {
   const tcChaseEnabled = useCuelistStore((s) => s.tcChaseEnabled);
   const lastTimecode = useCuelistStore((s) => s.lastTimecode);
   const lastTimecodeAt = useCuelistStore((s) => s.lastTimecodeAt);
+  const armedCueId = useCuelistStore((s) => s.armedCueId);
   const moveSlots = useGraphStore((s) => s.moveSlots);
   const movements = useGraphStore((s) => s.movements);
   const setlistOrder = useGraphStore((s) => s.setlistOrder);
@@ -66,6 +67,7 @@ export const ConduiteSurface: React.FC = () => {
       return nextId ? (moveSlots.find((s) => s.id === nextId)?.name ?? null) : null;
     })(),
     soloRestoreCount: soloSavedIds.length,
+    armedCueId,
   };
 
   return (
@@ -76,6 +78,7 @@ export const ConduiteSurface: React.FC = () => {
       }
       onPanic={() => doPanic()}
       onArmToggle={() => doArm(!armed)}
+      onArmCue={(id) => useCuelistStore.getState().armCue(id)}
       onRecallCue={(id) => doCueRecallById(id, undefined, 'conduite')}
       onGoSetlist={() => doGo('conduite')}
       onUnpark={(obj) => doUnpark(obj, 'conduite')}

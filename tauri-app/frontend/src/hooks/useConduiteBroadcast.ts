@@ -48,6 +48,9 @@ export function useConduiteBroadcast() {
           return nextId ? (gs.moveSlots.find((s) => s.id === nextId)?.name ?? null) : null;
         })(),
         soloRestoreCount: gs.soloSavedIds.length,
+        // Arm unifié — la fenêtre détachée affiche et navigue le MÊME
+        // marqueur que la surface interne, l'OSC et le menu CUE GO.
+        armedCueId: cs.armedCueId,
       }).catch(() => {});
     }, 500);
 
@@ -78,6 +81,14 @@ export function useConduiteBroadcast() {
       }
       if (p.startsWith('cuearm:')) {
         doCueArm(p.slice(7), 'conduite-window');
+        return;
+      }
+      // armcue:<id|none> — arm par ID direct (clic row de la fenêtre
+      // détachée), écrit dans le store partagé : la main window, l'OSC
+      // et le menu CUE GO visent alors la même cue.
+      if (p.startsWith('armcue:')) {
+        const id = p.slice(7);
+        useCuelistStore.getState().armCue(id === 'none' ? null : id);
         return;
       }
       if (p.startsWith('unpark:')) {

@@ -25,6 +25,7 @@ type BroadcastState = {
   tcStr: string;
   nextSetlistName: string | null;
   soloRestoreCount: number;
+  armedCueId: string | null;
 };
 
 const cmd = (c: string) => void emit('conduite:cmd', c);
@@ -54,6 +55,7 @@ export const ConduitePage: React.FC = () => {
         onGo={(armed) => cmd(armed ? `recall:${armed}` : 'next')}
         onPanic={() => cmd('panic')}
         onArmToggle={() => cmd('arm')}
+        onArmCue={(id) => cmd(id ? `armcue:${id}` : 'armcue:none')}
         onRecallCue={(id) => cmd(`recall:${id}`)}
         onGoSetlist={() => cmd('go')}
         onUnpark={(obj) => cmd(`unpark:${obj}`)}

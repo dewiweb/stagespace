@@ -33,6 +33,11 @@ export type ConduiteViewState = {
   nextSetlistName: string | null;
   /// Slots à rejouer après un solo — >0 = bouton UNSOLO visible.
   soloRestoreCount: number;
+  /// Cue armée — source unique : useCuelistStore.armedCueId (le même
+  /// store que le fil OSC /stagespace/cue/arm et le menu CUE GO). La
+  /// vue ne porte plus d'arm local : tous les chemins de contrôle
+  /// (clic, OSC, menu, fenêtre détachée) visent la même cible.
+  armedCueId: string | null;
 };
 
 export type ConduiteHandlers = {
@@ -42,6 +47,9 @@ export type ConduiteHandlers = {
   onPanic: () => void;
   onArmToggle: () => void;
   onRecallCue: (id: string) => void;
+  /// Arm/désarm une cue (null = désarmer) — écrit dans le store partagé
+  /// (directement en surface interne, via `conduite:cmd` en détaché).
+  onArmCue: (id: string | null) => void;
   /// SETLIST GO — crossfade vers le prochain move (≠ onGo = cue recall).
   onGoSetlist: () => void;
   /// Dégèle un objet parké (obj_index backend).

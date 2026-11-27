@@ -20,10 +20,13 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
   onUnpark,
   onUnsolo,
   onDetach,
+  onArmCue,
 }) => {
-  // Arm local — click = arm (outline), double-click = RECALL : le même
-  // contrat que CuelistPanel, jamais de scene-kill au simple clic.
-  const [armedCueId, setArmedCueId] = React.useState<string | null>(null);
+  // Arm unifié — lu depuis st (source unique : useCuelistStore, partagé
+  // avec le fil OSC et le menu CUE GO), écrit via onArmCue. Click = arm
+  // (outline), double-click = RECALL : jamais de scene-kill au simple clic.
+  const armedCueId = st?.armedCueId ?? null;
+  const setArmedCueId = onArmCue;
 
   // Modèle console : Prev/Next déplacent le marqueur d'armement SANS
   // tirer — on se positionne dans la cue list sans casser la scène.

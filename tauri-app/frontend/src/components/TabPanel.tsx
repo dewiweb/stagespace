@@ -15,8 +15,9 @@ interface TabPanelProps {
 }
 
 /// Conteneur d'onglets — tous les contenus restent montés (hidden quand
-/// inactif) : l'état local des panels (armedCueId, timers, scroll) survit
-/// au switch, et rien ne se re-synchronise à chaque changement d'onglet.
+/// inactif) : l'état local des panels (inputs en cours, timers, scroll)
+/// survit au switch, et rien ne se re-synchronise à chaque changement
+/// d'onglet.
 export default function TabPanel({ tabs, defaultTab, onTabChange }: TabPanelProps) {
   const [activeTab, setActiveTabState] = React.useState(defaultTab || tabs[0]?.id || '');
   const setActiveTab = (id: string) => { setActiveTabState(id); onTabChange?.(id); };
