@@ -165,3 +165,37 @@ Trois problèmes distincts :
 - Transport morphing PLAY/STOP (le bouton dit ce qu'il fera).
 - Confirmations sur actions destructives ; recall guards nack/busy.
 - Télémétrie niveau console pro (fps, osc/s, merge µs, lock).
+
+## I. Matrice de couverture UI — la table OSC comme inventaire produit
+
+Chaque commande `/stagespace/*` est une feature produit de première classe
+(sinon elle n'existerait pas au wire). Lecture croisée : quelles features
+ont un chemin UI découvrable ?
+
+| Commande OSC | Chemin UI direct | Couverture |
+|---|---|---|
+| go / cue next/prev/recall/arm/go | menus, shortcuts, pads conduite | complète |
+| panic / stop | statusbar, menus | complète |
+| timecode chase | menu Show, transport score | complète |
+| macro speed/scale/rotate/translate/radius/height | sliders transform (atelier+jeu drawer) | complète |
+| arm/disarm (LIVE/DRY-RUN) | chip statusbar master | complète |
+| park/unpark | menu objet, chip statusbar | complète |
+| slot play/stop/solo | pads jeu | complète |
+| unsolo | menu Show seulement | **partielle — invisible** |
+| position/clear (manual) | radar grab, menu objet | complète |
+| trackpos (origines) | fantômes radar ; édition ? | **partielle** |
+| pose capture/snap/goto | PosesPanel | complète |
+| throw (grab & throw) | radar drag-and-release | complète (découvrabilité faible) |
+| spatial k | strip jeu | complète |
+| attention | menu objet + strip jeu | complète |
+| gesture explode/converge/orbit/front | strip jeu | complète |
+| rehearsal record/stop/play/clear | onglet « Score » panneau atelier | **partielle — mal logée** |
+| soundcheck start/stop/next/prev | clips score + OSC seulement | **ABSENTE de l'UI directe** |
+| show/load | menu File | complète |
+| view atelier/conduite/jeu | onglets titlebar (+score absent du menu View) | quasi |
+| positions/pos/state dump | — | debug, ok |
+
+**Verdict : 3 features de première classe sans chemin UI direct ou mal
+logées** — soundcheck (absente), rehearsal/pos-tape (mal logée),
+unsolo (invisible). Ce sont exactement les écarts d'accrétion organique
+de la section B, confirmés par l'inventaire wire.
