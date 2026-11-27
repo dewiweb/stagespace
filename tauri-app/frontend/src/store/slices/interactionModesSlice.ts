@@ -2,7 +2,7 @@ import { StateCreator } from 'zustand';
 import { safeSetItem, safeParseStoredJson } from '../../utils/safeStorage';
 
 const VIEWER_PREFS_KEY = 'stagespace.viewer.prefs';
-type ViewerPrefs = { dim?: boolean; ghosts?: boolean; traj?: boolean; idle?: boolean };
+type ViewerPrefs = { dim?: boolean; ghosts?: boolean; traj?: boolean; idle?: boolean; ori?: 'upstage-up' | 'downstage-up' };
 const viewerPrefs = safeParseStoredJson<ViewerPrefs>(VIEWER_PREFS_KEY, {});
 const saveViewerPrefs = (prefs: ViewerPrefs) =>
   safeSetItem(VIEWER_PREFS_KEY, JSON.stringify(prefs));
@@ -14,6 +14,7 @@ const persistViewerPrefs = (get: () => InteractionModesSlice) =>
     ghosts: get().viewerRestGhosts,
     traj: get().viewerTrajectories,
     idle: get().viewerShowIdle,
+    ori: get().viewerTopOrientation,
   });
 
 /// Modes d'interaction du 3D — manipuler (drag objets/handle), dessiner,
@@ -67,6 +68,14 @@ export interface InteractionModesSlice {
   /// tout stoppé = viewers vides — impossible de composer une pose.
   viewerShowIdle: boolean;
   setViewerShowIdle: (v: boolean) => void;
+  /// ori : orientation des vues de dessus (top) ET de profil (side) —
+  /// 'upstage-up' = +Y en haut d'écran (avec −X à droite, cohérence
+  /// caméra physique), 'downstage-up' = rotation 180° (−Y en haut, +X à
+  /// droite). Les vues top 3D et radar partagent TOUJOURS la même
+  /// orientation — c'est le sens de ce réglage. front (élévation) est
+  /// invariante. Défaut 'upstage-up' = comportement historique du 3D.
+  viewerTopOrientation: 'upstage-up' | 'downstage-up';
+  setViewerTopOrientation: (v: 'upstage-up' | 'downstage-up') => void;
 }
 
 type Store = InteractionModesSlice & {
@@ -144,6 +153,11 @@ export const createInteractionModesSlice: StateCreator<Store, [], [], Interactio
   viewerShowIdle: viewerPrefs.idle ?? false,
   setViewerShowIdle: (v) => {
     set({ viewerShowIdle: v });
+    persistViewerPrefs(get);
+  },
+  viewerTopOrientation: viewerPrefs.ori ?? 'upstage-up',
+  setViewerTopOrientation: (v) => {
+    set({ viewerTopOrientation: v });
     persistViewerPrefs(get);
   },
 });

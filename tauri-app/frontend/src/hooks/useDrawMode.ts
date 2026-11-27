@@ -78,6 +78,7 @@ export function useDrawMode({ cameraRef, containerRef, controlsRef, cursorReadou
 
   const drawMode = useGraphStore((s) => s.drawMode);
   const drawView = useGraphStore((s) => s.drawView);
+  const topOri = useGraphStore((s) => s.viewerTopOrientation);
 
   // ── Vues fixées : snap caméra + verrou rotation + restore sur 'free' ──
   // Actives dans TOUS les modes (inspection ortho, pas seulement le draw) :
@@ -125,20 +126,27 @@ export function useDrawMode({ cameraRef, containerRef, controlsRef, cursorReadou
       camera.up.set(0, 1, 0);
       // Epsilon latéral sur la vue top — évite la singularité de pôle
       // exacte d'OrbitControls (azimuth indéterminé à polar=0).
+      // Orientation top/side — réglage utilisateur partagé avec le radar
+      // (les deux viewers montrent le même sens, quel que soit le choix).
+      // 'upstage-up' : +Y en haut d'écran (avec −X à droite — cohérence
+      // caméra physique) ; 'downstage-up' = rotation 180°.
+      const up = topOri === 'upstage-up' ? 1 : -1;
       if (view === 'top') {
-        camera.up.set(0, 0, 1); // upstage (+y backend = +z three) en haut de l'écran
+        camera.up.set(0, 0, up); // ±z three = ±y backend en haut de l'écran
         camera.position.set(t.x, t.y + d, t.z + d * 0.001);
       } else if (view === 'front') {
         camera.position.set(t.x, t.y, t.z + d);
       } else {
-        camera.position.set(t.x + d, t.y, t.z);
+        // side : le profil suit la même rotation — 'upstage-up' se voit
+        // depuis +x (−y à droite), 'downstage-up' depuis −x (+y à droite).
+        camera.position.set(t.x + d * up, t.y, t.z);
       }
       controls.enableRotate = false;
       controls.update();
     };
     apply();
     return () => cancelAnimationFrame(raf);
-  }, [drawView, cameraRef, controlsRef]);
+  }, [drawView, topOri, cameraRef, controlsRef]);
 
   // Convert screen coords to world coords on the view's drawing plane
   const screenToWorld = useCallback(

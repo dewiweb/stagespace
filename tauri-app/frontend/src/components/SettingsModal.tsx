@@ -66,6 +66,8 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const setViewerDimUnfocused = useGraphStore((s) => s.setViewerDimUnfocused);
   const viewerRestGhosts = useGraphStore((s) => s.viewerRestGhosts);
   const setViewerRestGhosts = useGraphStore((s) => s.setViewerRestGhosts);
+  const viewerTopOrientation = useGraphStore((s) => s.viewerTopOrientation);
+  const setViewerTopOrientation = useGraphStore((s) => s.setViewerTopOrientation);
 
   const [oscIdsStr, setOscIdsStr] = React.useState(manualOscIds.join(','));
   const [audioDevices, setAudioDevices] = React.useState<{ id: string; name: string }[]>([]);
@@ -577,6 +579,17 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 className="accent-stagespace-accent"
               />
               Fantômes — objets au repos à leur origine, cibles de la pose sélectionnée
+            </label>
+            <label className="flex items-center gap-2 text-xs text-gray-300 mt-2.5 cursor-pointer">
+              Orientation vues top/side (3D + radar — toujours identiques)
+              <select
+                value={viewerTopOrientation}
+                onChange={(e) => setViewerTopOrientation(e.target.value as 'upstage-up' | 'downstage-up')}
+                className="px-1.5 py-0.5 bg-gray-900 text-white text-xs rounded border border-gray-700 focus:border-stagespace-accent focus:outline-none"
+              >
+                <option value="upstage-up">+Y en haut d'écran</option>
+                <option value="downstage-up">−Y en haut d'écran</option>
+              </select>
             </label>
           </section>
           </>)}

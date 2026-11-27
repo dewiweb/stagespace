@@ -21,11 +21,16 @@ import type { Zone } from '../../store/slices/spatialFxSlice';
 /// front : élévation X/Z — +z vers le haut (ySign -1).
 /// side  : profil Y/Z — +y vers la droite, +z vers le haut.
 export type RadarView = 'top' | 'front' | 'side';
-const VIEW_AXES: Record<RadarView, { a: number; b: number; ySign: number; label: string }> = {
-  top:   { a: 0, b: 1, ySign: 1,  label: 'FRONT' },
-  front: { a: 0, b: 2, ySign: -1, label: 'UP' },
-  side:  { a: 1, b: 2, ySign: -1, label: 'UP' },
-};
+/// Axes de projection — xSign/ySign appliqués aux coords monde. Le radar
+/// épouse l'orientation du viewer 3D (`viewerTopOrientation`, settings) :
+/// 'upstage-up' = +Y en haut d'écran (avec −X à droite — les vues top
+/// physique-cohérentes n'ont que deux orientations possibles, rotations
+/// 180° l'une de l'autre) ; 'downstage-up' = l'inverse. front invariant.
+const viewAxes = (up: boolean): Record<RadarView, { a: number; b: number; xSign: number; ySign: number; label: string }> => ({
+  top:   { a: 0, b: 1, xSign: up ? -1 : 1, ySign: up ? -1 : 1, label: 'FRONT' },
+  front: { a: 0, b: 2, xSign: 1,           ySign: -1,          label: 'UP' },
+  side:  { a: 1, b: 2, xSign: up ? -1 : 1, ySign: -1,          label: 'UP' },
+});
 
 /// Empreinte d'une zone dans le plan projeté (axes a,b) — bounds utilisés
 /// par l'auto-fit du radar (une zone lointaine ne doit pas clipper).
@@ -123,8 +128,10 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
   const zones = useGraphStore((s) => s.zones);
   const graphZones = useGraphStore((s) => s.graphZones);
   // Vue projetée — top/front/side, choisie via le sélecteur dans le
-  // header du panneau (PerformView) — mêmes conventions que le viewer 3D.
-  const { a: va, b: vb, ySign, label: axisLabel } = VIEW_AXES[radarView];
+  // header du panneau (PerformView) — mêmes conventions que le viewer 3D,
+  // orientation partagée incluse (settings généraux).
+  const topOri = useGraphStore((s) => s.viewerTopOrientation);
+  const { a: va, b: vb, xSign, ySign, label: axisLabel } = viewAxes(topOri === 'upstage-up')[radarView];
 
   // Auto-fit : échelle sur les bounds réels PROJETÉS, AVEC hystérésis —
   // un objet lancé loin ne rescale pas la vue d'un coup : zoom-out
@@ -149,7 +156,7 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
   const maxR = maxRef.current;
   const k = 100 / maxR;
   // Projette une position monde [x,y,z] → coords écran du plan actif.
-  const proj = (p: readonly number[]): [number, number] => [p[va] * k, p[vb] * k * ySign];
+  const proj = (p: readonly number[]): [number, number] => [p[va] * k * xSign, p[vb] * k * ySign];
 
   // Inspect de l'objet sélectionné — délégué à ObjectInspectBar (partagé
   // avec le viewer 3D) : état source + position + release/park.
@@ -220,7 +227,7 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
         // Vélocité écran → monde selon la vue : l'axe a = droite écran,
         // l'axe b = bas écran × ySign (top : +y monde vers le bas → pas
         // de négation ; front/side : +z vers le haut → négation).
-        const velA = ((e.clientX - from.x) * scale) / dt;
+        const velA = ((e.clientX - from.x) * scale * xSign) / dt;
         const velB = ((e.clientY - from.y) * scale * ySign) / dt;
         const v: [number, number, number] = [0, 0, 0];
         v[va] = velA;
@@ -249,15 +256,19 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
       <circle cx="0" cy="0" r="52" fill="none" stroke={VIZ.radarGrid} strokeWidth="0.5" />
       <line x1="0" y1="-105" x2="0" y2="105" stroke={VIZ.radarGrid} strokeWidth="0.5" />
       <line x1="-105" y1="0" x2="105" y2="0" stroke={VIZ.radarGrid} strokeWidth="0.5" />
-      <text x="0" y="-99" fill={VIZ.faintLabel} fontSize="8" textAnchor="middle">{axisLabel} · {maxR.toFixed(0)}m</text>
+      <text x="0" y={radarView === 'top' && topOri === 'upstage-up' ? 93 : -99} fill={VIZ.faintLabel} fontSize="8" textAnchor="middle">{axisLabel} · {maxR.toFixed(0)}m</text>
       {/* Axes projetés — la vue ne dit rien si on ne sait pas quels
           axes on regarde. */}
       <text x="103" y="107" fill={VIZ.faintLabel} fontSize="7" textAnchor="end">
         {'XYZ'[va]}/{'XYZ'[vb]}
       </text>
-      {/* En side : le FRONT (-y) est à gauche — repère au bord. */}
-      {radarView === 'side' && (
+      {/* En side : repère FRONT (-y) au bord — le côté dépend de
+          l'orientation partagée (gauche en downstage-up, droite sinon). */}
+      {radarView === 'side' && topOri !== 'upstage-up' && (
         <text x="-103" y="107" fill={VIZ.faintLabel} fontSize="7" textAnchor="start">← FRONT</text>
+      )}
+      {radarView === 'side' && topOri === 'upstage-up' && (
+        <text x="103" y="107" fill={VIZ.faintLabel} fontSize="7" textAnchor="end">FRONT →</text>
       )}
       {/* En front : repère LEFT/RIGHT implicite = ±x, rien à marquer. */}
       {/* Empreintes des zones — cyan manuelles, violet graph-déclarées.
@@ -273,7 +284,7 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
         const dash = z.effect ? 'none' : '3 2';
         if (z.shape.shape === 'sphere') {
           // Sphère projetée = cercle dans n'importe quelle vue ortho.
-          const cx = z.shape.center[va] * k;
+          const cx = z.shape.center[va] * k * xSign;
           const cy = z.shape.center[vb] * k * ySign;
           const r = z.shape.radius * k;
           const rf = (z.shape.radius + z.falloff) * k;
@@ -288,11 +299,13 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
         }
         // Box projetée : rect dans le plan (a,b) — le ySign exige un min
         // sur les deux coins écran, pas sur les coords monde.
+        const x1 = z.shape.min[va] * k * xSign;
+        const x2 = z.shape.max[va] * k * xSign;
         const y1 = z.shape.min[vb] * k * ySign;
         const y2 = z.shape.max[vb] * k * ySign;
-        const w = (z.shape.max[va] - z.shape.min[va]) * k;
+        const w = Math.abs(x2 - x1);
         const h = Math.abs(y2 - y1);
-        const x = z.shape.min[va] * k;
+        const x = Math.min(x1, x2);
         const y = Math.min(y1, y2);
         const f = z.falloff * k;
         return (
