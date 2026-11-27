@@ -241,3 +241,137 @@ conduite, pile de toasts recouvrant la télémétrie, legend park/freeze,
 accès soundcheck absent, nommage « Score » trompeur, menu View sans
 Score, unsolo invisible, densité 9-10px. Le frontend est le même code
 en webview et en navigateur — ces findings tiennent en production.
+
+## K. Enrichissement — inventaires exhaustifs croisés (validation/corrections)
+
+Inventaires code-vérifiés des 4 surfaces croisés avec l'exploration
+directe. Corrections d'abord, puis les findings nouveaux majeurs.
+
+### K0. Corrections à l'audit initial
+
+- **Unsolo n'est PAS invisible** — un bouton `UNSOLO` conditionnel existe
+  dans la gesture strip jeu (`PerformView.tsx:331-339`) quand
+  `soloRestoreCount > 0`, et le bouton `S` du pad actif bascule en unsolo.
+  Le vrai problème est ailleurs : le commentaire MenuBar promet solo/unsolo
+  dans le menu Show jeu mais les entrées n'y sont **pas** (`MenuBar.tsx:169-187`
+  vs commentaire `:32-38`) — promesse de menu non tenue.
+- **Les rows de CuelistPanel montrent plus que je ne le créditais** :
+  badges TRK / w(pre-wait) / f(follow) / TC + compte de moves + fade.
+  Le constat « entrées minimales » ne vaut que pour **ConduiteView**,
+  la console — pas pour CuelistPanel.
+
+### K1. FRAGMENTATION DE L'ARM — finding architectural majeur
+
+Deux modèles d'arm coexistent sans se parler :
+- `ConduiteView` et `CuelistPanel` arment en **state React local** ;
+- `/stagespace/cue/arm`, `/cue/go` et le menu Show utilisent
+  `useCuelistStore.armedCueId` (store global).
+
+Conséquences mesurées : armer une cue en Conduite n'affecte ni le menu
+CUE GO ni l'OSC ; une cue armée par OSC n'apparaît pas armée dans la
+liste Conduite ni dans son NEXT ; fenêtres interne/détachée ont des
+armes indépendantes ; `Shift+Enter` ignore l'arme locale et tire la
+suivante séquentielle. **Le concept console « arm puis GO » est cassé
+en morceaux selon le chemin de contrôle** — c'est le plus gros défaut
+de cohérence live de l'app.
+
+### K2. Fenêtre conduite détachée — trous de sécurité
+
+- Pas de chemin retour LIVE→DRY-RUN : le bouton n'apparaît que disarmed ;
+  pas de StatusBar ni menu dans la fenêtre détachée.
+- Pas de raccourcis clavier (useLiveShortcuts non monté) — Esc panic
+  inopérant au clavier dans la fenêtre FOH.
+- État muet avant le premier broadcast (500ms) : « Waiting for main
+  window… ».
+- Les commandes wire `tcchase/tcfps/cuego/prev` sont routées côté main
+  mais **aucun contrôle ne les émet** dans la page détachée — capacités
+  latentes mortes.
+
+### K3. Features sans aucun chemin UI — précisions factuelles
+
+- **trackpos** : `doSetTrackPosition` n'est appelé que depuis
+  `useShowControl` (OSC). Zéro UI. `clearHol` n'a **aucun caller UI**.
+- **pos-tape** : aucune route OSC non plus — entièrement atelier-only,
+  prisonnier de l'onglet mal nommé.
+- **soundcheck** : confirmé absent de tout UI direct (jeu, menus,
+  atelier) — seuls les clips score et l'OSC le déclenchent.
+- **OSC-IN mappings** : éditables UNIQUEMENT dans le drawer jeu — or
+  c'est de la donnée de préparation (persistée .hfg, capturable en cue)
+  sans aucun accès atelier.
+
+### K4. Contradictions internes jeu
+
+- **Le jeu n'est pas la surface réduite annoncée** : la palette d'outils
+  3D expose Assign et Draw en fenêtre principale — de l'édition de move
+  et du spline studio en pleine surface live. Doctrine vs réalité à
+  trancher (feature ou fuite ?).
+- **Slider spatial menteur** : state React local initialisé à 1, ne
+  reflète jamais les changements OSC externes.
+- **Gestes à deux forces** : strip = 3.0, menu Show = 1.0, défaut OSC
+  = 3.0 — même nom, deux puissances.
+
+### K5. Strings stales (documentation interne de l'UI)
+
+- `TrackGrid.tsx:160`, `useMoveEditorStore.ts:481`, `WelcomeModal.tsx:79`
+  parlent d'une **Toolbar qui n'existe plus**.
+- `ShortcutsModal.tsx:51` parle de la **« MANUAL bar »** remplacée par
+  les chips OVERRIDE/PARKED.
+- Empty state Conduite : « créez-en dans l'atelier » alors que jeu
+  (★ Store) **et score** (★ cue dans ScoreTransport) créent des cues —
+  trois sources, un hint qui n'en nomme qu'une.
+
+### K6. Log opérationnel — trois défauts
+
+- Le TC roulant inonde l'historique (pas de filtrage/coalescence).
+- `logAction` saute le logging quand `from` est truthy — or la conduite
+  passe `'conduite'` : **les actions conduite ne sont pas loguées**.
+- Pas d'auto-scroll ; commentaire « 8 lignes » vs slice(30) réel.
+
+### K7. Détails conduite confirmés
+
+- Rows = numéro+nom uniquement ; fade/mode/scope/timing absents.
+- Pas d'audition (confirmé) — elle vit dans CuelistPanel.
+- TC display-only, conditionnel au chase ; chase toggle absent de la
+  surface (menu Show uniquement) et totalement absent du détaché.
+- Countdown pre-wait/follow potentiellement non-tickant en fenêtre
+  interne (calcul au render, pas d'interval).
+- `PosesPanel` vit dans `components/conduite/` mais n'est monté **ni en
+  conduite ni dans la fenêtre détachée** — ironie de placement ; le
+  commentaire LiveDrawer (« contrairement à la conduite, aveugle »)
+  prouve que l'équipe le sait.
+
+### K8. Numérotation objet — risque de confusion opérateur
+
+Les menus objet affichent `obj + 1` (obj_index+1) alors que la doctrine
+opérateur est en track_id. Pour des tracks 1-based identiques ça
+coincide, mais dès qu'un mapping custom existe, « obj 3 » du menu et
+`/stagespace/position 3` ne désignent plus la même chose que « T3 »
+du TrackGrid. Audit de cohérence nécessaire avant d'ajouter des contrôles.
+
+### K9. Score surface — création de cues
+
+`★ cue` dans ScoreTransport snapshotte l'arrangement au curseur → cue
+Full/fade 0.5/osc_mappings:false. La création de cues a donc TROIS
+sources (atelier, jeu, score) aux sémantiques par défaut différentes —
+à documenter/unifier.
+
+### K10. Export — inventaire complet (partage/show)
+
+`.hfg` (interchange complet) · pos-tape `.sstape.json` (seul download
+browser du codebase) · clipboard JSON de chaînes de nodes (cross-machine)
+· Remote UI (sans auth — averti) · media sync out vers régies. Pas
+d'export PNG/vidéo/log — non nécessaire mais à acter comme choix.
+
+### K11. Recommandations ajoutées
+
+| # | Chantier | Impact | Effort |
+|---|---|---|---|
+| U9 | **Unifier l'arm dans le store** — local arm = store arm, broadcast au détaché ; tous les chemins (clavier/menu/OSC/UI) tirent la même cue | critique live | moyen |
+| U10 | **Fenêtre détachée sûre** — chemin disarm, Esc panic clavier, contrôles TC | fort live | moyen |
+| U11 | **Trackpos UI** — éditeur d'origines (TrackGrid menu ? Settings Show ?) ; clearHol à exposer ou supprimer | moyen | moyen |
+| U12 | **Mapper les strings stales** — Toolbar/MANUAL bar/hint conduite | faible | trivial |
+| U13 | **Trancher jeu-édition** — Assign/Draw en jeu : feature assumée (documenter) ou à verrouiller | doctrine | faible |
+| U14 | **Log opérationnel** — filtrer TC, loguer les actions GUI quelle que soit `from`, auto-scroll | moyen | faible |
+| U15 | **Slider spatial** — binder au state backend réel | faible | faible |
+| U16 | **Gestes uniformes** — une seule force (3.0) ou exposer le paramètre | faible | trivial |
+| U17 | **OSC-IN en atelier** — dupliquer le panel mappings dans un onglet panneau (donnée de préparation) | moyen | faible |
