@@ -33,7 +33,7 @@ stagespace/
 ```bash
 cd rust-engines
 cargo build              # Build
-cargo test --lib         # Run tests (565 tests, incl. ts-rs export tests)
+cargo test --lib         # Run tests (606 tests, incl. ts-rs export tests)
 cargo clippy --all-targets -- -D warnings  # Lint (CI: --all-targets inclut tests/benches)
 cargo fmt -- --check     # Format check
 ```
@@ -75,7 +75,7 @@ cd tauri-app/frontend
 npm install              # Install deps
 npm run dev              # Dev server (Vite)
 npm run build            # Production build (tsc + vite build)
-npm test                 # Run tests (598 tests, vitest)
+npm test                 # Run tests (633 tests, vitest)
 npm run contracts        # Regenerate TS types from Rust (ts-rs → src/types/generated/)
 npm run test:watch       # Watch mode
 npx tsc -b               # Type check (build mode — `tsc --noEmit` is vacuous on the solution-style root tsconfig)
@@ -130,11 +130,11 @@ CI fails if the committed files drift from the Rust sources.
 
 | Suite | Count |
 |-------|-------|
-| Rust engines | 565 |
+| Rust engines | 606 |
 | Tauri backend | 100 |
-| Frontend (vitest) | 598 |
+| Frontend (vitest) | 633 |
 | E2E CLI | ~100 assertions |
-| **Total** | **~1363** |
+| **Total** | **~1440** |
 
 ## Live Show Safety Features
 
