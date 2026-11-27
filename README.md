@@ -29,7 +29,7 @@ any generic OSC receiver.
     │ circular     │  │ bouncing     │
     │ elliptical   │  │ swarm (boids)│
     │ lissajous    │  │ spring       │
-    │ spiral       │  │ follow       │ ← pursue/evade/orbit/arrive
+    │ spiral       │  │ follow       │ ← follow/pursue/evade/orbit/arrive
     │ perlin_noise │  │ avoidance    │
     │ pendulum     │  │ vectorfield  │ ← procedural + drawn fields
     │ formation    │  └─────────────┘
@@ -46,6 +46,7 @@ any generic OSC receiver.
          ┌──────────▼──────────┐
          │  MergeRuntime 60 FPS │   ← N move slots on parallel workers
          │  Cue list / setlist  │   ← recalls (Full|Tracking), TC chase
+         │  Score sequencer     │   ← timeline automation (clips, curves)
          │  Post-process graph  │   ← Scale/Rotate/Shift/Zone/Velocity…
          │  OSC Out (rosc)      │   → 6 profiles (Holophonix, IEM, IRCAM,
          │                      │      ADM, Generic XYZ/AED) + extended
@@ -67,24 +68,29 @@ any generic OSC receiver.
 | Engine | Description |
 |--------|-------------|
 | `circular` | Uniform circular orbit |
-| `spiral` | Rising/falling helix |
+| `elliptical` | Ellipse with independent axes |
+| `spiral` | Expanding/contracting spiral |
+| `helix` | 3D helix — vertical rises/falls |
 | `lissajous` | 3D Lissajous curves |
 | `figure8` | Bernoulli lemniscate |
+| `rose_curve` | Polar rose (k petals) |
+| `wave` | Travelling wave across objects |
 | `linear` | Linear A→B pan |
 | `oscillation` | Sinusoidal oscillation |
 | `perlin_noise` | Organic movement |
 | `formation` | Geometric formation |
 | `converge` | Convergence/divergence |
 | `pendulum` | Pendulum simulation |
+| `custom_traj` | Custom x,y,z equations (cartesian/polar/spherical) |
 
 ### Physics Engine
 | Engine | Description |
 |--------|-------------|
 | `bouncing` | Bounces inside a container |
-| `avoidance` | Mutual repulsion |
+| `avoidance` | Mutual repulsion + optional external repulsor (`avoid_object`) |
 | `spring` | Attraction toward a target |
-| `follow` | Single file — `pursue`/`evade`/`orbit`/`arrive` modes |
-| `swarm` | Boids flock |
+| `follow` | Steering — `follow`/`pursue`/`evade`/`orbit`/`arrive` modes |
+| `swarm` | Boids flock — separation/alignment/cohesion, leader & in-line modes |
 | `vectorfield` | Advection by velocity field (vortex/sink/flow/noise/**drawn**) |
 
 ### Splines & drawn trajectories
@@ -94,32 +100,43 @@ any generic OSC receiver.
 | `EvaluateSpline` | Spline sampling |
 | `TrimSpline` / `OffsetSpline` | Spline editing |
 
-### Modifiers & post-process (global graph)
+### Modifiers, composites & post-process
 | Node | Description |
 |------|-------------|
 | `Scale` / `Rotate` / `Offset` | Spatial transforms |
+| `Mirror` / `Clamp` / `LFO` / `Jitter` | Symmetry, bounds, added oscillation, organic noise |
+| `PhaseShift` / `SpeedScale` / `Delay` / `Freeze` | Time modifiers (per-object lag, time scale, hold) |
+| `Mix` / `Group` / `Sequence` / `Crossfade` / `Switch` | Composites — blend / split / chain two trajectories |
 | `RadiusScale` / `HeightOffset` / `PerTrackDepth` | Spatial macros |
 | `Barycenter` / `ManualPosition` | Origin / manual override |
 | `AudioFalloff` | Audio modulation of params |
 | `Zone` | Region of space → spatial channels (sphere/box, falloff) |
 | `Velocity` | Kinematic modulation (speed/accel/jerk/**angvel**) → channels |
 | `MoveRef` / `Merge` | Sub-graph reference / merge strategies |
+| `Plugin` | WASM plugin node (`.ssx` — engine/modifier/composite) |
 
-### Audio Sources
+### Reactive sources
 | Engine | Description |
 |--------|-------------|
 | `BPM` | Sync to audio BPM |
 | `AudioAmplitude` | Modulation by audio amplitude |
+| `AudioSpectrum` | FFT band → position |
+| `OSCInput` | Incoming OSC value → position |
 
 ### Falloffs
 | Engine | Description |
 |--------|-------------|
 | `TimeFalloff` | Temporal influence with easing |
 | `PointDistanceFalloff` | Spatial influence by distance |
+| `DirectionalFalloff` | Directional influence (cone along a direction) |
+| `AudioAmplitudeFalloff` | Audio-amplitude-driven influence |
 
 ---
 
 ## Installation
+
+Prerequisites: **Rust** stable (1.88+), **Node.js** 24+. On Linux:
+`libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev patchelf`.
 
 ```bash
 # Rust engines
@@ -161,24 +178,58 @@ bash tests/e2e_cli_test.sh    # full E2E suite
 ## Features
 
 - **Node Editor**: React Flow graph editor with editable custom nodes,
-  two tabs (per-move sub-graph + post-merge **global graph**)
+  three tabs (per-move sub-graph, post-merge **global graph**, **modulation**
+  signal graph)
 - **Compilation**: validation and compilation into composite functions
 - **Playback**: real-time 60 FPS playback, parallel workers + MergeRuntime
 - **Merge strategies**: override / crossfade / blend / priority
+- **WASM plugins**: third-party nodes as `.ssx` bundles (engines, modifiers,
+  composites) — extend the palette without recompiling
 - **3D Preview**: Three.js visualization connected to the runtime,
-  **3D zone visualization** for effects
+  **3D zone visualization** for effects, trajectory trails — configurable
+  stage orientation
 - **Spatial channels**: gain, spread, distance, presence, yaw, aperture, lfe
   per object and per OSC profile
 - **Kinematic modulations**: speed/accel/jerk/**angvel** (angular velocity
   around a configurable listener) → spatial channels
 - **Zones**: sphere/box + smoothstep falloff → drive the channels of objects
   inside; declarable in the FX panel or as a `Zone` node in the global graph
+- **Global macros**: speed / scale / shift / yaw / pitch / roll / radius /
+  height — live whole-field transforms, mappable to OSC IN
+- **Audio IN**: native microphone capture (cpal) — BPM, amplitude and FFT
+  spectrum reactive engines
 - **OSC IN mappings**: any OSC address → macro / channel / position
-  (wildcards, scale/offset/clamp/smooth transforms, anti-loop)
-- **Audio IN**: native microphone capture (cpal) with BPM and amplitude
-- **Cue System**: full snapshots (graphs, active moves, runtime effects)
-  with atomic recall
-- **Save/Load**: localStorage persistence of graphs
+  (wildcards, scale/offset/clamp/smooth transforms, anti-loop, learn mode)
+- **PSN tracking**: PosiStageNet/RTTrP input (BlackTrax, zactrack,
+  Follow-Me…) — external trackers drive object positions
+- **Operator surfaces**: **atelier** (preparation), **conduite** (cue
+  console), **jeu** (live instrument — slot pads, gestures, radar) and
+  **score** — plus detachable conduite/run windows
+- **Poses**: capture live positions into named presets (all or picked
+  tracks), instant snap or animated goto with easings — pose-pad wall in
+  jeu (tap = snap, hold = goto)
+- **Spatial gestures**: explode / converge / orbit / front / attention /
+  ballistic throw — per-object velocity, damped to rest
+- **Score sequencer**: multitrack timeline automation (clips, curves,
+  poses) with transport, loop region and timecode chase
+- **Soundcheck**: cyclic per-track probe for spatial identification
+- **Rehearsal tape**: timestamped recording of busking actions, replayable
+- **Manual control**: drag objects in the 3D view (operator takeover),
+  park/freeze objects, editable per-track origins (where panic returns them)
+- **Cue System**: Full|Tracking snapshots (graphs, active moves, runtime
+  effects) with atomic recall, pre-wait/follow/timecode fields, arm+GO
+  console model and timecode chase
+- **OSC show control**: `/stagespace/*` command API — go, cue recall/arm,
+  panic, slots, solo, positions, poses, gestures, macros, timecode… with
+  ack/nack controller feedback (full table in AGENTS.md)
+- **Track setup**: Holophonix `.hol` project import or manual OSC ids
+- **Remote UI**: drive the same live show from browsers on the LAN
+  (HTTP/SSE bridge — docs/dev-bridge.md)
+- **Save/Load**: `.hfg` show files — the full show (graphs, slots, setlist,
+  cues, OSC config, spatial FX, tracks) — plus autosave, dirty tracking
+  and recent shows
+- **Live safety**: PANIC (stop all + origins), OSC arm/dry-run, recall
+  guards, undo/redo, show-wide keyboard shortcuts
 
 ---
 
@@ -209,6 +260,7 @@ sent as separate messages per the profile's capability matrix
 - **Styles**: TailwindCSS
 - **OSC**: `rosc` (Rust)
 - **Audio IN**: `cpal` + `realfft` (native capture + FFT, Rust)
+- **Plugins**: `wasmtime` (WASM `.ssx` host, Rust) + guest SDK
 - **Engines**: pure Rust (real-time performance)
 
 ---
@@ -220,6 +272,8 @@ sent as separate messages per the profile's capability matrix
 - [docs/user-manual.md](docs/user-manual.md) — operator manual (views, OSC show-control, OSC-IN + learn, live safety, troubleshooting)
 - [docs/console-integration.md](docs/console-integration.md) — driving STAGESPACE from a console/QLab/Companion
 - [docs/use-cases.md](docs/use-cases.md) — field use cases and open limits
+- [docs/PLUGINS_WASM.md](docs/PLUGINS_WASM.md) — WASM plugin system (.ssx format, ABI, SDK)
+- [docs/dev-bridge.md](docs/dev-bridge.md) — Remote UI / headless bridge (backend over HTTP+SSE)
 - [MANUAL_TESTING.md](MANUAL_TESTING.md) - Manual testing checklist
 - [LOGGING.md](rust-engines/LOGGING.md) - Logging system guide
 - [ERROR_HANDLING.md](rust-engines/ERROR_HANDLING.md) - Error handling guide
@@ -237,7 +291,7 @@ cd rust-engines
 cargo test --lib
 ```
 
-519 tests pass on the engine side (full suites: see the "Test
+565 tests pass on the engine side (full suites: see the "Test
 Counts" table in [AGENTS.md](AGENTS.md)).
 
 ---
