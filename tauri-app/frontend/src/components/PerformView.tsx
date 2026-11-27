@@ -2,6 +2,7 @@ import React from 'react';
 import { Play } from 'lucide-react';
 import Scene3D from './viewer3d/Scene3D';
 import CuelistPanel from './panels/CuelistPanel';
+import { PosesPanel } from './conduite/PosesPanel';
 import EmptyState from './ui/EmptyState';
 import { StatusChip } from './ui/StatusChip';
 import { SlotTile } from './show/SlotTile';
@@ -12,6 +13,7 @@ import { cueLabel, tcStr } from '../utils/showFormat';
 import { useGraphStore } from '../store/useGraphStore';
 import { toast } from '../utils/toast-helpers';
 import { useCuelistStore } from '../store/useCuelistStore';
+import { usePoseStore } from '../store/usePoseStore';
 import { doSolo, doStop, doUnsolo, getSoloRestoreIds } from '../utils/liveActions';
 import { Radar2D } from './jeu/Radar2D';
 import type { RadarView } from './jeu/Radar2D';
@@ -68,7 +70,8 @@ export const PerformView: React.FC = () => {
   const [centerView, setCenterView] = React.useState<'pads' | 'poses' | '3d'>('pads');
   // Colonne gauche en tabs : setlist ET cues tenaient mal dans le même
   // 40/60 — chacune prend toute la hauteur à la demande (audit ergo).
-  const [leftTab, setLeftTab] = React.useState<'setlist' | 'cues'>('cues');
+  const [leftTab, setLeftTab] = React.useState<'setlist' | 'cues' | 'poses'>('cues');
+  const posesCount = usePoseStore((s) => s.poses.length);
   // Projection du radar — sélecteur dans le header du panneau radar.
   const [radarView, setRadarView] = React.useState<RadarView>('top');
   // Fenêtre détachée (?view=run) — l'édition pure est masquée : le
@@ -359,7 +362,7 @@ export const PerformView: React.FC = () => {
         {/* Colonne gauche : tabs SETLIST | CUES — chacune toute la hauteur */}
         <div className="w-80 flex-shrink-0 border-r border-stagespace-border flex flex-col bg-stagespace-panel min-h-0">
           <div className="flex border-b border-stagespace-border flex-shrink-0">
-            {(['setlist', 'cues'] as const).map((t) => (
+            {(['setlist', 'cues', 'poses'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setLeftTab(t)}
@@ -369,7 +372,7 @@ export const PerformView: React.FC = () => {
                     : 'text-gray-500 hover:text-gray-300'
                 }`}
               >
-                {t === 'setlist' ? `Setlist ${setlistSlots.length || ''}` : `Cues ${cues.length || ''}`}
+                {t === 'setlist' ? `Setlist ${setlistSlots.length || ''}` : t === 'cues' ? `Cues ${cues.length || ''}` : `Poses ${posesCount || ''}`}
               </button>
             ))}
           </div>
@@ -433,6 +436,14 @@ export const PerformView: React.FC = () => {
                   ne mute pas la scène — sauf en fenêtre détachée où le
                   storage est read-only (store non persisté). */}
               <CuelistPanel readonly canStore={!detached} />
+            </div>
+          )}
+          {/* Poses — contenu du show au même titre que setlist/cues :
+              capture, gestion et rappel snap/goto/morph. Le même
+              composant sert l'atelier (tab) et cette colonne. */}
+          {leftTab === 'poses' && (
+            <div className="flex-1 min-h-0 flex flex-col">
+              <PosesPanel />
             </div>
           )}
         </div>

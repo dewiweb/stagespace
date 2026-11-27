@@ -5,7 +5,9 @@
 import React from 'react';
 import { usePoseStore } from '../../store/usePoseStore';
 import { useGraphStore } from '../../store/useGraphStore';
-import { doPoseSnap, doPoseGoto, POSE_EASINGS } from '../../utils/liveActions';
+import { doPoseSnap, doPoseGoto, doPoseCapture, POSE_EASINGS } from '../../utils/liveActions';
+import Modal from '../ui/Modal';
+import { TrackGrid } from '../TrackGrid';
 import { PoseTile } from '../show/PoseTile';
 import EmptyState from '../ui/EmptyState';
 
@@ -21,6 +23,36 @@ export const PosePadWall: React.FC = () => {
   // Courbe de la rampe — smooth (défaut backend) est le bon défaut musical :
   // vélocité nulle aux deux bouts, pas d'à-coup à l'arrivée.
   const [gotoEasing, setGotoEasing] = React.useState<string>('smooth');
+  const holProject = useGraphStore((s) => s.holProject);
+  // Capture depuis le mur — la pose créée devient immédiatement un pad.
+  // La distribution est choisie inline dans la modale (TrackGrid, tout
+  // coché par défaut = capture complète) — pas de picker imbriqué.
+  const [captureOpen, setCaptureOpen] = React.useState(false);
+  const [captureName, setCaptureName] = React.useState('');
+  const [captureIds, setCaptureIds] = React.useState<number[]>([]);
+
+  const captureTrackInfos = React.useMemo(
+    () =>
+      holProject?.tracks.length
+        ? holProject.tracks.map((t) => ({ id: t.id, name: t.name, color: t.color, position: t.position }))
+        : manualOscIds.map((id) => ({ id, name: `#${id}` })),
+    [holProject, manualOscIds],
+  );
+
+  const openCapture = () => {
+    setCaptureName('');
+    setCaptureIds(captureTrackInfos.map((t) => t.id));
+    setCaptureOpen(true);
+  };
+  const capture = () => {
+    const name = captureName.trim();
+    if (!name || captureIds.length === 0) return;
+    // Toutes cochées = capture complète canonisée (undefined — le backend
+    // prend toutes les positions connues, tracks futures incluses).
+    const all = captureIds.length >= captureTrackInfos.length;
+    doPoseCapture(name, all ? undefined : captureIds);
+    setCaptureOpen(false);
+  };
 
   React.useEffect(() => {
     void refreshPoses();
@@ -29,6 +61,13 @@ export const PosePadWall: React.FC = () => {
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       <div className="flex items-center justify-end gap-1 px-3 py-1 border-b border-stagespace-border flex-shrink-0">
+        <button
+          onClick={openCapture}
+          className="mr-auto px-2 py-0.5 rounded bg-stagespace-target/15 hover:bg-stagespace-target/25 text-stagespace-target text-[10px] font-bold"
+          title="Capture les positions courantes en nouvelle pose — elle devient un pad ici"
+        >
+          + capture
+        </button>
         <label
           className="flex items-center gap-1 text-[10px] text-gray-500"
           title="Durée de la rampe goto (hold sur un pad)"
@@ -80,11 +119,66 @@ export const PosePadWall: React.FC = () => {
           <div className="col-span-4 py-16">
             <EmptyState
               title="Aucune pose"
-              hint="Capture des positions dans le drawer Poses — elles deviennent des pads ici."
+              hint="+ capture fige les positions courantes en pose — ou via l'onglet Poses à gauche."
             />
           </div>
         )}
       </div>
+
+      {/* Modale capture — nom + distribution inline (tout coché = capture
+          complète). Les positions capturées sont celles du moment :
+          manuelles, holds de moves, ou live des moves en cours. */}
+      {captureOpen && (
+        <Modal title="Capture pose" onClose={() => setCaptureOpen(false)}>
+          <div className="p-4">
+            <input
+              autoFocus
+              value={captureName}
+              onChange={(e) => setCaptureName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') capture();
+              }}
+              placeholder="pose name…"
+              className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-200 placeholder-gray-600 focus:border-stagespace-accent focus:outline-none mb-3"
+            />
+            <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2">
+              Tracks capturées — {captureIds.length}/{captureTrackInfos.length}
+            </div>
+            <TrackGrid
+              compact
+              tracks={captureTrackInfos}
+              selectedTrackIds={new Set(captureIds)}
+              toggleTrackSelection={(tid) =>
+                setCaptureIds((prev) =>
+                  prev.includes(tid) ? prev.filter((t) => t !== tid) : [...prev, tid],
+                )
+              }
+              setTrackSelection={setCaptureIds}
+              assignments={[]}
+            />
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={capture}
+                disabled={!captureName.trim() || captureIds.length === 0}
+                className="flex-1 py-1.5 bg-stagespace-accent hover:opacity-90 text-gray-950 text-xs rounded font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+                title={
+                  captureIds.length >= captureTrackInfos.length
+                    ? 'Capture ALL known positions'
+                    : `Capture ${captureIds.length} picked track(s) at their current positions`
+                }
+              >
+                ● Capturer
+              </button>
+              <button
+                onClick={() => setCaptureOpen(false)}
+                className="px-4 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 text-xs rounded"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };
