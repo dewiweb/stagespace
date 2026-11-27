@@ -406,3 +406,5 @@ d'audit sur branche mergée.
 |---|---|---|
 | U9 unification arm | **fait** (feat/ux-finitions) — store unique, ConduiteView props-driven, broadcast détaché, arm consumée au recall/désarmée au delete ; 620/620 verts | `U9 — unification de l'arm de cue` |
 | U10 fenêtre détachée sûre | **fait** — bouton LIVE/DRY-RUN symétrique dans les deux états, chip TC cliquable (toggle chase — le routing tcchase: dormait sans émetteur), Esc/Enter/Shift+Enter/Backspace montés dans ConduitePage | en cours de vérif |
+
+| U1 re-attach orphelins | **fait** — reattachOrphanMovements (slots coquilles, movementId repris) + chip orphelin cliquable dans la top bar jeu ; graphJson null honnete, transport retrouve | ce commit |

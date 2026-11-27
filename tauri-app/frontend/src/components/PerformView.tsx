@@ -9,6 +9,7 @@ import { LiveDrawer } from './perform/LiveDrawer';
 import { useShowStatusStore, startShowStatusPolling } from '../store/useShowStatusStore';
 import { cueLabel, tcStr } from '../utils/showFormat';
 import { useGraphStore } from '../store/useGraphStore';
+import { toast } from '../utils/toast-helpers';
 import { useCuelistStore } from '../store/useCuelistStore';
 import { doSolo, doStop, doUnsolo, getSoloRestoreIds } from '../utils/liveActions';
 import { Radar2D } from './jeu/Radar2D';
@@ -211,12 +212,16 @@ export const PerformView: React.FC = () => {
             {playingCount > 0 ? `${playingCount} LIVE` : 'IDLE'}
           </span>
           {orphanCount > 0 && (
-            <span
-              className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${STATUS_TONES.warning}`}
-              title={`${orphanCount} orphan movement(s) running — no slot controls them. STOP ALL clears.`}
+            <button
+              onClick={() => {
+                const n = useGraphStore.getState().reattachOrphanMovements();
+                if (n > 0) toast.success(`${n} orphan move(s) re-attached — pads control them again`);
+              }}
+              className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${STATUS_TONES.warning} hover:brightness-125 cursor-pointer transition-colors`}
+              title={`${orphanCount} orphan movement(s) running — click to re-attach them as shell slots (stop control regained). STOP ALL also clears.`}
             >
-              +{orphanCount} ⚠
-            </span>
+              +{orphanCount} ⚠ re-attach
+            </button>
           )}
         </div>
 

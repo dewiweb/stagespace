@@ -25,7 +25,7 @@ import {
 
 type CreatorArgs = Parameters<StateCreator<MoveSlotsStore, [], [], MoveSlotsSlice>>;
 
-export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]): Pick<MoveSlotsSlice, 'setSlotSignalGraph' | 'selectSlotForEditing' | 'addMoveSlot' | 'duplicateMoveSlot' | 'insertMoveSlots' | 'removeMoveSlot' | 'renameMoveSlot' | 'setSlotTemplate' | 'setSlotTracks' | 'setSlotMacros' | 'setSlotFadeDuration' | 'setSlotEndMode' | 'setSlotAnchorMode' | 'setSlotAnchorTarget' | 'setSlotAnchorPose' | 'setSlotLoopMode' | 'setSlotDirection' | 'updateSlotAnimationFields' | 'toggleSlotPreview' | 'addToSetlist' | 'removeFromSetlist' | 'moveSetlistItem'> => ({
+export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]): Pick<MoveSlotsSlice, 'setSlotSignalGraph' | 'selectSlotForEditing' | 'addMoveSlot' | 'reattachOrphanMovements' | 'duplicateMoveSlot' | 'insertMoveSlots' | 'removeMoveSlot' | 'renameMoveSlot' | 'setSlotTemplate' | 'setSlotTracks' | 'setSlotMacros' | 'setSlotFadeDuration' | 'setSlotEndMode' | 'setSlotAnchorMode' | 'setSlotAnchorTarget' | 'setSlotAnchorPose' | 'setSlotLoopMode' | 'setSlotDirection' | 'updateSlotAnimationFields' | 'toggleSlotPreview' | 'addToSetlist' | 'removeFromSetlist' | 'moveSetlistItem'> => ({
   setSlotSignalGraph: (id, graph) => {
     set((s) => {
       const moveSlots = s.moveSlots.map((sl) =>
@@ -91,6 +91,46 @@ export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]):
     });
   },
 
+  /// U1 — Ré-adoption des movements orphelins : backend vivant, aucun slot
+  /// ne les contrôle (typique après reload d'une fenêtre remote-UI — les
+  /// slots restaurés ont movementId null). Crée un slot coquille par
+  /// orphelin : le movementId repris rend le transport (stop avec fade)
+  /// au lieu de ne laisser que STOP ALL. graphJson null honnêtement —
+  /// le contenu réel est inconnu côté frontend ; le slot sert au contrôle
+  /// live, pas à l'édition (un hot-swap remplacerait le graphe réel).
+  reattachOrphanMovements: () => {
+    const { movements, moveSlots } = get();
+    const owned = new Set(moveSlots.map((s) => s.movementId));
+    const orphans = movements.filter((mv) => mv.id.startsWith('mv-') && !owned.has(mv.id));
+    if (orphans.length === 0) return 0;
+    const base = Date.now();
+    const newSlots = [...moveSlots];
+    orphans.forEach((mv, i) => {
+      newSlots.push({
+        id: `slot-${base}-r${i}`,
+        name: mv.name || `Orphelin ${i + 1}`,
+        graphJson: null,
+        signalGraph: null,
+        templateId: 'custom',
+        trackIds: mv.osc_ids ?? [],
+        movementId: mv.id,
+        isPreview: mv.is_preview ?? false,
+        macros: defaultMacros(),
+        fadeDuration: 2.0,
+        loopMode: 'loop' as const,
+        direction: 'forward' as const,
+        fadeIn: 0.5,
+        fadeOut: 0.5,
+        phaseSpread: 0,
+        assignments: [],
+        audioMods: [],
+        oscIndex: Math.max(0, ...newSlots.map((sl) => sl.oscIndex)) + 1,
+      });
+    });
+    set({ moveSlots: newSlots });
+    saveSlotsToStorage(newSlots);
+    return orphans.length;
+  },
   addMoveSlot: () => {
     const { holProject, manualOscIds, moveSlots } = get();
     // Tracks par défaut: toutes les tracks disponibles

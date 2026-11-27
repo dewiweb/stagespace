@@ -32,6 +32,9 @@ export interface MoveSlotsSlice {
 
   // ─── CRUD moves ───
   addMoveSlot: () => void;
+  /// Ré-adopte les movements orphelins (slots coquilles) — retourne le
+  /// nombre de movements rattachés.
+  reattachOrphanMovements: () => number;
   /// Clone graphe+tracks+macros d'un slot — inséré juste après la source,
   /// sélectionné pour édition ("Move N copy"). Pas dans la setlist :
   /// l'ordre du spectacle reste un choix délibéré.
