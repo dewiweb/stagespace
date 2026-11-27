@@ -415,3 +415,5 @@ d'audit sur branche mergée.
 | U6 legend radar | **fait** — freeze hollow (ring) vs park plein, points radar ET légende cohérents | batch |
 | U11 trackpos UI | **fait** — « Set origin here » dans le menu objet (radar/3D/TrackGrid) : capture la position actuelle comme origine de track (où panic/revert ramènent) ; avant : OSC ou import .hol uniquement | ce commit |
 | U4 toasts | **fait** — ancre bottom-16 (au-dessus statusbar + légende radar), dédup ×N des rafales identiques, cap 3 visibles + « +N more » | ce commit |
+| U15 slider spatial menteur | **fait** — k tracké dans useSpatialKStore au niveau de doSpatial (couvre menu/OSC/strip), slider bindé | batch |
+| U16 gestes à deux forces | **fait** — menu aligné sur 3.0 (strip + défaut OSC) | batch |

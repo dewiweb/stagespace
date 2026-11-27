@@ -3,6 +3,7 @@
 /// Partagé par la surface Jeu et la fenêtre ?view=run.
 import React from 'react';
 import { doAttention, doGesture, doSpatial } from '../../utils/liveActions';
+import { useSpatialKStore } from '../../utils/liveActionsSpatial';
 import { useGraphStore } from '../../store/useGraphStore';
 import { SOURCE_STRONG } from '../../utils/sourceColors';
 
@@ -17,7 +18,9 @@ const GESTURES: Array<{ name: string; label: string; hint: string }> = [
 ];
 
 export const GestureStrip: React.FC = () => {
-  const [spatialK, setSpatialK] = React.useState(1);
+  // Bindé au store partagé — reflète aussi les changements OSC/menu
+  // (avant : state local figé à 1, menteur après tout contrôle externe).
+  const spatialK = useSpatialKStore((s) => s.k);
   const objectsLive = useGraphStore((s) => Object.keys(s.objectStates).length > 0);
   // Un objet en stase attention = source 'freeze' (frozen_attn côté
   // merge) — le bouton reflète l'état réel au lieu d'être toujours actif.
@@ -34,9 +37,7 @@ export const GestureStrip: React.FC = () => {
           step={0.05}
           value={spatialK}
           onChange={(e) => {
-            const k = parseFloat(e.target.value);
-            setSpatialK(k);
-            doSpatial(k);
+            doSpatial(parseFloat(e.target.value));
           }}
           className="flex-1 accent-stagespace-modulation"
           title="Compresseur spatial — k<1 resserre le champ, k>1 l'étend"
