@@ -419,3 +419,40 @@ d'audit sur branche mergée.
 | U16 gestes à deux forces | **fait** — menu aligné sur 3.0 (strip + défaut OSC) | batch |
 | U14 log opérationnel | **fait** — (1) bug de suppression corrigé : seule la provenance réseau « osc: » est couverte par le broadcast backend, les actions GUI taguées (menu/conduite) sont enfin loguées ; (2) dedup par préfixe de commande avec badge ×N — le TC roulant n'inonde plus ; (3) auto-scroll conditionnel (seulement si déjà près du bas) | ce commit |
 | U2 complétion soundcheck | **fait** — état exposé (useSoundcheckStore), menu start/stop état-dépendant, next/prev grisés hors sonde | ce commit |
+
+
+---
+
+## État des chantiers — fin de session feat/ux-finitions (2026-11)
+
+### Traités et poussés (tsc propre, 620+/620+ tests verts à chaque commit)
+
+| Chantier | Contenu livré |
+|---|---|
+| **U9** unification arm | `useCuelistStore.armedCueId` source unique — clic/OSC/menu/détaché visent la même cue ; arm consumée au recall, désarmée au delete |
+| **U10** fenêtre FOH détachée | bouton LIVE/DRY-RUN symétrique, chip TC cliquable, Esc/panic + transport clavier |
+| **U1** re-attach orphelins | chip `+N ⚠` jeu cliquable — slots coquilles (movementId repris du backend, tracks réels), stop-avec-fade retrouvé |
+| **U2** foyer répétition + soundcheck | tab renommé, soundcheck/rehearsal dans menu Show, état sonde publié (start⇄STOP état-dépendant) |
+| **U3** conduite habitée | audition cue armée au centre (radar extrait en composant partagé `CueAuditionRadar`), méta fade/mode dans les rows, hint corrigé |
+| **U4** toasts | ancre bottom-16 (hors statusbar/légende), dédup ×N, cap 3 + « +N more » |
+| **U5** menus | View + Score, unsolo visible jeu |
+| **U6** legend radar | freeze hollow/outline vs park plein — légende ET rendu |
+| **U11** trackpos UI | « Set origin here » dans le menu objet — conversion obj→track à la frontière |
+| **U12** strings stales | Toolbar/manuelle-bar references purgées |
+| **U14** log opérationnel | bug suppression GUI corrigé (préfixe `osc:`), dedup ×N anti-TC, auto-scroll conditionnel |
+| **U15** slider spatial | `useSpatialKStore` — reflète toutes les sources |
+| **U16** gestes uniformes | menu aligné sur 3.0 |
+
+### Restants — non commencés, avec le pourquoi
+
+| Chantier | Nature | Note de reprise |
+|---|---|---|
+| **U7** pos-tape replay visualisé | moyen | la tape existe (rehearsalState entries) ; visualiser = timeline ou overlay radar des positions rejouées |
+| **U8** flush slots fiabilité | investigation | lors des tests bridge les slots n'ont pas réapparu au reload malgré la persistance — vérifier le flush localStorage en prod réelle (pas devbridge) |
+| **U13** jeu expose Assign/Draw | **décision produit** | la palette 3D jeu expose de l'édition de move contraire à la doctrine « surface réduite » — feature assumée ou fuite ? À trancher par l'utilisateur |
+| **U17** moniteur OSC-IN atelier | moyen | `last_by_address` existe backend — surface de debug/monitor à créer |
+
+### Découvertes en cours de route (hors audit initial)
+
+- **`armedCueId` keyboard** : `Shift+Enter` tire la cue séquentielle suivante, pas l'armée — sémantique clavier à clarifier (le fil OSC `/cue/go` lui vise l'armée)
+- **soundcheck cross-fenêtre** : la state machine est frontend-locale par webview — une sonde lancée dans la principale est invisible dans la détachée (cohérent avec l'architecture commande-routée, mais l'état publié ne traverse pas le broadcast)
