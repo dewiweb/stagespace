@@ -5,6 +5,7 @@ import CuelistPanel from './panels/CuelistPanel';
 import EmptyState from './ui/EmptyState';
 import { StatusChip } from './ui/StatusChip';
 import { SlotTile } from './show/SlotTile';
+import { PosePadWall } from './perform/PosePadWall';
 import { LiveDrawer } from './perform/LiveDrawer';
 import { useShowStatusStore, startShowStatusPolling } from '../store/useShowStatusStore';
 import { cueLabel, tcStr } from '../utils/showFormat';
@@ -64,7 +65,7 @@ export const PerformView: React.FC = () => {
   const soloSavedIds = useGraphStore((s) => s.soloSavedIds);
   const movements = useGraphStore((s) => s.movements);
   // Panneau central : pads (l'instrument, défaut) ou canvas 3D.
-  const [centerView, setCenterView] = React.useState<'pads' | '3d'>('pads');
+  const [centerView, setCenterView] = React.useState<'pads' | 'poses' | '3d'>('pads');
   // Colonne gauche en tabs : setlist ET cues tenaient mal dans le même
   // 40/60 — chacune prend toute la hauteur à la demande (audit ergo).
   const [leftTab, setLeftTab] = React.useState<'setlist' | 'cues'>('cues');
@@ -447,6 +448,12 @@ export const PerformView: React.FC = () => {
               Pads
             </button>
             <button
+              onClick={() => setCenterView('poses')}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${centerView === 'poses' ? 'bg-stagespace-target text-gray-950' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              Poses
+            </button>
+            <button
               onClick={() => setCenterView('3d')}
               className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${centerView === '3d' ? 'bg-stagespace-accent text-gray-950' : 'text-gray-500 hover:text-gray-300'}`}
             >
@@ -460,6 +467,7 @@ export const PerformView: React.FC = () => {
           <div className={`flex-1 min-h-0 ${centerView === '3d' ? '' : 'hidden'}`}>
             <Scene3D width="100%" height="100%" />
           </div>
+          {centerView === 'poses' && <PosePadWall />}
           {centerView === 'pads' && (
             <div className={`flex-1 overflow-y-auto p-3 grid gap-3 auto-rows-min content-start ${
               moveSlots.length > 12 ? 'grid-cols-4' : moveSlots.length > 6 ? 'grid-cols-3' : 'grid-cols-2'
