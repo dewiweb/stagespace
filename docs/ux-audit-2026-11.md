@@ -199,3 +199,45 @@ ont un chemin UI découvrable ?
 logées** — soundcheck (absente), rehearsal/pos-tape (mal logée),
 unsolo (invisible). Ce sont exactement les écarts d'accrétion organique
 de la section B, confirmés par l'inventaire wire.
+
+## J. Corrections — contexte de capture vs production (ajout post-revue)
+
+Les captures initiales ont été prises en mode **headless dev bridge +
+vite dev** (pas l'app Tauri de production). Réévaluation honnête des
+findings à travers cette lentille :
+
+### Ce qui change en production desktop
+
+En app Tauri desktop, webview et backend partagent la durée de vie du
+process — un refresh isolé de la webview n'arrive quasiment jamais
+(crash webview uniquement). La « fracture reload » (section D) n'est
+donc **pas un scénario desktop quotidien**.
+
+### Ce qui reste vrai en production — le cas Remote UI
+
+**Remote UI est une feature de production** (Settings → Réseau →
+Remote UI, persistée) : des navigateurs distants pilotent le même show
+vivant. Or un navigateur distant se rafraîchit volontiers en plein show
+(onglet fermé, tablette rechargée, reconnexion réseau) — et là la
+fracture est réelle et complète : slots restaurés avec `movementId:
+null`, orphelins backend, « Aucun slot » affiché pendant que le
+spectacle tourne. U1 (re-attach) reste donc justifié — re-scopé :
+**scénario remote-UI + recovery crash webview**, pas desktop nominal.
+
+### Artefact de test identifié — « Aucun slot »
+
+Dans le script de capture, les pages puppeteer étaient ouvertes AVANT
+la création du slot — or le store zustand n'hydrate depuis localStorage
+qu'au démarrage. Les pages jeu/conduite, chargées avant que le slot
+existe, ne pouvaient pas le voir quoi qu'il arrive. Le constat « les
+slots n'ont même pas réapparu » (D point 3) est donc **non concluant** —
+ni preuve de bug, ni preuve de fiabilité. U8 (vérifier le flush) reste
+ouvert mais sans présomption.
+
+### Ce qui est invariant plateforme (findings non affectés)
+
+Tout ce qui relève du layout/composants React purs : espace mort
+conduite, pile de toasts recouvrant la télémétrie, legend park/freeze,
+accès soundcheck absent, nommage « Score » trompeur, menu View sans
+Score, unsolo invisible, densité 9-10px. Le frontend est le même code
+en webview et en navigateur — ces findings tiennent en production.
