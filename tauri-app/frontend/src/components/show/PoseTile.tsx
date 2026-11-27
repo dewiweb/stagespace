@@ -73,24 +73,33 @@ export const PoseTile: React.FC<PoseTileProps> = (p) => {
           </span>
         )}
       </div>
-      <div className="min-w-0">
+      {unpatched === 0 && (
+        <div className="text-[10px] text-gray-600 min-w-0">{ntracks} tracks</div>
+      )}
+      {/* Strip nom — sélection fantômes, visuellement distincte du corps
+          (snap/goto). Flush sur les bords bas : label de touche console,
+          même langage que SlotTile. */}
+      <div
+        className={`-mx-3 -mb-3 mt-2 px-3 py-1.5 border-t rounded-b-[10px] transition-colors ${
+          p.isSelected
+            ? 'bg-stagespace-target/15 border-stagespace-target/50'
+            : 'bg-black/30 border-gray-700/70 hover:bg-black/50 hover:border-gray-600'
+        }`}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          p.onSelect();
+        }}
+        title="Show/hide pose targets as ghosts in the viewers (no snap)"
+        role="button"
+      >
         <div
           className={`text-sm font-semibold truncate leading-tight ${
-            p.isSelected ? 'text-stagespace-target' : 'hover:text-stagespace-target'
+            p.isSelected ? 'text-stagespace-target' : ''
           }`}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            p.onSelect();
-          }}
-          title="Show/hide pose targets as ghosts in the viewers (no snap)"
-          role="button"
         >
           {p.pose.name}
         </div>
-        {unpatched === 0 && (
-          <div className="text-[10px] text-gray-600">{ntracks} tracks</div>
-        )}
       </div>
     </div>
   );

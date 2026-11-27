@@ -146,26 +146,36 @@ export const SlotTile: React.FC<SlotTileProps> = (p) => {
           </button>
         )}
         <div className="min-w-0 pr-10">
-          {/* Nom = sélection pour le drawer — stopPropagation sur pointerdown
-              (tue le timer hold/bump) ET click (ne lance pas le move). Corps
-              du pad = transport pur, sélection stable en multi-pad live. */}
-          <div
-            className={`${big ? 'text-lg' : 'text-sm'} font-semibold truncate leading-tight ${
-              p.isSelected ? 'text-stagespace-accent' : p.onSelect ? 'hover:text-stagespace-accent' : ''
-            }`}
-            onPointerDown={p.onSelect ? (e) => e.stopPropagation() : undefined}
-            onClick={p.onSelect ? (e) => { e.stopPropagation(); p.onSelect?.(); } : undefined}
-            title={p.onSelect ? 'Select for editing — the drawer below targets this move (no play/stop)' : undefined}
-            role={p.onSelect ? 'button' : undefined}
-          >
-            {slot.name}
-          </div>
           <div
             className={`text-[10px] mt-0.5 ${isPlaying ? 'text-stagespace-live/80' : 'text-gray-500'}`}
             title={`Tracks : ${slot.trackIds.join(', ')}${isPlaying ? '' : ' — tap = play, hold ≥350ms = momentary'}`}
           >
             {formatTrackIds(slot.trackIds, p.parkedTracks ?? [])}
             {isPlaying ? ' · LIVE' : ' · hold=bump'}
+          </div>
+        </div>
+        {/* Strip nom — zone de SÉLECTION visuellement distincte du corps
+            (transport). Flush sur les bords bas du pad via marges
+            négatives : elle se lit comme le label d'une touche console,
+            pas comme une surface de jeu. stopPropagation pointerdown
+            (tue le timer hold/bump) ET click (ne lance pas le move). */}
+        <div
+          className={`${big ? '-mx-4 -mb-4' : '-mx-3 -mb-3'} mt-2 px-3 py-1.5 border-t rounded-b-[10px] transition-colors ${
+            p.isSelected
+              ? 'bg-stagespace-accent/15 border-stagespace-accent/50'
+              : 'bg-black/30 border-gray-700/70 hover:bg-black/50 hover:border-gray-600'
+          }`}
+          onPointerDown={p.onSelect ? (e) => e.stopPropagation() : undefined}
+          onClick={p.onSelect ? (e) => { e.stopPropagation(); p.onSelect?.(); } : undefined}
+          title={p.onSelect ? 'Select for editing — the drawer below targets this move (no play/stop)' : undefined}
+          role={p.onSelect ? 'button' : undefined}
+        >
+          <div
+            className={`${big ? 'text-lg' : 'text-sm'} font-semibold truncate leading-tight ${
+              p.isSelected ? 'text-stagespace-accent' : ''
+            }`}
+          >
+            {slot.name}
           </div>
         </div>
       </div>
