@@ -28,7 +28,7 @@ export type ConduiteViewState = {
   tcChaseEnabled: boolean;
   tcActive: boolean;
   tcStr: string;
-  showLog: { ts: number; label: string }[];
+  showLog: { ts: number; label: string; n: number }[];
   armed: boolean;
   parked: number[];
   consoleAge: number | null;

@@ -40,7 +40,7 @@ export interface PerfSlice {
   refreshPerceptual: () => Promise<void>;
   /// Log opérationnel des commandes show — qui a GO quand, quel NACK.
   /// P2.4 : l'historique horodaté visible en conduite.
-  showLog: { ts: number; label: string }[];
+  showLog: { ts: number; label: string; n: number }[];
   pushShowLog: (label: string) => void;
 }
 
@@ -88,10 +88,27 @@ export const createPerfSlice: StateCreator<PerfSlice, [], [], PerfSlice> = (set)
     } catch { /* non critique */ }
   },
   showLog: [],
+  // Dedup par préfixe de commande — le TC roulant émet une valeur
+  // différente à chaque tick (exact-match inopérant) : les répétitions
+  // consécutives de la même commande s'effondrent en ×N, le label garde
+  // la valeur la plus récente (audit U14).
   pushShowLog: (label) =>
-    set((s) => ({
-      showLog: [...s.showLog.slice(-49), { ts: Date.now(), label }],
-    })),
+    set((s) => {
+      const keyOf = (l: string) => /^[A-Za-z]+/.exec(l)?.[0] ?? l;
+      const key = keyOf(label);
+      const last = s.showLog[s.showLog.length - 1];
+      if (last && keyOf(last.label) === key) {
+        return {
+          showLog: [
+            ...s.showLog.slice(0, -1),
+            { ts: Date.now(), label, n: (last.n ?? 1) + 1 },
+          ],
+        };
+      }
+      return {
+        showLog: [...s.showLog.slice(-49), { ts: Date.now(), label, n: 1 }],
+      };
+    }),
 });
 
 // Canal live:state — une SEULE fenêtre poll le backend : la principale

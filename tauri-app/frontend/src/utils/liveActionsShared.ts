@@ -47,7 +47,10 @@ export function rec(name: string, args: number[] = [], ref?: RecRef) {
 /// Les commandes OSC (from présent) sont broadcastées par le backend
 /// en 'show-log' à toutes les fenêtres : ne pas doubler ici.
 export function logAction(name: string, detail?: string) {
-  if (detail) return; // couvert par le broadcast backend
+  // Seule la provenance réseau ('osc:<addr>') est couverte par le broadcast
+  // backend — les tags GUI ('menu', 'conduite'…) ne le sont JAMAIS :
+  // les supprimer ici les faisait disparaître du log (audit U14).
+  if (detail?.startsWith('osc:')) return;
   useGraphStore.getState().pushShowLog(name);
 }
 

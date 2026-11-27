@@ -11,7 +11,8 @@ import type { ConduiteHandlers, ConduiteViewState } from './types';
 import { SOURCE_OUTLINE } from '../../utils/sourceColors';
 import { CueAuditionRadar } from '../cues/CueAuditionRadar';
 
-export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteHandlers> = ({
+export const ConduiteView: React.FC<{
+ st: ConduiteViewState | null } & ConduiteHandlers> = ({
   st,
   onGo,
   onPanic,
@@ -24,6 +25,16 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
   onArmCue,
   onTcChaseToggle,
 }) => {
+  // Auto-scroll du log — seulement si l'opérateur est déjà près du bas :
+  // remonter lire l'historique ne doit pas être arraché par le TC roulant.
+  const logRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const el = logRef.current;
+    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 60) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [st?.showLog]);
+
   // Arm unifié — lu depuis st (source unique : useCuelistStore, partagé
   // avec le fil OSC et le menu CUE GO), écrit via onArmCue. Click = arm
   // (outline), double-click = RECALL : jamais de scene-kill au simple clic.
@@ -262,13 +273,14 @@ export const ConduiteView: React.FC<{ st: ConduiteViewState | null } & ConduiteH
           retombe dessus en fin de cue sans lire. */}
       <div className="h-28 border-t border-gray-800 flex flex-col flex-shrink-0">
         <div className="px-3 py-1 text-[10px] text-gray-500 uppercase tracking-widest">Log</div>
-        <div className="flex-1 overflow-y-auto px-3 pb-2 font-mono text-[11px] leading-4">
+        <div ref={logRef} className="flex-1 overflow-y-auto px-3 pb-2 font-mono text-[11px] leading-4">
           {st?.showLog.slice(-30).map((l, i) => (
             <div key={l.ts + '-' + i} className="text-gray-400 truncate">
               <span className="text-gray-600">
                 {new Date(l.ts).toLocaleTimeString('fr-FR', { hour12: false })}
               </span>{' '}
               {formatLogLabel(l.label)}
+              {l.n > 1 && <span className="text-gray-600"> ×{l.n}</span>}
             </div>
           ))}
         </div>

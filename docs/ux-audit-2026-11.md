@@ -417,3 +417,4 @@ d'audit sur branche mergée.
 | U4 toasts | **fait** — ancre bottom-16 (au-dessus statusbar + légende radar), dédup ×N des rafales identiques, cap 3 visibles + « +N more » | ce commit |
 | U15 slider spatial menteur | **fait** — k tracké dans useSpatialKStore au niveau de doSpatial (couvre menu/OSC/strip), slider bindé | batch |
 | U16 gestes à deux forces | **fait** — menu aligné sur 3.0 (strip + défaut OSC) | batch |
+| U14 log opérationnel | **fait** — (1) bug de suppression corrigé : seule la provenance réseau « osc: » est couverte par le broadcast backend, les actions GUI taguées (menu/conduite) sont enfin loguées ; (2) dedup par préfixe de commande avec badge ×N — le TC roulant n'inonde plus ; (3) auto-scroll conditionnel (seulement si déjà près du bas) | ce commit |

@@ -21,7 +21,11 @@ export function useShowControl() {
       try {
         const u = await safeListen<ShowControlEvent>('show-control', (event) => {
           const cmd = event.payload.command;
-          const from = event.payload.from;
+          // Préfixe 'osc:' — logAction ne supprime le log local que pour
+          // la provenance réseau (couverte par le broadcast backend show-log).
+          // Sans ça, les actions GUI taguées ('menu', 'conduite') étaient
+          // silencieusement absentes du log opérationnel (audit U14).
+          const from = 'osc:' + event.payload.from;
           // Pas de log ici — il vit dans liveActions (point de passage
           // commun GUI + OSC), sinon chaque commande OSC loggerait 2×.
           switch (cmd.command) {
