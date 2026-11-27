@@ -418,3 +418,4 @@ d'audit sur branche mergée.
 | U15 slider spatial menteur | **fait** — k tracké dans useSpatialKStore au niveau de doSpatial (couvre menu/OSC/strip), slider bindé | batch |
 | U16 gestes à deux forces | **fait** — menu aligné sur 3.0 (strip + défaut OSC) | batch |
 | U14 log opérationnel | **fait** — (1) bug de suppression corrigé : seule la provenance réseau « osc: » est couverte par le broadcast backend, les actions GUI taguées (menu/conduite) sont enfin loguées ; (2) dedup par préfixe de commande avec badge ×N — le TC roulant n'inonde plus ; (3) auto-scroll conditionnel (seulement si déjà près du bas) | ce commit |
+| U2 complétion soundcheck | **fait** — état exposé (useSoundcheckStore), menu start/stop état-dépendant, next/prev grisés hors sonde | ce commit |

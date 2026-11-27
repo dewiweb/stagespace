@@ -44,6 +44,12 @@ const soundcheckState: { running: boolean; idx: number; pinged: number | null; t
   pinged: null,
   timer: null,
 };
+/// État observable publié — la machine reste module-locale mais l'UI
+/// (menu Show, toggle) doit pouvoir refléter running/pinged (audit U2).
+export const useSoundcheckStore = create<{ running: boolean; pinged: number | null }>(() => ({ running: false, pinged: null }));
+function publishSoundcheck() {
+  useSoundcheckStore.setState({ running: soundcheckState.running, pinged: soundcheckState.pinged });
+}
 
 function soundcheckPing(tracks: number[]) {
   const s = soundcheckState;
@@ -53,6 +59,7 @@ function soundcheckPing(tracks: number[]) {
   }
   const obj = tracks[s.idx];
   s.pinged = obj;
+  publishSoundcheck();
   // Sauvegarde la position manuelle existante — le ping ne doit jamais
   // détruire une reprise opérateur (C2, vérité backend).
   invoke<[number, number, number] | null>('get_manual_position', { obj }).then((prev) => {
@@ -62,6 +69,7 @@ function soundcheckPing(tracks: number[]) {
       if (prev) doSetPosition(obj, prev[0], prev[1], prev[2]);
       else doClearPosition(obj);
       s.pinged = null;
+      publishSoundcheck();
       s.idx += 1;
       if (s.running && s.idx < tracks.length) soundcheckPing(tracks);
       else doSoundcheck('stop');
@@ -73,6 +81,7 @@ function soundcheckPing(tracks: number[]) {
     s.timer = setTimeout(() => {
       doClearPosition(obj);
       s.pinged = null;
+      publishSoundcheck();
       s.idx += 1;
       if (s.running && s.idx < tracks.length) soundcheckPing(tracks);
       else doSoundcheck('stop');
@@ -88,6 +97,7 @@ export function doSoundcheck(action?: string) {
   const tracks = useGraphStore.getState().manualOscIds.map((_, i) => i);
   if (action === 'stop') {
     s.running = false;
+    publishSoundcheck();
     if (s.timer) { clearTimeout(s.timer); s.timer = null; }
     // Ne nettoie que le ping courant — jamais les positions manuelles
     // de l'opérateur.
@@ -97,12 +107,15 @@ export function doSoundcheck(action?: string) {
   }
   if (action === 'next' || action === 'prev') {
     s.running = true;
+  publishSoundcheck();
+    publishSoundcheck();
     s.idx = Math.max(0, Math.min(tracks.length - 1, s.idx + (action === 'next' ? 1 : -1)));
     soundcheckPing(tracks);
     return;
   }
   // start (défaut)
   s.running = true;
+  publishSoundcheck();
   s.idx = 0;
   soundcheckPing(tracks);
 }

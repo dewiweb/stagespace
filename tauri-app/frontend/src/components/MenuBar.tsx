@@ -5,7 +5,7 @@ import { useCuelistStore } from '../store/useCuelistStore';
 import { useOscArmed } from '../hooks/useOscArmed';
 import { importHolProject, loadShow, loadShowFromPath, saveShow, basename } from '../utils/showFileActions';
 import { useSessionStore } from '../store/useSessionStore';
-import { doSetPosition } from '../utils/liveActionsSpatial';
+import { doSetPosition, useSoundcheckStore } from '../utils/liveActionsSpatial';
 import { getGraphClipboardOps } from '../utils/clipboardBus';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
@@ -149,12 +149,15 @@ export const MenuBar: React.FC = () => {
   // Soundcheck — la sonde cyclique d'identification des enceintes n'avait
   // AUCUN accès UI direct (clips score ou OSC uniquement — audit U2).
   // Le ping saute dans le radar/3D : le feedback est visuel par nature.
+  // Entrées état-dépendantes — start/grisé selon running (audit U2 fin).
+  const scRunning = useSoundcheckStore((s) => s.running);
   const soundcheckEntries: Entry[] = [
     { separator: true },
-    { label: 'Soundcheck: start — ping each track', onClick: () => doSoundcheck('start') },
-    { label: 'Soundcheck: stop', onClick: () => doSoundcheck('stop') },
-    { label: 'Soundcheck: next track', onClick: () => doSoundcheck('next') },
-    { label: 'Soundcheck: previous track', onClick: () => doSoundcheck('prev') },
+    scRunning
+      ? { label: 'Soundcheck: STOP — sonde en cours', onClick: () => doSoundcheck('stop') }
+      : { label: 'Soundcheck: start — ping each track', onClick: () => doSoundcheck('start') },
+    { label: 'Soundcheck: next track', disabled: !scRunning, onClick: () => doSoundcheck('next') },
+    { label: 'Soundcheck: previous track', disabled: !scRunning, onClick: () => doSoundcheck('prev') },
   ];
 
   // Menu Show contextuel — les verbes qui ont du sens SUR la surface.
