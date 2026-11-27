@@ -408,3 +408,4 @@ d'audit sur branche mergée.
 | U10 fenêtre détachée sûre | **fait** — bouton LIVE/DRY-RUN symétrique dans les deux états, chip TC cliquable (toggle chase — le routing tcchase: dormait sans émetteur), Esc/Enter/Shift+Enter/Backspace montés dans ConduitePage | en cours de vérif |
 
 | U1 re-attach orphelins | **fait** — reattachOrphanMovements (slots coquilles, movementId repris) + chip orphelin cliquable dans la top bar jeu ; graphJson null honnete, transport retrouve | ce commit |
+| U2 foyer répétition + soundcheck | **partiel** — tab panneau Score renommé Rec (collision de nommage résolue), soundcheck accessible dans les menus Show jeu+conduite (avant : zéro accès direct) ; bouton FOH avec état reste à faire (state machine module-privée à sortir en store) | ce commit |

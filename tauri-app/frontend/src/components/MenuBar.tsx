@@ -19,6 +19,7 @@ import {
   doGesture,
   doGo,
   doPanic,
+  doSoundcheck,
   doStop,
   doTcChase,
   doToggleSelectedSlot,
@@ -144,6 +145,16 @@ export const MenuBar: React.FC = () => {
     danger: true,
     onClick: () => doPanic(),
   };
+  // Soundcheck — la sonde cyclique d'identification des enceintes n'avait
+  // AUCUN accès UI direct (clips score ou OSC uniquement — audit U2).
+  // Le ping saute dans le radar/3D : le feedback est visuel par nature.
+  const soundcheckEntries: Entry[] = [
+    { separator: true },
+    { label: 'Soundcheck: start — ping each track', onClick: () => doSoundcheck('start') },
+    { label: 'Soundcheck: stop', onClick: () => doSoundcheck('stop') },
+    { label: 'Soundcheck: next track', onClick: () => doSoundcheck('next') },
+    { label: 'Soundcheck: previous track', onClick: () => doSoundcheck('prev') },
+  ];
 
   // Menu Show contextuel — les verbes qui ont du sens SUR la surface.
   const showMenu: Menu =
@@ -160,6 +171,7 @@ export const MenuBar: React.FC = () => {
               checked: tcChaseEnabled,
               onClick: () => doTcChase(!tcChaseEnabled, 'menu'),
             },
+            ...soundcheckEntries,
             { separator: true },
             oscArmEntry,
             { separator: true },
@@ -177,6 +189,7 @@ export const MenuBar: React.FC = () => {
               { label: 'Gesture: Converge', onClick: () => doGesture('converge', 1.0, 'menu') },
               { label: 'Gesture: Orbit', onClick: () => doGesture('orbit', 1.0, 'menu') },
               { label: 'Gesture: Front', onClick: () => doGesture('front', 1.0, 'menu') },
+              ...soundcheckEntries,
               { separator: true },
               { label: 'Stop all moves', onClick: () => doStop() },
               { separator: true },

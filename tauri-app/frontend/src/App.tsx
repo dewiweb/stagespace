@@ -328,7 +328,7 @@ function AppMain() {
     { id: 'cues', label: 'Cues', content: <CuelistPanel /> },
     { id: 'poses', label: 'Poses', content: <PosesPanel /> },
     { id: 'fx', label: 'FX', content: <SpatialFxPanel /> },
-    { id: 'score', label: 'Score', content: <ScorePanel /> },
+    { id: 'score', label: 'Rec', content: <ScorePanel /> },
     { id: 'log', label: 'Log', content: <ShowLogPanel /> },
   ];
 
