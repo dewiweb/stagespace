@@ -56,8 +56,10 @@ type HolProjectStore = HolProjectSlice & {
   setSlotTracks: (id: string, trackIds: number[]) => void;
 };
 
-// Génère des positions en cercle pour n objets (radius adaptatif)
-function defaultCirclePositions(n: number): Record<number, [number, number, number]> {
+// Génère des positions en cercle pour n objets (radius adaptatif) —
+// exporté : même fallback de placement pour les viewers (viewerShowIdle)
+// et l'initialisation des positions manuelles.
+export function defaultCirclePositions(n: number): Record<number, [number, number, number]> {
   const radius = n <= 4 ? 1.5 : n <= 8 ? 2.0 : n <= 16 ? 3.0 : n <= 32 ? 4.0 : 5.0;
   const positions: Record<number, [number, number, number]> = {};
   for (let i = 0; i < n; i++) {

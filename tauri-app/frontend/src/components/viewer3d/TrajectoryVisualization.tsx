@@ -33,6 +33,7 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
   /// paient une resim par sampling — empiler saturait le pool backend).
   const inFlightRef = useRef(false);
   const dirtyRef = useRef(false);
+  const showTrajectories = useGraphStore((s) => s.viewerTrajectories);
   const macros = useGraphStore((s) => s.macros);
   const graphCompileVersion = useGraphStore((s) => s.graphCompileVersion);
   const movements = useGraphStore((s) => s.movements);
@@ -78,7 +79,9 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
       });
       pathLinesRef.current = [];
     };
-    if (!(isPlaying || hasMovements)) {
+    // Pref View menu : trajectoires masquées → purge + aucun sampling
+    // (le sampling coûte des resim aux engines à état — zéro appel ici).
+    if (!showTrajectories || !(isPlaying || hasMovements)) {
       clearLines();
       return;
     }
@@ -184,7 +187,7 @@ export const TrajectoryVisualization: React.FC<TrajectoryVisualizationProps> = (
         cancelRef.current = null;
       }
     };
-  }, [isPlaying, hasMovements, movementIdsKey, animKey, graphCompileVersion, nObjects, macrosKey, movementsToShow, sceneReady, sceneRef, objectsRef]);
+  }, [showTrajectories, isPlaying, hasMovements, movementIdsKey, animKey, graphCompileVersion, nObjects, macrosKey, movementsToShow, sceneReady, sceneRef, objectsRef]);
 
   // Cleanup à l'unmount — removeFromParent détache du parent réel (le ref
   // scene peut avoir été réassigné entre-temps).

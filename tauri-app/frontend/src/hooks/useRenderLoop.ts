@@ -306,7 +306,11 @@ export function useRenderLoop({
       const manualIds = storeState.manualOscIds;
       // Prefs visualiseurs (Settings) — focus doux + fantômes au repos.
       const dimUnfocused = storeState.viewerDimUnfocused;
-      const restGhosts = storeState.viewerRestGhosts;
+      // viewerShowIdle (View menu) force le fallback origine même si la
+      // pref restGhosts est off — les tracks hors de tout move doivent
+      // rester visibles (composition de poses à l'arrêt).
+      const showIdle = storeState.viewerShowIdle;
+      const restGhosts = storeState.viewerRestGhosts || showIdle;
       const trackPos = storeState.trackPositions;
       // Origine d'un objet — track_id-keyed : holTracks[objIdx].id en
       // mode .hol, manualOscIds[objIdx] sinon (même mapping que les labels).
@@ -463,6 +467,10 @@ export function useRenderLoop({
               const [tx, ty, tz] = toThree(src[0], src[1], src[2]);
               mesh.position.set(tx, ty, tz);
               showMeshAndLabels(mesh);
+            } else if (showIdle) {
+              // Ni manuel ni origine — le mesh garde sa position courante
+              // (spawn cercle / dernier point connu), visible en fantôme.
+              showMeshAndLabels(mesh);
             }
             const mat = mesh.material as THREE.MeshStandardMaterial;
             // Couleur hol ou HSL par défaut
@@ -487,7 +495,8 @@ export function useRenderLoop({
             }
             // Fantôme au repos — après la normalisation matériau : très
             // estompé, aucun emissive (ce n'est pas une position live).
-            if (!mp && rp && !storeState.assignMode) {
+            // Sans origine connue, showIdle affiche quand même en fantôme.
+            if (!mp && (rp || showIdle) && !storeState.assignMode) {
               mat.emissive.set(VIZ.obj.off);
               mat.opacity = unfocused ? 0.1 : 0.15;
               mat.transparent = true;
@@ -511,7 +520,9 @@ export function useRenderLoop({
           // Draw aussi : on dessine une trajectoire AUTOUR des objets —
           // une scène vide rendrait le geste aveugle.
           storeState.drawMode;
-        const showObjects = needsObjects || mvts.length > 0;
+        // viewerShowIdle (View menu) : les tracks hors de tout move restent
+        // visibles — composition de poses à l'arrêt (sinon scène vide).
+        const showObjects = needsObjects || mvts.length > 0 || showIdle;
         objs.forEach((mesh) => { hideMeshAndLabels(mesh); });
         if (showObjects) {
           objs.forEach((mesh, i) => {
@@ -539,8 +550,9 @@ export function useRenderLoop({
               mesh.position.set(tx, ty, tz);
             }
             // Sans position manuelle l'objet garde sa position spawn —
-            // affiché quand même : assign/zones doivent viser ce qui existe.
-            if (src || needsObjects) {
+            // affiché quand même : assign/zones doivent viser ce qui existe,
+            // et showIdle veut TOUT voir pour composer des poses à l'arrêt.
+            if (src || needsObjects || showIdle) {
               showMeshAndLabels(mesh);
               const mat = mesh.material as THREE.MeshStandardMaterial;
               // Normalisation à chaque frame — l'état style (assign,
@@ -563,12 +575,13 @@ export function useRenderLoop({
                 mat.emissive.set(VIZ.obj.selected);
               }
               // Estompage — fantôme au repos (origine, pas position live)
-              // ou objet hors-sélection en focus doux.
+              // ou objet hors-sélection en focus doux. Un objet showIdle
+              // sans aucune position connue (spawn fallback) = même fantôme.
               if (unfocused) {
                 mat.emissive.set(VIZ.obj.off);
                 mat.opacity = 0.22;
                 mat.transparent = true;
-              } else if (!p && rp) {
+              } else if (!p && (rp || (showIdle && !src))) {
                 mat.emissive.set(VIZ.obj.off);
                 mat.opacity = 0.15;
                 mat.transparent = true;

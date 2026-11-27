@@ -7,6 +7,8 @@ import React, { useEffect, useState } from 'react';
 import { usePoseStore } from '../../store/usePoseStore';
 import { useGraphStore } from '../../store/useGraphStore';
 import { doPoseCapture, doPoseSnap, doPoseGoto, doPoseMorph } from '../../utils/liveActions';
+import Modal from '../ui/Modal';
+import { TrackGrid } from '../TrackGrid';
 
 /// Layout-agnostic — le host décide du cadre (colonne Conduite, tab
 /// Atelier, drawer Jeu). `fill` = colonne flex verticale (défaut) ;
@@ -17,25 +19,53 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
   const selectPose = usePoseStore((s) => s.selectPose);
   const refreshPoses = usePoseStore((s) => s.refreshPoses);
   const deletePose = usePoseStore((s) => s.deletePose);
-  const selectedTrackIds = useGraphStore((s) => s.selectedTrackIds);
   const manualOscIds = useGraphStore((s) => s.manualOscIds);
+  const holProject = useGraphStore((s) => s.holProject);
   const [newName, setNewName] = useState('');
   const [gotoDuration, setGotoDuration] = useState(2.0);
   // Source du morph — une seule pose « A » à la fois ; chaque autre
   // row expose alors son bouton morph A→elle.
   const [morphSource, setMorphSource] = useState<string | null>(null);
+  // Distribution de la capture — tracks concernées par la prochaine pose.
+  // null = TOUTES les positions connues (défaut). Sélection explicite via
+  // le picker TrackGrid (stagé dans tempCaptureIds tant que la modale est
+  // ouverte). Volontairement décorrélé de la sélection du move editor :
+  // capturer une pose n'a rien à voir avec l'assignation d'un slot.
+  const [captureTracks, setCaptureTracks] = useState<number[] | null>(null);
+  const [capturePickerOpen, setCapturePickerOpen] = useState(false);
+  const [tempCaptureIds, setTempCaptureIds] = useState<number[]>([]);
 
   useEffect(() => {
     void refreshPoses();
   }, [refreshPoses]);
 
+  // TrackInfos pour la TrackGrid du picker — même construction que
+  // MovesTable (couleurs/noms du .hol, fallback IDs manuels).
+  const pickerTrackInfos = React.useMemo(
+    () =>
+      holProject?.tracks.length
+        ? holProject.tracks.map((t) => ({ id: t.id, name: t.name, color: t.color, position: t.position }))
+        : manualOscIds.map((id) => ({ id, name: `#${id}` })),
+    [holProject, manualOscIds],
+  );
+  const allTrackIds = React.useMemo(() => pickerTrackInfos.map((t) => t.id), [pickerTrackInfos]);
+
+  const openCapturePicker = () => {
+    setTempCaptureIds(captureTracks ?? allTrackIds);
+    setCapturePickerOpen(true);
+  };
+  const confirmCapturePicker = () => {
+    // Toutes cochées = capture complète — null canonise l'état (le backend
+    // capture alors toutes les positions connues, y compris les tracks
+    // ajoutées plus tard au patch).
+    setCaptureTracks(tempCaptureIds.length >= allTrackIds.length ? null : [...tempCaptureIds]);
+    setCapturePickerOpen(false);
+  };
+
   const capture = () => {
     const name = newName.trim();
     if (!name) return;
-    // Sélection active = la distribution de la capture ; sinon toutes
-    // les positions connues (undefined → backend capture tout).
-    const sel = Array.from(selectedTrackIds).filter((t) => manualOscIds.includes(t));
-    doPoseCapture(name, sel.length ? sel : undefined);
+    doPoseCapture(name, captureTracks?.length ? captureTracks : undefined);
     setNewName('');
   };
 
@@ -57,7 +87,7 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
         </label>
       </div>
 
-      {/* Capture — nom + tracks sélectionnées (ou toutes). */}
+      {/* Capture — nom + distribution (picker tracks) + cap. */}
       <div className="px-2 py-2 border-b border-gray-800 flex gap-1">
         <input
           value={newName}
@@ -69,18 +99,67 @@ export const PosesPanel: React.FC<{ fill?: boolean }> = ({ fill = true }) => {
           className="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600 focus:border-stagespace-accent focus:outline-none"
         />
         <button
+          onClick={openCapturePicker}
+          className={`px-1.5 py-1 rounded text-[10px] font-mono border ${
+            captureTracks
+              ? 'border-stagespace-accent/50 text-stagespace-accent bg-stagespace-accent/10'
+              : 'border-gray-700 text-gray-500 hover:text-gray-300'
+          }`}
+          title={
+            captureTracks
+              ? `Capture covers ${captureTracks.length} picked track(s) — click to change`
+              : 'Capture covers ALL tracks — click to pick a subset'
+          }
+        >
+          {captureTracks ? `${captureTracks.length}/${allTrackIds.length}` : 'all'}
+        </button>
+        <button
           onClick={capture}
           disabled={!newName.trim()}
           className="px-2 py-1 rounded bg-stagespace-accent/20 hover:bg-stagespace-accent/30 text-stagespace-info text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
           title={
-            selectedTrackIds.size > 0
-              ? `Capture ${selectedTrackIds.size} selected track(s) at their current positions`
+            captureTracks
+              ? `Capture ${captureTracks.length} picked track(s) at their current positions`
               : 'Capture ALL known positions'
           }
         >
           ● cap
         </button>
       </div>
+
+      {/* Picker de distribution — même TrackGrid que le picker MovesTable,
+          sélection STAGÉE appliquée à la confirmation. Mode select-only
+          (pas de depth : une pose est binaire, membre ou pas). */}
+      {capturePickerOpen && (
+        <Modal title="Pose capture — tracks" onClose={() => setCapturePickerOpen(false)}>
+          <div className="p-4">
+            <TrackGrid
+              compact
+              tracks={pickerTrackInfos}
+              selectedTrackIds={new Set(tempCaptureIds)}
+              toggleTrackSelection={(tid) =>
+                setTempCaptureIds((prev) =>
+                  prev.includes(tid) ? prev.filter((t) => t !== tid) : [...prev, tid],
+                )
+              }
+              setTrackSelection={setTempCaptureIds}
+              assignments={[]}
+            />
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={confirmCapturePicker}
+                disabled={tempCaptureIds.length === 0}
+                className="flex-1 py-1.5 bg-stagespace-accent hover:opacity-90 text-gray-950 text-xs rounded font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+                title={tempCaptureIds.length === 0 ? 'Pick at least one track' : undefined}
+              >Confirmer</button>
+              <button
+                onClick={() => setCapturePickerOpen(false)}
+                className="px-4 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 text-xs rounded"
+              >Cancel</button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       <div className="flex-1 overflow-y-auto">
         {poses.map((p) => {

@@ -13,6 +13,7 @@ import { buildObjectMenuItems } from '../../utils/objectMenuItems';
 import { sourceHex, SOURCE_LABEL, SOURCE_HEX } from '../../utils/sourceColors';
 import { VIZ, UI_HEX } from '../../utils/uiColors';
 import { ObjectInspectBar } from '../viewer3d/ObjectInspectBar';
+import { defaultCirclePositions } from '../../store/slices/holProjectSlice';
 import type { Zone } from '../../store/slices/spatialFxSlice';
 
 /// Vue radar — même vocabulaire que le 3D (top/front/side).
@@ -87,12 +88,31 @@ export const Radar2D: React.FC<{ view: RadarView }> = ({ view: radarView }) => {
     }, 40);
     return () => clearInterval(t);
   }, []);
-  const positions = Object.keys(livePositions).length > 0 ? livePositions : emittedPositions;
-  // Origines des objets sans position émise — fantômes au repos.
-  const restGhostPos: [number, [number, number, number]][] = restGhosts
+  // viewerShowIdle (menu View) — les tracks hors de tout move restent
+  // visibles : positions manuelles en solide (réelles — composition de
+  // pose à l'arrêt), origines/cercle par défaut en fantômes.
+  const showIdle = useGraphStore((s) => s.viewerShowIdle);
+  const manualPositionsStore = useGraphStore((s) => s.manualPositions);
+  const basePositions = Object.keys(livePositions).length > 0 ? livePositions : emittedPositions;
+  const positions = React.useMemo(() => {
+    if (!showIdle) return basePositions;
+    const merged: Record<number, [number, number, number]> = { ...basePositions };
+    manualOscIds.forEach((_tid, i) => {
+      if (!merged[i] && manualPositionsStore[i]) merged[i] = manualPositionsStore[i];
+    });
+    return merged;
+  }, [showIdle, basePositions, manualOscIds, manualPositionsStore]);
+  // Origines des objets sans position émise — fantômes au repos. showIdle
+  // étend la chaîne au cercle par défaut pour les tracks sans trackpos :
+  // TOUT le pool est visible, sinon impossible de viser une formation.
+  const idleDefaults = React.useMemo(
+    () => (showIdle ? defaultCirclePositions(Math.max(manualOscIds.length, 1)) : null),
+    [showIdle, manualOscIds.length],
+  );
+  const restGhostPos: [number, [number, number, number]][] = restGhosts || showIdle
     ? manualOscIds.flatMap((tid, i): [number, [number, number, number]][] => {
         if (positions[i]) return [];
-        const rp = trackPositions[tid];
+        const rp = trackPositions[tid] ?? idleDefaults?.[i];
         return rp ? [[i, rp]] : [];
       })
     : [];

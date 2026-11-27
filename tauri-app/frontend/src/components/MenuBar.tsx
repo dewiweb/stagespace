@@ -81,6 +81,11 @@ export const MenuBar: React.FC = () => {
   const selectedObjIndex = useGraphStore((s) => s.selectedObjIndex);
   const emittedPositions = useGraphStore((s) => s.emittedPositions);
   const pullShowFromHost = useGraphStore((s) => s.pullShowFromHost);
+  // Prefs visualiseurs — toggles du menu View.
+  const viewerTrajectories = useGraphStore((s) => s.viewerTrajectories);
+  const setViewerTrajectories = useGraphStore((s) => s.setViewerTrajectories);
+  const viewerShowIdle = useGraphStore((s) => s.viewerShowIdle);
+  const setViewerShowIdle = useGraphStore((s) => s.setViewerShowIdle);
   // Score — sélection + transport pour les verbes Edit/Show score.
   const scorePlaying = useScoreStore((s) => s.playing);
   const scoreLoopArmed = useScoreStore((s) => s.loopStartMs != null && s.loopEndMs != null);
@@ -457,6 +462,17 @@ export const MenuBar: React.FC = () => {
           disabled: surface !== 'atelier',
           disabledReason: 'Atelier only',
           onClick: () => setShowExpert(!showExpert),
+        },
+        { separator: true },
+        {
+          label: 'Trajectories — move paths in 3D viewers',
+          checked: viewerTrajectories,
+          onClick: () => setViewerTrajectories(!viewerTrajectories),
+        },
+        {
+          label: 'Idle tracks — show objects without move',
+          checked: viewerShowIdle,
+          onClick: () => setViewerShowIdle(!viewerShowIdle),
         },
       ],
     },

@@ -2,9 +2,19 @@ import { StateCreator } from 'zustand';
 import { safeSetItem, safeParseStoredJson } from '../../utils/safeStorage';
 
 const VIEWER_PREFS_KEY = 'stagespace.viewer.prefs';
-const viewerPrefs = safeParseStoredJson<{ dim?: boolean; ghosts?: boolean }>(VIEWER_PREFS_KEY, {});
-const saveViewerPrefs = (dim: boolean, ghosts: boolean) =>
-  safeSetItem(VIEWER_PREFS_KEY, JSON.stringify({ dim, ghosts }));
+type ViewerPrefs = { dim?: boolean; ghosts?: boolean; traj?: boolean; idle?: boolean };
+const viewerPrefs = safeParseStoredJson<ViewerPrefs>(VIEWER_PREFS_KEY, {});
+const saveViewerPrefs = (prefs: ViewerPrefs) =>
+  safeSetItem(VIEWER_PREFS_KEY, JSON.stringify(prefs));
+/// Snapshot des 4 prefs depuis l'état courant — appelé APRÈS le set pour
+/// persister la combinaison complète (une pref seule écraserait les autres).
+const persistViewerPrefs = (get: () => InteractionModesSlice) =>
+  saveViewerPrefs({
+    dim: get().viewerDimUnfocused,
+    ghosts: get().viewerRestGhosts,
+    traj: get().viewerTrajectories,
+    idle: get().viewerShowIdle,
+  });
 
 /// Modes d'interaction du 3D — manipuler (drag objets/handle), dessiner,
 /// assigner (clic objet → toggleTrackSelection). L'assign 3D avait été
@@ -48,6 +58,15 @@ export interface InteractionModesSlice {
   setViewerDimUnfocused: (v: boolean) => void;
   viewerRestGhosts: boolean;
   setViewerRestGhosts: (v: boolean) => void;
+  /// traj : lignes de trajectoire échantillonnées dans les viewers 3D
+  /// (atelier + jeu). Désactivé = scène épurée + zéro sampling backend.
+  viewerTrajectories: boolean;
+  setViewerTrajectories: (v: boolean) => void;
+  /// idle : les tracks non couvertes par un move en cours restent visibles
+  /// (position manuelle → origine trackpos → cercle par défaut). Sans ça
+  /// tout stoppé = viewers vides — impossible de composer une pose.
+  viewerShowIdle: boolean;
+  setViewerShowIdle: (v: boolean) => void;
 }
 
 type Store = InteractionModesSlice & {
@@ -110,11 +129,21 @@ export const createInteractionModesSlice: StateCreator<Store, [], [], Interactio
   viewerDimUnfocused: viewerPrefs.dim ?? true,
   setViewerDimUnfocused: (v) => {
     set({ viewerDimUnfocused: v });
-    saveViewerPrefs(v, get().viewerRestGhosts);
+    persistViewerPrefs(get);
   },
   viewerRestGhosts: viewerPrefs.ghosts ?? true,
   setViewerRestGhosts: (v) => {
     set({ viewerRestGhosts: v });
-    saveViewerPrefs(get().viewerDimUnfocused, v);
+    persistViewerPrefs(get);
+  },
+  viewerTrajectories: viewerPrefs.traj ?? true,
+  setViewerTrajectories: (v) => {
+    set({ viewerTrajectories: v });
+    persistViewerPrefs(get);
+  },
+  viewerShowIdle: viewerPrefs.idle ?? false,
+  setViewerShowIdle: (v) => {
+    set({ viewerShowIdle: v });
+    persistViewerPrefs(get);
   },
 });
