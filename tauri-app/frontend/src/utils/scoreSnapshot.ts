@@ -15,7 +15,7 @@ import { useScoreStore, GLOBALFX_LANE, laneIdOf, type ScoreClipDoc, type ScoreKe
 import { useGraphStore } from '../store/useGraphStore';
 import { effectiveTrackIds } from './scoreResolve';
 import { sampleKfs } from './scoreCurveMath';
-import { buildSlotActivation, type SlotActivationCtx, type SlotGlobalMacros } from './slotActivation';
+import { buildSlotActivation, type SlotActivationCtx } from './slotActivation';
 import type { StoreScoreCueRequest } from '../types/generated/StoreScoreCueRequest';
 import type { MoveSnapshot } from '../types/generated/MoveSnapshot';
 import type { ChannelModulation } from '../types/generated/ChannelModulation';
@@ -97,10 +97,6 @@ export async function snapshotScoreAt(
   const moves: MoveSnapshot[] = [];
   let unionTracks: number[] = [];
   let skippedClips = 0;
-  /// Macros du DERNIER clip slot survivant tiré — elles sont appliquées
-  /// au merge global au lancement du clip (même source que le payload
-  /// wire), donc l'état à t est celui du plus récent.
-  let lastMacros: SlotGlobalMacros | undefined;
   for (const { c } of survivors) {
     if (c.ref.type !== 'slot') continue;
     const slot = gs.moveSlots.find((s) => s.id === (c.ref as { slotId: string }).slotId);
@@ -118,7 +114,6 @@ export async function snapshotScoreAt(
       ctx,
       `sc-${c.id}`,
     );
-    lastMacros = act.globalMacros;
     const req = act.request as Record<string, unknown>;
     const animation = (req.animation ?? {}) as Record<string, unknown>;
     moves.push({
@@ -140,6 +135,18 @@ export async function snapshotScoreAt(
       anchor_mode: (req.anchor_mode ?? null) as MoveSnapshot['anchor_mode'],
       anchor_target: (req.anchor_target ?? null) as number | null,
       anchor_pose: (req.anchor_pose ?? null) as string | null,
+      // Transform per-move du move (0.8.0) — sans elle le cue rejoué
+      // respawnerait le move avec une transform neutre.
+      macros: {
+        speed: slot.macros.speed,
+        scale: slot.macros.scale,
+        shift_x: slot.macros.shiftX,
+        shift_y: slot.macros.shiftY,
+        shift_z: slot.macros.shiftZ,
+        yaw: slot.macros.yaw,
+        pitch: slot.macros.pitch,
+        roll: slot.macros.roll,
+      },
     });
     unionTracks = [...new Set([...unionTracks, ...((req.track_indices ?? []) as number[])])];
   }
@@ -240,17 +247,13 @@ export async function snapshotScoreAt(
   const postClip = lastFired(doc.clips, ['postGraph'], t);
   const modClip = lastFired(doc.clips, ['modGraph'], t);
 
-  // ── Macros : dernières macros de slot appliquées + courbes GLOBALFX ──
-  let macros: StoreScoreCueRequest['macros'] = lastMacros
-    ? {
-        speed: 1, scale: lastMacros.scale,
-        shift_x: lastMacros.shiftX, shift_y: lastMacros.shiftY, shift_z: lastMacros.shiftZ,
-        yaw: lastMacros.yaw, pitch: lastMacros.pitch, roll: lastMacros.roll,
-      }
-    : null;
+  // ── Macros cue-level (état GLOBAL du merge) : les clips slot n'y
+  //    touchent plus (transform per-move, 0.8.0) — seules les courbes
+  //    globalFx automatisent le global. ──
+  let macros: NonNullable<StoreScoreCueRequest['macros']> | null = null;
   let spatialMacros: StoreScoreCueRequest['spatial_macros'] = null;
   if (!muted(GLOBALFX_LANE)) {
-    const fields: [string, keyof NonNullable<typeof macros>][] = [
+    const fields: [string, keyof import('../types/generated/MacroSnapshot').MacroSnapshot][] = [
       ['speed', 'speed'], ['scale', 'scale'],
       ['shift_x', 'shift_x'], ['shift_y', 'shift_y'], ['shift_z', 'shift_z'],
       ['yaw', 'yaw'], ['pitch', 'pitch'], ['roll', 'roll'],
@@ -262,7 +265,7 @@ export async function snapshotScoreAt(
       if (!macros) {
         macros = { speed: 1, scale: 1, shift_x: 0, shift_y: 0, shift_z: 0, yaw: 0, pitch: 0, roll: 0 };
       }
-      macros[field] = v;
+      (macros as Record<string, number>)[field] = v;
       touched = true;
     }
     const rs = sampleKfs(doc.globalFxCurves?.['radius_scale'], t);

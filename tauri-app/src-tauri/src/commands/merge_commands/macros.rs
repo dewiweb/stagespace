@@ -91,6 +91,61 @@ pub(crate) fn apply_set_macro_request(
     }
 }
 
+/// Définit les macros spatiales d'un move individuel (per-move — le
+/// worker les applique en espace local : scale/rotation autour du centre
+/// de sa trajectoire, shift en translation monde). Symétrique per-move
+/// de `set_global_macro`, pour l'édition live de la transform d'un slot
+/// en lecture (0.8.0 — vraie transform per-move).
+#[tauri::command]
+pub async fn set_move_macro(
+    movement_id: String,
+    request: SetMacroRequest,
+    state: State<'_, AppState>,
+) -> Result<(), IpcError> {
+    for (name, v) in [
+        ("scale", request.scale),
+        ("shiftX", request.shiftX),
+        ("shiftY", request.shiftY),
+        ("shiftZ", request.shiftZ),
+        ("yaw", request.yaw),
+        ("pitch", request.pitch),
+        ("roll", request.roll),
+        ("radius_scale", request.radius_scale),
+        ("height_offset", request.height_offset),
+    ] {
+        if let Some(v) = v {
+            require_finite(name, v)?;
+        }
+    }
+    let movements = lock_or_recover(&state.movements);
+    let movement = movements
+        .get(&movement_id)
+        .ok_or_else(|| IpcError::not_found(format!("Movement '{movement_id}' not found")))?;
+    let macros = movement.runtime.macros();
+    if let Some(s) = request.scale {
+        macros.set_scale(s);
+    }
+    let current_shift = macros.get_shift();
+    macros.set_shift(
+        request.shiftX.unwrap_or(current_shift.x),
+        request.shiftY.unwrap_or(current_shift.y),
+        request.shiftZ.unwrap_or(current_shift.z),
+    );
+    let (cy, cp, cr) = macros.get_rotation();
+    macros.set_rotation(
+        request.yaw.unwrap_or(cy),
+        request.pitch.unwrap_or(cp),
+        request.roll.unwrap_or(cr),
+    );
+    if let Some(v) = request.radius_scale {
+        macros.set_radius_scale(v);
+    }
+    if let Some(v) = request.height_offset {
+        macros.set_height_offset(v);
+    }
+    Ok(())
+}
+
 /// Définit le speed d'un move individuel (per-move, dans le worker)
 #[tauri::command]
 pub async fn set_move_speed(

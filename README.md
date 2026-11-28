@@ -194,8 +194,11 @@ bash tests/e2e_cli_test.sh    # full E2E suite
   around a configurable listener) → spatial channels
 - **Zones**: sphere/box + smoothstep falloff → drive the channels of objects
   inside; declarable in the FX panel or as a `Zone` node in the global graph
-- **Global macros**: speed / scale / shift / yaw / pitch / roll / radius /
-  height — live whole-field transforms, mappable to OSC IN
+- **Two composing transform scopes**: each move owns its **move transform**
+  (speed/scale/shift/rotation — scale/rotation around the trajectory's own
+  center, live-editable while playing) and the **global transform** applies
+  to the whole scene around its origin (plus radius/height) — both compose
+  per frame, and global macros are mappable to OSC IN
 - **Audio IN**: native microphone capture (cpal) — BPM, amplitude and FFT
   spectrum reactive engines
 - **OSC IN mappings**: any OSC address → macro / channel / position

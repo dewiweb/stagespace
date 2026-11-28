@@ -71,25 +71,15 @@ export const createSlotPlaybackMethods = (set: CreatorArgs[0], get: CreatorArgs[
       // Request via le builder partagé (utils/slotActivation) — le même
       // chemin sert le score timeline : un clip Slot rejoue ce payload.
       const { buildSlotActivation } = await import('../../utils/slotActivation');
-      const { request, globalMacros } = await buildSlotActivation(
+      const { request } = await buildSlotActivation(
         slot, graphJson, { holProject, manualOscIds }, movementId,
       );
 
       await invoke('activate_move', { request });
-      if (slot.macros) {
-        // Macros du slot : speed est per-move (worker — posée via spec.speed
-        // dans l'animation payload), les macros spatiales (scale/shift/rotation)
-        // sont GLOBALES — appliquées au MergeRuntime via set_global_macro.
-        // ⚠ Elles écrasent les macros globales — c'est voulu : l'UI annonce
-        // « appliquées au lancement et au GO ».
-        // Non-fatal : un échec ici ne doit pas faire échouer le play.
-        try {
-          await invoke('set_global_macro', { request: globalMacros });
-        } catch (e) {
-          console.warn('[playSlot] set_global_macro failed:', e);
-          toast.warning(`"${slot.name}": spatial macros not applied (${e})`);
-        }
-      }
+      // Transform per-move (0.8.0) : les macros spatiales du slot voyagent
+      // dans l'animation payload → seedées au worker (espace local), plus
+      // poussées au merge global. Le global reste où l'opérateur l'a mis —
+      // fin du modèle console « preset qui écrase » (fiction A5).
       // Succès : retirer du pending — movementId est déjà setté
       set((s) => ({
         pendingPlays: s.pendingPlays.filter((pid) => pid !== id),

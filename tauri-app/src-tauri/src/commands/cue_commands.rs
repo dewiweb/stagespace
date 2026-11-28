@@ -142,6 +142,22 @@ pub async fn store_cue(
                     anchor_mode: Some(m.anchor_mode),
                     anchor_target: m.anchor_target,
                     anchor_pose: m.anchor_pose.clone(),
+                    // Transform per-move du worker (0.8.0) — snapshotée
+                    // depuis le runtime live (hot-swaps inclus), sinon le
+                    // recall respawnerait le move avec une transform neutre.
+                    macros: {
+                        let snap = m.runtime.macros().snapshot();
+                        Some(stagespace_engines::MacroSnapshot {
+                            speed: snap.speed,
+                            scale: snap.scale,
+                            shift_x: snap.shift.x,
+                            shift_y: snap.shift.y,
+                            shift_z: snap.shift.z,
+                            yaw: snap.yaw,
+                            pitch: snap.pitch,
+                            roll: snap.roll,
+                        })
+                    },
                 }
             })
             .collect()
@@ -790,7 +806,9 @@ pub(crate) fn recall_cue_inner(
         use crate::commands::merge_commands::{
             parse_direction, parse_loop_mode, spawn_move_for_recall, MoveSpec,
         };
-        let speed = cue.macros.as_ref().map(|m| m.speed);
+        // Speed de repli (cues ancien format — pas de macros per-move) :
+        // le cue-level s'appliquait uniformément à tous les moves.
+        let fallback_speed = cue.macros.as_ref().map(|m| m.speed);
         for snap in &cue.moves {
             // Déjà actif et running → ne pas respawner (le move continue).
             let already_running = {
@@ -823,8 +841,16 @@ pub(crate) fn recall_cue_inner(
                 loop_mode: parse_loop_mode(&snap.loop_mode),
                 direction: parse_direction(&snap.direction),
                 fade: Some((snap.fade_in, snap.fade_out)),
-                speed,
-                spatial_macros: None,
+                // Macros per-move (0.8.0) : le snapshot du worker prime ;
+                // cues ancien format → speed cue-level, transform neutre.
+                speed: snap.macros.as_ref().map(|m| m.speed).or(fallback_speed),
+                spatial_macros: snap.macros.as_ref().map(|m| {
+                    crate::commands::merge_commands::SpatialMacroInit {
+                        scale: m.scale,
+                        shift: (m.shift_x, m.shift_y, m.shift_z),
+                        rotation: (m.yaw, m.pitch, m.roll),
+                    }
+                }),
                 animation_state: snap.animation_state.clone(),
                 signal_graph: snap.signal_graph.clone(),
                 end_mode: snap.end_mode.unwrap_or_default(),

@@ -154,7 +154,7 @@ describe('scoreSnapshot — arrangement → cue', () => {
     expect(request.spatial_macros).toEqual({ radius_scale: 0.5, height_offset: 0 });
   });
 
-  it('macros de slot appliquées au lancement → base du snapshot', async () => {
+  it('macros de slot → transform per-move du MoveSnapshot, PAS le global (0.8.0)', async () => {
     const s = makeSlot({ id: 's1', trackIds: [1] });
     s.macros = { ...s.macros, scale: 2, yaw: 45 };
     useGraphStore.setState({ moveSlots: [s] } as never);
@@ -162,9 +162,13 @@ describe('scoreSnapshot — arrangement → cue', () => {
       clips: [clip({ id: 'cA', ref: { type: 'slot', slotId: 's1' }, startMs: 0 })],
     } as never);
     const { request } = await snapshotScoreAt(1000, ctx());
-    expect(request.macros!.scale).toBe(2);
-    expect(request.macros!.yaw).toBe(45);
-    expect(request.macros!.speed).toBe(1); // pas de champ speed dans SlotGlobalMacros
+    // Vraie transform per-move : les macros du slot voyagent dans le
+    // snapshot du move (restaurées au worker au recall), pas dans les
+    // macros cue-level — le global n'est plus écrasé par les slots.
+    const mv = request.moves.find((m) => m.id === 'sc-cA');
+    expect(mv?.macros?.scale).toBe(2);
+    expect(mv?.macros?.yaw).toBe(45);
+    expect(request.macros).toBeNull();
   });
 
   it('postGraph/modGraph → global_graph/signal_graph', async () => {

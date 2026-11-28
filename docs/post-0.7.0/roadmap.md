@@ -154,10 +154,17 @@ dernier move lancé écrase).
 Recommandation : **voie 1 à court terme** (0.8.x), voie 2 seulement si
 un cas d'usage concret la justifie — à re-discuter après usage réel.
 
+**Résolution (28 nov.) — les deux scopes, clarifiés** : l'exploration a
+révélé que l'architecture per-move existait déjà dans le backend (audit
+T2 — `MacroScope`, `SpatialMacroInit`, `move_transform` worker en espace
+local) mais que le chemin slot la désactivait (`spatial_macros: None`).
+La voie 2 était donc M et non XL — retenue avec exigence UX de
+clarification. Traitée en lot 2 :
+
 | # | Item | Taille |
 |---|------|--------|
-| A5.1 | Unification UI transform (voie 1) + libellés honnêtes | M |
-| A5.2 | Documentation du modèle (stocké per-move, appliqué global) | S |
+| ~~A5.1~~ | ~~Unification UI transform~~ — **traité autrement** : vraie transform per-move câblée (seeding spawn, `set_move_macro`, hot-swap réel, cues capturant/restaurant la transform) + sections distinctes « Move transform » (ce move, pivot propre centre) / « Global transform » (toute la scène, pivot origin) dans l'Inspector | M |
+| ~~A5.2~~ | ~~Documentation~~ — **traité** : modèle deux scopes documenté (README + AGENTS.md) — composition worker local → merge monde | S |
 
 ## A6 — Ergonomie des track IDs
 
@@ -196,7 +203,7 @@ pose est un composant de sélection visuelle déjà disponible.
 
 **0.8.0 « ergonomie & vérité »** — le lot cohérent UX+doc, faisable sans
 changement architectural :
-- A5.1+A5.2 transform honnête · A6.1+A6.2+A6.3 track IDs
+- ~~A5.1+A5.2~~ transform — **traitée autrement** : vraie per-move + global clarifiés (lot 2, 28 nov.) · A6.1+A6.2+A6.3 track IDs
 - A3.1+A3.2+A3.3 toggles viewers
 - A2.2+A2.3+A2.4 accès modulation (~~prérequis A2.1~~ **validé** le 28 nov. —
   le cœur fonctionne, le problème est l'invisibilité du scope)

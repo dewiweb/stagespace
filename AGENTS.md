@@ -75,7 +75,7 @@ cd tauri-app/frontend
 npm install              # Install deps
 npm run dev              # Dev server (Vite)
 npm run build            # Production build (tsc + vite build)
-npm test                 # Run tests (633 tests, vitest)
+npm test                 # Run tests (646 tests, vitest)
 npm run contracts        # Regenerate TS types from Rust (ts-rs → src/types/generated/)
 npm run test:watch       # Watch mode
 npx tsc -b               # Type check (build mode — `tsc --noEmit` is vacuous on the solution-style root tsconfig)
@@ -131,8 +131,8 @@ CI fails if the committed files drift from the Rust sources.
 | Suite | Count |
 |-------|-------|
 | Rust engines | 608 |
-| Tauri backend | 124 |
-| Frontend (vitest) | 633 |
+| Tauri backend | 127 |
+| Frontend (vitest) | 646 |
 | E2E CLI | ~100 assertions |
 | **Total** | **~1465** |
 
@@ -244,6 +244,31 @@ Each move/slot carries two flags (Playback tab: `End`, `Anchor`):
 
 Combined: `hold` freezes the object at `f(T)`, `current` on the next
 move continues from that point — "release/peg-out" console semantics.
+
+### Transform model (two composing scopes, since 0.8.0)
+
+Transforms exist at BOTH scopes, composing per frame — worker local first,
+then merge world:
+
+- **Move transform (per-move)** — each worker owns its `MacroState`
+  (speed, scale, shift, rotation) applied in LOCAL space by
+  `move_transform`: scale/rotation pivot around the trajectory center,
+  shift repositions the move in world space. Stored in `slot.macros`,
+  seeded at spawn (`SpatialMacroInit` — `spec_from_request` reads them
+  from the animation payload), live-editable while playing via
+  `update_animation_state` (Inspector hot-swap) or `set_move_macro`
+  (slot macros write-through). Captured per-move in cue snapshots
+  (`MoveSnapshot.macros`) and restored at recall.
+- **Global transform (merge)** — scale/shift/rotation + radius_scale/
+  height_offset applied in WORLD space after the merge, pivot = scene
+  origin. One control surface (`GlobalTransformSurface`) everywhere:
+  Inspector, LiveDrawer global scope, ViewerToolbar. Writes the `macros`
+  store + `pushMacrosToRuntime` — immediate effect on ALL playing moves.
+
+The UX distinction is deliberate and must be preserved: "Move transform"
+(this move only, around its own center) vs "Global transform" (whole
+scene, around the scene origin). radius_scale/height_offset remain
+global-only (not carried by MoveMacros/SpatialMacroInit).
 
 Rejection & feedback: commands refused while `isRecalling` or on unknown
 cue/slot get `/stagespace/nack <reason>` back to the sender (`busy:…`,

@@ -22,7 +22,7 @@ pub use graph_updates::{
     update_signal_graph,
 };
 pub use macros::{
-    set_global_macro, set_global_origin, set_global_osc_ids, set_merge_strategy,
+    set_global_macro, set_global_origin, set_global_osc_ids, set_merge_strategy, set_move_macro,
     set_move_playback_mode, set_move_priority, set_move_speed, set_move_weight, set_track_depths,
 };
 pub use manual_positions::{

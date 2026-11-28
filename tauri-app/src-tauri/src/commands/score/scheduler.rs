@@ -10,7 +10,6 @@ use super::types::{
 };
 use crate::commands::cue_commands::recall_cue_inner;
 use crate::commands::error::IpcError;
-use crate::commands::merge_commands::macros::apply_set_macro_request;
 use crate::commands::merge_commands::move_management::{
     deactivate_all_arc, deactivate_move_arc, spawn_move, spec_from_request,
 };
@@ -555,9 +554,11 @@ pub(crate) fn fire_clip(
             }
             match spawn_move(spec_from_request(req.clone()), sh) {
                 Ok(_) => {
-                    if let Some(m) = macros {
-                        apply_set_macro_request(m, &lock_or_recover(&sh.merge_runtime));
-                    }
+                    // Transform per-move (0.8.0) : les macros du slot sont
+                    // seedées au worker par spec_from_request (payload
+                    // animation) — ne plus les appliquer au merge global
+                    // (double-application + écrasement du global opérateur).
+                    let _ = macros;
                     if offset_ms > 0 || !clip.curves.is_empty() {
                         if let Some(mv) = lock_or_recover(&sh.movements).get(&req.movement_id) {
                             if offset_ms > 0 {

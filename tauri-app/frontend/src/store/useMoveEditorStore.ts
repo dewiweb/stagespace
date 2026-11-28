@@ -207,17 +207,13 @@ export function _initAnimationThrottle(getState: () => MoveEditorStore) {
       ? gs.moveSlots.find((s) => s.id === gs.editingSlotId)?.movementId ?? undefined
       : activeMovementIds[activeMovementIds.length - 1];
     if (!movementId) return;
-    // Sémantique slot : les macros spatiales (scale/shift/rotation) vivent au
-    // niveau MERGE global (set_global_macro au launch). update_animation_state
-    // les écrit au WORKER — envoyer les valeurs réelles doublerait le
-    // transform (merge × worker). On neutralise : le worker reste neutre,
-    // le merge porte le spatial. Speed est bien per-move → envoyé tel quel.
-    const animation = gs.editingSlotId
-      ? { ...current, scale: 1.0, offset_x: 0, offset_y: 0, offset_z: 0, yaw: 0, pitch: 0, roll: 0 }
-      : current;
+    // Transform per-move (0.8.0) : les valeurs réelles partent au worker —
+    // il les applique en espace local, composées avec la transform globale
+    // du merge. Plus de neutralisation : l'édition d'un move en jeu ajuste
+    // SA transform en live, sans toucher aux autres moves ni au global.
     invoke('update_animation_state', {
       movementId,
-      animation,
+      animation: current,
     }).catch((e) => {
       console.error('Update animation state failed:', e);
       toast.error('Update animation state failed: ' + e);

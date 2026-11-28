@@ -288,6 +288,23 @@ export const throttledMoveSpeed = throttleTrailingKeyed((movementId: string, spe
     .catch((e) => console.warn('[setSlotMacros] set_move_speed failed:', e));
 }, 33);
 
+/// Push live des macros spatiales per-move (worker, espace local) —
+/// la transform du move en lecture, sans toucher au merge global.
+export const throttledMoveMacros = throttleTrailingKeyed((movementId: string, macros: MoveMacros) => {
+  invoke('set_move_macro', {
+    movementId,
+    request: {
+      scale: macros.scale,
+      shiftX: macros.shiftX,
+      shiftY: macros.shiftY,
+      shiftZ: macros.shiftZ,
+      yaw: macros.yaw,
+      pitch: macros.pitch,
+      roll: macros.roll,
+    },
+  }).catch((e) => console.warn('[setSlotMacros] set_move_macro failed:', e));
+}, 33);
+
 export function loadSetlistFromStorage(): string[] {
   const parsed = safeParseStoredJson<string[]>(SETLIST_STORAGE_KEY, []);
   return Array.isArray(parsed) ? parsed : [];

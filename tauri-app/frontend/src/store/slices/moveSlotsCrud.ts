@@ -20,6 +20,7 @@ import {
   computeTrackIndices,
   extractDuration,
   ENGINE_TYPES_WITH_N_OBJECTS,
+  throttledMoveMacros,
   throttledMoveSpeed,
 } from './moveSlotsTypes';
 
@@ -390,14 +391,13 @@ export const createSlotCrudMethods = (set: CreatorArgs[0], get: CreatorArgs[1]):
       saveSlotsToStorageDebounced(newSlots);
       return { moveSlots: newSlots };
     });
-    // Appliquer en live si le slot est en lecture
+    // Appliquer en live si le slot est en lecture — speed ET spatial sont
+    // per-move (worker, espace local) depuis 0.8.0 : la transform du move
+    // s'édite en direct sans toucher aux autres moves ni au global.
     const slot = get().moveSlots.find((s) => s.id === id);
     if (slot?.movementId) {
-      // Speed = per-move (worker) — poussé au backend, throttlé à ~30Hz.
       throttledMoveSpeed(slot.movementId, slot.macros.speed ?? 1.0);
-      // Note: les macros spatiales (scale, shift, rotation) sont globales (MergeRuntime).
-      // Elles ne sont PAS poussées ici — utiliser les macros globales de l'Inspector pour ça.
-      // Les macros spatiales du slot sont appliquées au lancement (playSlot) via set_global_macro.
+      throttledMoveMacros(slot.movementId, slot.macros);
     }
   },
 

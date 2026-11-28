@@ -278,6 +278,12 @@ pub struct MoveSnapshot {
     /// recall avec le contenu courant de la pose (positions éditables).
     #[serde(default)]
     pub anchor_pose: Option<String>,
+    /// Macros per-move du worker au moment du store (speed + transform
+    /// spatiale locale, 0.8.0) — sans elles le recall perdait la transform
+    /// du move (le modèle console historique n'en avait pas : le spatial
+    /// était global). `None` = cue ancien format → valeurs neutres.
+    #[serde(default)]
+    pub macros: Option<MacroSnapshot>,
 }
 
 fn default_move_duration() -> f64 {

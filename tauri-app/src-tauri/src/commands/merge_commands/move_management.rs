@@ -676,7 +676,16 @@ pub(crate) fn spec_from_request(request: ActivateMoveRequest) -> MoveSpec {
         direction: parse_direction(&request.direction),
         fade: request.animation.as_ref().map(|a| (a.fade_in, a.fade_out)),
         speed: request.animation.as_ref().map(|a| a.speed),
-        spatial_macros: None,
+        // Transform per-move — le worker applique scale/shift/rotation en
+        // espace local (pivot = centre de la trajectoire), composée avec la
+        // transform globale du merge (espace monde). Avant 0.8.0 : `None`
+        // et le frontend poussait le spatial au GLOBAL (modèle console
+        // « preset » — la fiction de l'audit A5).
+        spatial_macros: request.animation.as_ref().map(|a| SpatialMacroInit {
+            scale: a.scale,
+            shift: (a.offset_x, a.offset_y, a.offset_z),
+            rotation: (a.yaw, a.pitch, a.roll),
+        }),
         animation_state,
         signal_graph: request
             .animation

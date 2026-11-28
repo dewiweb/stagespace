@@ -1,11 +1,10 @@
 import React from 'react';
-import { useMoveEditorStore, Move } from '../store/useMoveEditorStore';
+import { useMoveEditorStore } from '../store/useMoveEditorStore';
 import { useGraphStore, NodeType } from '../store/useGraphStore';
 import { TrackGrid } from './TrackGrid';
 import { PARAM_SCHEMA, NODE_DESCRIPTIONS, type ParamDef, type NodeParamValue, type GraphNodeData } from './nodeParamSchema';
 import { NodeParamsPanel } from './panels/NodeParamsPanel';
 import { ParamInput } from './ParamInput';
-import type { MacrosState } from '../store/slices/macrosSlice';
 import { silentCatch } from '../utils/tauri';
 import { graphHasStatefulEngine, STATEFUL_PLAYBACK_HINT } from '../utils/graphMigration';
 
@@ -62,9 +61,6 @@ export default function Inspector() {
   const nodes = useGraphStore((s) => s.nodes);
   const updateNodeData = useGraphStore((s) => s.updateNodeData);
   const updateGraphLive = useGraphStore((s) => s.updateGraphLive);
-  const macros = useGraphStore((s) => s.macros);
-  const setMacros = useGraphStore((s) => s.setMacros);
-  const pushMacrosToRuntime = useGraphStore((s) => s.pushMacrosToRuntime);
   const editingSlotId = useGraphStore((s) => s.editingSlotId);
   const moveSlots = useGraphStore((s) => s.moveSlots);
   const selectSlotForEditing = useGraphStore((s) => s.selectSlotForEditing);
@@ -107,47 +103,9 @@ export default function Inspector() {
 
   // ── Audio mod UI ──
 
-  // ── Debounces — un timer par action : partager le même ref annulait un
-  // hot-swap graphe en attente quand un slider de macro bougeait (le param
-  // node restait dans le store sans jamais arriver au runtime). ──
-  const macroPushDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── Debounce hot-swap graphe — timer dédié (un slider de param node ne
+  // doit pas annuler un hot-swap en attente d'une autre action). ──
   const graphHotSwapDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Mapping bidirectionnel entre les noms Simple (Move state) et Expert (Graph store macros)
-  // Simple: scale, offset_x, offset_y, offset_z, yaw, pitch, roll, speed
-  // Expert: scale, shiftX,    shiftY,    shiftZ,    yaw, pitch, roll, speed
-  const SIMPLE_TO_MACRO: Record<string, string> = {
-    scale: 'scale', offset_x: 'shiftX', offset_y: 'shiftY', offset_z: 'shiftZ',
-    yaw: 'yaw', pitch: 'pitch', roll: 'roll', speed: 'speed',
-    radius_scale: 'radius_scale', height_offset: 'height_offset',
-  };
-  const MACRO_TO_SIMPLE: Record<string, string> = {
-    scale: 'scale', shiftX: 'offset_x', shiftY: 'offset_y', shiftZ: 'offset_z',
-    yaw: 'yaw', pitch: 'pitch', roll: 'roll', speed: 'speed',
-    radius_scale: 'radius_scale', height_offset: 'height_offset',
-  };
-
-  // Handler unifié : met à jour les deux stores (Move + Graph macros) + pousse vers le runtime
-  // Utilisé à la fois par les sliders Transform (Simple) et Global transform (Expert)
-  const handleUnified = (key: string, value: number, source: 'simple' | 'expert') => {
-    if (source === 'simple') {
-      // key est un nom Simple (offset_x, scale, yaw, ...)
-      updateCurrent({ [key]: value } as Partial<Move>);
-      const macroKey = SIMPLE_TO_MACRO[key];
-      if (macroKey) setMacros({ [macroKey]: value } as Partial<MacrosState>);
-    } else {
-      // key est un nom Expert (shiftX, scale, yaw, ...)
-      setMacros({ [key]: value } as Partial<MacrosState>);
-      const animKey = MACRO_TO_SIMPLE[key];
-      if (animKey) updateCurrent({ [animKey]: value } as Partial<Move>);
-    }
-    // Toujours pousser vers le runtime (debounced) — c'était manquant pour le mode Simple
-    if (macroPushDebounce.current) clearTimeout(macroPushDebounce.current);
-    macroPushDebounce.current = setTimeout(() => { pushMacrosToRuntime(); }, 100);
-  };
-
-  const handleMacro = (key: string, value: number) => handleUnified(key, value, 'expert');
-  const handleTransform = (key: string, value: number) => handleUnified(key, value, 'simple');
 
   const handleNodeParamChange = (key: string, value: NodeParamValue) => {
     if (!selectedNode) return;
@@ -343,22 +301,36 @@ export default function Inspector() {
               <Slider label="Fade out" value={current.fade_out} min={0} max={5} step={0.1} onChange={(v) => updateCurrent({ fade_out: v })} unit="s" />
             </Section>
 
-            {/* TRANSFORM — speed, scale, shift, rotation : scope PER-MOVE
-                (champs Animation du move — pas un graphe, cf. MacroScope::PerMove).
-                Radius/Height en sous-groupe « global » : ils n'existent pas
-                sur Animation — scope merge (Global transform). */}
-            <Section title="Transform" icon={<Zap size={12} />}>
-              <Slider label="Speed" value={current.speed} min={0} max={4} step={0.05} onChange={(v) => handleTransform('speed', v)} unit="x" />
-              <Slider label="Scale" value={current.scale} min={0} max={4} step={0.05} onChange={(v) => handleTransform('scale', v)} />
-              <Slider label="Shift X" value={current.offset_x} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_x', v)} />
-              <Slider label="Shift Y" value={current.offset_y} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_y', v)} />
-              <Slider label="Shift Z" value={current.offset_z} min={-5} max={5} step={0.1} onChange={(v) => handleTransform('offset_z', v)} />
-              <Slider label="Yaw" value={current.yaw} min={-180} max={180} step={1} onChange={(v) => handleTransform('yaw', v)} unit="°" />
-              <Slider label="Pitch" value={current.pitch} min={-90} max={90} step={1} onChange={(v) => handleTransform('pitch', v)} unit="°" />
-              <Slider label="Roll" value={current.roll} min={-180} max={180} step={1} onChange={(v) => handleTransform('roll', v)} unit="°" />
-              <div className="pt-1 mt-1 border-t border-gray-800 text-[10px] uppercase tracking-wider text-gray-600" title="Scope merge — tous les moves (Global transform)">— global —</div>
-              <Slider label="Radius" value={macros.radius_scale} min={0} max={4} step={0.05} onChange={(v) => handleMacro('radius_scale', v)} unit="x" />
-              <Slider label="Height" value={macros.height_offset} min={-5} max={5} step={0.1} onChange={(v) => handleMacro('height_offset', v)} unit="m" />
+            {/* MOVE TRANSFORM — vraie transform per-move (worker, espace
+                local) : scale/rotation pivotent autour du centre de la
+                trajectoire du move, shift repositionne le move dans la
+                scène. Live quand le slot joue, sans toucher aux autres
+                moves ni au global. Composée avec la Global transform. */}
+            <Section title="Move transform" icon={<Zap size={12} />}
+              badge={editingIsLive ? 'live' : undefined}>
+              <div className="text-gray-500 text-xs -mt-0.5 pb-1"
+                title="Cette transform n'affecte que ce move — scale/rotation autour du centre de sa trajectoire, shift le repositionne dans la scène. Elle se compose avec la Global transform (toute la scène, pivot = origin).">
+                This move only — scale/rotate around its own center{editingIsLive ? ' · live' : ' · effective when playing'}
+              </div>
+              <Slider label="Speed" value={current.speed} min={0} max={4} step={0.05} editable live={editingIsLive} onChange={(v) => updateCurrent({ speed: v })} unit="x" />
+              <Slider label="Scale" value={current.scale} min={0} max={4} step={0.05} editable live={editingIsLive} onChange={(v) => updateCurrent({ scale: v })} />
+              <Slider label="Shift X" value={current.offset_x} min={-5} max={5} step={0.1} editable live={editingIsLive} onChange={(v) => updateCurrent({ offset_x: v })} />
+              <Slider label="Shift Y" value={current.offset_y} min={-5} max={5} step={0.1} editable live={editingIsLive} onChange={(v) => updateCurrent({ offset_y: v })} />
+              <Slider label="Shift Z" value={current.offset_z} min={-5} max={5} step={0.1} editable live={editingIsLive} onChange={(v) => updateCurrent({ offset_z: v })} />
+              <Slider label="Yaw" value={current.yaw} min={-180} max={180} step={1} editable live={editingIsLive} onChange={(v) => updateCurrent({ yaw: v })} unit="°" />
+              <Slider label="Pitch" value={current.pitch} min={-90} max={90} step={1} editable live={editingIsLive} onChange={(v) => updateCurrent({ pitch: v })} unit="°" />
+              <Slider label="Roll" value={current.roll} min={-180} max={180} step={1} editable live={editingIsLive} onChange={(v) => updateCurrent({ roll: v })} unit="°" />
+            </Section>
+
+            {/* GLOBAL TRANSFORM — scope merge : toute la scène, pivot =
+                origin. Même contrôle qu'en mode Expert et dans le drawer Jeu. */}
+            <Section title="Global transform" icon={<Zap size={12} />} defaultOpen={false}
+              badge={activeMovementIds.length > 0 ? `${activeMovementIds.length} live` : undefined}>
+              <div className="text-gray-500 text-xs -mt-0.5 pb-1"
+                title="Transforme toute la scène — tous les moves, pivot = origin de la scène (isobarycentre des tracks). Se compose avec les Move transforms per-move.">
+                Whole scene — around the scene origin
+              </div>
+              <GlobalTransformSurface includeRadius live />
             </Section>
           </>
         )}

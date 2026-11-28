@@ -562,7 +562,7 @@ export default function MovesTable() {
             widthClass="max-w-sm"
           >
             <div className="p-4">
-              <p className="text-gray-500 text-xs mb-3">Applied on launch and GO</p>
+              <p className="text-gray-500 text-xs mb-3" title="Transform per-move du slot — scale/rotation autour du centre de sa trajectoire, live pendant la lecture">This move&apos;s transform — live while playing</p>
               <div className="space-y-2">
                 {([
                   { key: 'speed', label: 'Speed', min: 0.1, max: 4, step: 0.1 },

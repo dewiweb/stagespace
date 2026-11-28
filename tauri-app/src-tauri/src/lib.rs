@@ -35,7 +35,7 @@ use commands::merge_commands::{
     list_channel_modulations, list_effective_channels, list_graph_effects, list_spatial_channels,
     list_zones, remove_channel_modulation, remove_zone, set_global_macro, set_global_origin,
     set_global_osc_ids, set_kinematic_smoothing, set_manual_position, set_merge_strategy,
-    set_move_playback_mode, set_move_priority, set_move_speed, set_move_weight,
+    set_move_macro, set_move_playback_mode, set_move_priority, set_move_speed, set_move_weight,
     set_spatial_channel, set_track_depths, set_track_position, set_track_positions, throw_object,
     update_global_graph, update_move_graph_merged, update_signal_graph, update_zone,
 };
@@ -537,6 +537,7 @@ pub fn stagespace_invoke_handler<R: tauri::Runtime>(invoke: tauri::ipc::Invoke<R
         deactivate_all_moves,
         set_merge_strategy,
         set_global_macro,
+        set_move_macro,
         set_move_speed,
         set_move_playback_mode,
         set_move_weight,
@@ -748,6 +749,10 @@ mod supervisor_test_file;
 #[cfg(test)]
 #[path = "tests/param_modulation_tests.rs"]
 mod param_modulation_test_file;
+
+#[cfg(test)]
+#[path = "tests/per_move_transform_tests.rs"]
+mod per_move_transform_test_file;
 
 #[cfg(test)]
 #[path = "tests/show_control_e2e_tests.rs"]

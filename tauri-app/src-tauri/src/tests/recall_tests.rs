@@ -214,6 +214,7 @@ mod recall_tests {
             anchor_mode: None,
             anchor_target: None,
             anchor_pose: None,
+            macros: None,
         }];
         recall_cue_inner(cue, sh.clone()).expect("recall with respawn");
 
@@ -297,6 +298,7 @@ mod recall_tests {
             anchor_mode: None,
             anchor_target: None,
             anchor_pose: None,
+            macros: None,
         }];
         recall_cue_inner(cue, sh.clone()).expect("recall");
 
