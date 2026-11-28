@@ -182,6 +182,7 @@ pose est un composant de sélection visuelle déjà disponible.
 | ~~B3~~ plugin-examples — **traité** : clés `ports` obsolètes retirées des 3 manifests, chemin packer lemniscate corrigé | ~~S~~ | audit 0.7.0 |
 | ~~B4~~ Exemple enrichi — **traité** : 3 poses canoniques dans le .hfg, round-trip live vérifié, 10/10 tests gardiens | ~~S~~ | captures |
 | B5 | Question sémantique du geste/axe `front` — contradiction gelée, à trancher | — | gelé en 0.6.x |
+| ~~B8~~ Faux positif « missing required node signalout » — **traité** : le validateur exigeait SignalOut même sur graphe vide, alors que vide = « pas de modulation » (état par défaut, accepté comme reset à la compile). Tout utilisateur ouvrant l'onglet Modulation d'un move sans modulation voyait « 1 error ». Fix : exigence seulement si le graphe est non-vide + test de régression | ~~S~~ | validation owner A2.1, 28 nov. |
 | B6 | **Bug de sérialisation du signal graph global** : `buildShowEnvelope` écrit le *buffer d'édition courant* du signal store dans la section globale du show, quel que soit le contexte — un Ctrl+S pendant l'édition d'une modulation de slot écrit le graphe per-move (cibles `param:`) dans la section globale ; au reload il échoue à compiler (scope global sans nodes) et le vrai graphe global est perdu du fichier. Fix : sérialiser depuis la source canonique (localStorage global) ou flusher/rebasculer le contexte avant sauvegarde. La copie per-move dans les slots est saine (écrite en continu). | S | analyse scope A2, 28 nov. |
 
 ---

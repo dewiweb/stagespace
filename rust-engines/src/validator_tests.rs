@@ -1202,6 +1202,37 @@ mod diagnose_tests {
     }
 
     #[test]
+    fn diagnose_signal_empty_graph_is_valid() {
+        // Le graph signal vide = « pas de modulation » — état légitime et
+        // par défaut de tout move. Les chemins de compile le traitent comme
+        // reset (empty_signal_fn) ; le diagnostic ne doit pas exiger un
+        // SignalOut sur un canvas vide (faux positif « 1 error » systématique
+        // à l'ouverture de l'onglet Modulation — constaté en session owner).
+        let g = Graph::new();
+        let issues = diagnose(&g, GraphContext::Signal, None);
+        assert!(
+            !issues.iter().any(|i| i.severity == IssueSeverity::Error),
+            "empty signal graph must not error: {issues:?}"
+        );
+
+        // Non-vide sans terminal → l'erreur reste exigée.
+        let mut g = Graph::new();
+        let c = node(
+            NodeType::SignalConst,
+            "k",
+            serde_json::json!({"value": 1.0}),
+        );
+        g.add_node(c);
+        let issues = diagnose(&g, GraphContext::Signal, None);
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.severity == IssueSeverity::Error && i.message.contains("SignalOut")),
+            "non-empty graph without SignalOut must error: {issues:?}"
+        );
+    }
+
+    #[test]
     fn diagnose_signal_param_target() {
         // SignalOut avec cible invalide → erreur sur le node SignalOut.
         let move_g = valid_move_graph();

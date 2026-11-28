@@ -163,11 +163,15 @@ impl Validator {
             GraphContext::Signal => {
                 // Le terminal du domaine signal est SignalOut — un graph
                 // sans sink compile mais ne produit aucun delta.
+                // Exception : le graph vide est l'état « pas de modulation »
+                // (légitime — les chemins de compile le traitent comme reset
+                // via `empty_signal_fn`). L'exiger ici serait un faux positif
+                // sur l'état par défaut de tout move.
                 let has_out = graph
                     .nodes
                     .values()
                     .any(|n| n.node_type == NodeType::SignalOut);
-                if !has_out {
+                if !has_out && !graph.nodes.is_empty() {
                     errors.push((
                         ValidationError::MissingRequiredNode(NodeType::SignalOut),
                         vec![],
