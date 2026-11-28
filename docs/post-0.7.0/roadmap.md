@@ -156,17 +156,17 @@ pose est un composant de sélection visuelle déjà disponible.
 
 | # | Item | Taille | Origine |
 |---|------|--------|---------|
-| B1 | Poseramp endpoint exact à t=T — frame finale manquante, ~11 cm d'écart sur expo_in | M | sessions 0.7.0, spec violée « au centimètre près » |
+| ~~B1~~ Poseramp endpoint — **traité** : frame finale exacte à t=T avant la sortie du worker (+ fade-out clampé à 0), test de régression dédié | ~~M~~ | sessions 0.7.0 |
 | B2 | Findings F1–F5 de la validation e2e 0.6.8 | ? | e2e-validation-0.6.8.md (dossier courant) |
-| B3 | plugin-examples : README chemins/ports périmés + clé `ports` informative obsolète | S | audit plugins 0.7.0 |
-| B4 | Re-sauvegarde enrichie de `examples/full-feature-show.hfg` (poses, moteurs récents) | S | chantier captures |
+| ~~B3~~ plugin-examples — **traité** : clés `ports` obsolètes retirées des 3 manifests, chemin packer lemniscate corrigé | ~~S~~ | audit 0.7.0 |
+| ~~B4~~ Exemple enrichi — **traité** : 3 poses canoniques dans le .hfg, round-trip live vérifié, 10/10 tests gardiens | ~~S~~ | captures |
 | B5 | Question sémantique du geste/axe `front` — contradiction gelée, à trancher | — | gelé en 0.6.x |
 
 ---
 
 ## Phasage proposé
 
-**0.7.x (patchs)** — B1 (viol de spec poseramp), B3, B4 · pas de features
+**0.7.x (patchs)** — ~~B1, B3, B4~~ **traités** (28 nov.) — la voie est libre pour 0.8.0
 
 **0.8.0 « ergonomie & vérité »** — le lot cohérent UX+doc, faisable sans
 changement architectural :
