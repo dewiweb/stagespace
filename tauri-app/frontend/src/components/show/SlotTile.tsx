@@ -1,26 +1,10 @@
 import React from 'react';
 import { Play, Square, SlidersHorizontal } from 'lucide-react';
 import { SOURCE_BADGE } from '../../utils/sourceColors';
+import { formatTrackIds } from '../../utils/trackIds';
 
-/// Tracks condensés en plages pour la lisibilité pad : 64 tracks = mur
-/// de chiffres, «1-32» se lit en un clin d'œil. Les tracks parkés ⏸
-/// sortent de la plage pour garder leur marqueur.
-function formatTrackIds(trackIds: number[], parked: number[]): string {
-  const parkedSet = new Set(parked);
-  const parts: string[] = [];
-  let i = 0;
-  while (i < trackIds.length) {
-    const t = trackIds[i];
-    if (parkedSet.has(t)) { parts.push(`${t}⏸`); i++; continue; }
-    // Plage de tracks consécutifs non parkés
-    let j = i;
-    while (j + 1 < trackIds.length && !parkedSet.has(trackIds[j + 1]) && trackIds[j + 1] === trackIds[j] + 1) j++;
-    if (j - i >= 2) parts.push(`${trackIds[i]}-${trackIds[j]}`);
-    else for (let k = i; k <= j; k++) parts.push(`${trackIds[k]}`);
-    i = j + 1;
-  }
-  return parts.join(' ');
-}
+// Tracks condensés en plages — l'implémentation est partagée
+// (utils/trackIds, A6) : pads, table des moves, même lecture.
 
 /// Tuile de slot unifiée — un seul composant pour le rendu live d'un move
 /// (ex-renderPad + ex-renderSlotRow, deux implémentations divergentes dans

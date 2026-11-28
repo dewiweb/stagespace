@@ -175,9 +175,9 @@ pose est un composant de sélection visuelle déjà disponible.
 
 | # | Item | Taille |
 |---|------|--------|
-| A6.1 | Syntaxe ranges dans l'input (`1-4, 7, 9-12`) — parseur partagé avec le CLI | S |
-| A6.2 | Picker visuel TrackGrid dans le node Objects (popup ou inline) | M |
-| A6.3 | Affichage compact/chips lisible des ids dans les pads et listes | S |
+| ~~A6.1~~ | ~~Syntaxe ranges~~ — **traité** (lot 3, 28 nov.) : `utils/trackIds.ts` parse/format partagés (miroir du parseur CLI — ranges inclusives, mixité, ranges inversées acceptées, cap anti-typo), 12 tests. Le node Objects accepte `1-4, 7, 9-12` | ~~S~~ |
+| ~~A6.2~~ | ~~Picker visuel~~ — **traité** : bouton grille dans le champ Linked Tracks du node Objects → modal TrackGrid (même composant que le picker de la table) | ~~M~~ |
+| ~~A6.3~~ | ~~Affichage compact~~ — **traité** : format condensé partagé (`1-4, 7` au lieu de `1,2,3,4+3`) dans la table des moves ; SlotTile dédupliqué vers l'util | ~~S~~ |
 
 ---
 
@@ -203,7 +203,7 @@ pose est un composant de sélection visuelle déjà disponible.
 
 **0.8.0 « ergonomie & vérité »** — le lot cohérent UX+doc, faisable sans
 changement architectural :
-- ~~A5.1+A5.2~~ transform — **traitée autrement** : vraie per-move + global clarifiés (lot 2, 28 nov.) · A6.1+A6.2+A6.3 track IDs
+- ~~A5.1+A5.2~~ transform (lot 2) · ~~A6.1+A6.2+A6.3~~ track IDs (lot 3) — **traités**, 28 nov.
 - A3.1+A3.2+A3.3 toggles viewers
 - A2.2+A2.3+A2.4 accès modulation (~~prérequis A2.1~~ **validé** le 28 nov. —
   le cœur fonctionne, le problème est l'invisibilité du scope)

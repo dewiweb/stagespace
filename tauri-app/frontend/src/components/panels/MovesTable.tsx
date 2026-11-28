@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatTrackIds } from '../../utils/trackIds';
 import { CircleDot, Play, Square, RefreshCw, Pencil, SlidersHorizontal, X, Star, ChevronDown, Copy } from 'lucide-react';
 import { useGraphStore } from '../../store/useGraphStore';
 import { useMoveEditorStore } from '../../store/useMoveEditorStore';
@@ -386,9 +387,8 @@ export default function MovesTable() {
                       >
                         {slot.trackIds.length}tr
                       </button>
-                      <div className="text-xs text-gray-400 mt-0.5 truncate max-w-[80px]">
-                        {slot.trackIds.slice(0, 4).join(',')}
-                        {slot.trackIds.length > 4 && `+${slot.trackIds.length - 4}`}
+                      <div className="text-xs text-gray-400 mt-0.5 truncate max-w-[80px]" title={slot.trackIds.join(', ')}>
+                        {formatTrackIds(slot.trackIds)}
                       </div>
                       {(contestedBySlot.get(slot.id)?.length ?? 0) > 0 && (
                         <div

@@ -6,6 +6,7 @@ import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { PARAM_SCHEMA, pluginNodeSchema, pluginParamsOnSwitch, type ParamDef, type NodeParamValue, type GraphNode } from './nodeParamSchema';
 import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts, getOutputPorts, PORT_COLORS } from '../utils/connectionRules';
+import { parseTrackIds } from '../utils/trackIds';
 import { signalTargetOptions, modulatedParamKeys, signalTargetLabel } from '../utils/signalTargets';
 import { LinkedTracksField, NODE_INPUT_CLS } from './editor/LinkedTracksField';
 import { ParamInput } from './ParamInput';
@@ -182,14 +183,18 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
   const trackIdsValue = trackIdsText !== null
     ? trackIdsText
     : Array.isArray(rawTrackIds) ? rawTrackIds.join(', ') : String(rawTrackIds ?? '');
-  const commitTrackIds = () => {
-    const ids = (trackIdsText ?? '')
-      .split(',')
-      .map((s) => parseInt(s.trim(), 10))
-      .filter((n) => !isNaN(n));
+  const applyTrackIds = (ids: number[]) => {
     handleChange('track_ids', ids);
     handleChange('n_objects', ids.length);
     useGraphStore.getState().setManualOscIds(ids);
+  };
+  const commitTrackIds = () => {
+    // Syntaxe ranges partagée avec le CLI (A6.1) : "1-4, 7, 9-12".
+    applyTrackIds(parseTrackIds(trackIdsText ?? ''));
+    setTrackIdsText(null);
+  };
+  const pickTrackIds = (ids: number[]) => {
+    applyTrackIds(ids);
     setTrackIdsText(null);
   };
 
@@ -355,6 +360,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
                 value={trackIdsValue}
                 onChangeText={setTrackIdsText}
                 onCommit={commitTrackIds}
+                onPick={pickTrackIds}
                 ids={(data.params?.track_ids as number[]) ?? []}
                 maxShown={16}
               />
@@ -380,6 +386,7 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
             value={trackIdsValue}
             onChangeText={setTrackIdsText}
             onCommit={commitTrackIds}
+            onPick={pickTrackIds}
             ids={(data.params?.track_ids as number[]) ?? []}
             maxShown={12}
           />
