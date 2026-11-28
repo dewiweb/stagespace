@@ -7,7 +7,6 @@
   "kind": "modifier",
   "category": "Plugins",
   "description": "Oscillation circulaire (xz) autour de la trajectoire upstream — exemple ABI v2 modifier",
-  "ports": { "inputs": ["input"], "outputs": ["trajectory"] },
   "params": [
     {
       "key": "amp",

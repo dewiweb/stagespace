@@ -7,7 +7,6 @@
   "kind": "engine",
   "category": "Plugins",
   "description": "Figure-∞ horizontale (lemniscate de Bernoulli), objets déphasés le long de la courbe",
-  "ports": { "inputs": ["input", "duration"], "outputs": ["trajectory"] },
   "params": [
     {
       "key": "scale",

@@ -7,7 +7,6 @@
   "kind": "composite",
   "category": "Plugins",
   "description": "Blend paramétrique entre deux trajectoires : result = a·(1−w) + b·w — exemple ABI v2 composite",
-  "ports": { "inputs": ["input_a", "input_b"], "outputs": ["trajectory"] },
   "params": [
     {
       "key": "w",

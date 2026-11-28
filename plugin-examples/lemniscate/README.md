@@ -7,7 +7,7 @@ SDK → wasm32 → `.ssx` → STAGESPACE runtime pipeline.
 
 ```bash
 cargo build --release --target wasm32-unknown-unknown
-../plugin-sdk/target/release/stagespace-pack manifest.json \
+../../plugin-sdk/target/debug/stagespace-pack manifest.json \
     target/wasm32-unknown-unknown/release/lemniscate.wasm -o lemniscate.ssx
 ```
 
