@@ -42,9 +42,27 @@ params portent un flag `modulable` (spec ts-rs), les slots sont stables
 à travers recompiles et relus live. Le LFO positionnel (x/y/z/all) que
 l'audit mentionne est un *modificateur de position* sans rapport.
 
-**Le vrai problème : découvrabilité.** Le modèle mental attendu
-(Max/MSP : tirer un câble vers le param) n'est pas celui d'un graphe
-séparé dans un onglet.
+**Les deux scopes existent, câblés end-to-end** (vérifié au code,
+28 nov.) : per-move (`update_signal_graph` avec `movement_id` — graphe
+du move recompilé avec le signal, table de slots partagée, swap
+atomique ; persisté dans le document de chaque slot) **et** global
+(`movement_id` null — MergeRuntime, cibles macros uniquement, `param:`
+rejeté à la compile par construction ; persisté dans la section
+top-level du show + localStorage). Le chemin d'édition principal est
+même per-move : l'onglet signal édite la modulation **du slot ouvert
+dans l'éditeur**.
+
+**Le vrai problème : découvrabilité — et invisibilité du modèle de
+scope.** Le modèle mental attendu (Max/MSP : tirer un câble vers le
+param) n'est pas celui d'un graphe séparé dans un onglet. Et le
+scope lui-même est invisible : rien dans l'onglet n'indique si l'on
+édite la modulation *de ce move* ou la modulation *globale* ; l'accès
+au global est enfoui derrière le bouton « All » du drawer live
+(`editingSlotId = null`) ; les ModChips ne distinguent pas l'origine
+(macro globale vs param per-move). Conséquence : même un utilisateur
+qui trouve l'onglet ne peut pas construire le bon modèle mental.
+Corollaire technique : la confusion de scope a déjà produit un bug
+de sérialisation — voir **B6**.
 
 **À vérifier d'abord** (bloquant la suite) : l'owner teste l'onglet
 Modulation existant et confirme/infirme qu'il fait le job fonctionnellement.
@@ -54,8 +72,11 @@ Modulation existant et confirme/infirme qu'il fait le job fonctionnellement.
 | A2.1 | Validation owner du domaine signal existant | — | prérequis, aucune prod |
 | A2.2 | Clic-droit sur param modulable → « Modulate » créant un SignalOut pré-câblé | M | raccourci d'accès, pas nouveau moteur |
 | A2.3 | Dot-modulation cliquable (navigue vers la modulation source) | S | |
-| A2.4 | Section manuel + capture dédiée au domaine signal | S | |
+| A2.4 | Section manuel + capture dédiée au domaine signal — y compris le **modèle de scope** per-move/global | S | |
 | A2.5 | Limite by design à documenter : params structurels non modulables (compile-baked) | — | doc seulement |
+| A2.6 | Badge de scope dans l'onglet signal : « modulation de ce move » vs « modulation globale » explicite en permanence | S | clarification UX |
+| A2.7 | Accès explicite à la modulation globale (aujourd'hui enfoui derrière « All » du drawer live) — entrée dédiée, p.ex. dans l'inspecteur global ou le menu | S | clarification UX |
+| A2.8 | ModChips distinguent l'origine : macro globale vs `param:` per-move | S | clarification UX |
 
 ## A3 — Toggles de visibilité multi-accès
 
@@ -161,6 +182,7 @@ pose est un composant de sélection visuelle déjà disponible.
 | ~~B3~~ plugin-examples — **traité** : clés `ports` obsolètes retirées des 3 manifests, chemin packer lemniscate corrigé | ~~S~~ | audit 0.7.0 |
 | ~~B4~~ Exemple enrichi — **traité** : 3 poses canoniques dans le .hfg, round-trip live vérifié, 10/10 tests gardiens | ~~S~~ | captures |
 | B5 | Question sémantique du geste/axe `front` — contradiction gelée, à trancher | — | gelé en 0.6.x |
+| B6 | **Bug de sérialisation du signal graph global** : `buildShowEnvelope` écrit le *buffer d'édition courant* du signal store dans la section globale du show, quel que soit le contexte — un Ctrl+S pendant l'édition d'une modulation de slot écrit le graphe per-move (cibles `param:`) dans la section globale ; au reload il échoue à compiler (scope global sans nodes) et le vrai graphe global est perdu du fichier. Fix : sérialiser depuis la source canonique (localStorage global) ou flusher/rebasculer le contexte avant sauvegarde. La copie per-move dans les slots est saine (écrite en continu). | S | analyse scope A2, 28 nov. |
 
 ---
 
@@ -173,8 +195,10 @@ changement architectural :
 - A5.1+A5.2 transform honnête · A6.1+A6.2+A6.3 track IDs
 - A3.1+A3.2+A3.3 toggles viewers
 - A2.2+A2.3+A2.4 accès modulation (après validation A2.1)
+- A2.6+A2.7+A2.8 clarification du scope modulation per-move/global
 - A4.1+A4.5 infra doc minimale (skeleton + lint)
-- B2 si périmètre confirmé
+- B2 si périmètre confirmé · B6 (fix sérialisation signal — petit,
+  pourrait aussi passer en patch 0.7.x si on veut le sortir vite)
 
 **0.9.0 « documentation structurée »** — A4.2+A4.3+A4.4 : le livre
 complet en ligne et in-app, cas d'usage.
