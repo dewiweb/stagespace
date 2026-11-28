@@ -171,11 +171,15 @@ A **pose** is a named snapshot of track positions (backend-owned,
 saved in the `.hfg`). Poses are busking material: instant or animated
 recall, partial by nature — tracks outside the pose don't move.
 
+![Pose-pads wall — tap = snap, hold = goto, capture in the header](screenshots/19-pose-pads.png)
+
 - **Capture**: type a name in the left-column **POSES** tab (`● cap`) or
   hit **+ capture** in the pad wall header — the capture modal embeds a
   track picker (all checked = capture every known position, including
   tracks added later). Captured positions are the live ones: manual,
   move holds, or moving objects.
+![Poses tab — capture row, per-pose snap/goto/morph](screenshots/20-poses-left-tab.png) ![Capture modal — name + track picker](screenshots/21-pose-capture.png)
+
 - **Recall** per pose row (Poses panel): **snap** = instant (manual
   positions) · **goto** = animated ramp, duration and easing chosen in
   the panel header · **A→B morph** = pick a source pose `A`, then morph
@@ -474,7 +478,7 @@ Backend failures surface as **sticky toasts** (bottom-right) — graph
 validation, failed show load, panel crash. A rejected OSC command gets a
 `/stagespace/nack <reason>` back to the sender.
 
-![Error toasts — graph push failed, show load reverted, panel crash](screenshots/13-atelier-orbe.png)
+![Error toasts — backend refusals surface as bottom-right notifications](screenshots/13-atelier-orbe.png)
 | Move playing in silence | Tracks outside OSC list / dry-run | `LIVE` vs `DRY-RUN` + OSC destination in StatusBar |
 | Everything frozen, unresponsive | Dead backend | **BACKEND ✕** chip in StatusBar |
 | Black conduite window | Main window closed / not broadcasting | "WAITING FOR MAIN WINDOW…" |
@@ -693,6 +697,8 @@ engines. SDK: `plugin-sdk/` + `plugin-examples/`.
 | **Renderer discovery** | `Discover renderers` in Settings — scan available OSC outs |
 
 ## H. Monitoring panels
+
+![Score surface — dopesheet editor, lanes, transport](screenshots/22-score.png)
 
 - **Score** — the multitrack sequencer surface (a first-class surface,
   not a panel): clip timeline (move
