@@ -77,6 +77,7 @@ Modulation existant et confirme/infirme qu'il fait le job fonctionnellement.
 | A2.6 | Badge de scope dans l'onglet signal : « modulation de ce move » vs « modulation globale » explicite en permanence | S | clarification UX |
 | A2.7 | Accès explicite à la modulation globale (aujourd'hui enfoui derrière « All » du drawer live) — entrée dédiée, p.ex. dans l'inspecteur global ou le menu | S | clarification UX |
 | A2.8 | ModChips distinguent l'origine : macro globale vs `param:` per-move | S | clarification UX |
+| A2.9 | Cohérence de labeling du dropdown SignalOut : la valeur sélectionnée s'affiche brute (`param:Circular:radius`) alors que les entrées de liste sont humanisées (`Circular - Radius (#2)`) — unifier. Précision des inputs numériques : frequency injectée 0.4 affichée 0.49 — quantization de slider à supprimer pour les params modulables en continu | S | session owner 28 nov. |
 
 ## A3 — Toggles de visibilité multi-accès
 
@@ -183,6 +184,8 @@ pose est un composant de sélection visuelle déjà disponible.
 | ~~B4~~ Exemple enrichi — **traité** : 3 poses canoniques dans le .hfg, round-trip live vérifié, 10/10 tests gardiens | ~~S~~ | captures |
 | B5 | Question sémantique du geste/axe `front` — contradiction gelée, à trancher | — | gelé en 0.6.x |
 | ~~B8~~ Faux positif « missing required node signalout » — **traité** : le validateur exigeait SignalOut même sur graphe vide, alors que vide = « pas de modulation » (état par défaut, accepté comme reset à la compile). Tout utilisateur ouvrant l'onglet Modulation d'un move sans modulation voyait « 1 error ». Fix : exigence seulement si le graphe est non-vide + test de régression | ~~S~~ | validation owner A2.1, 28 nov. |
+| B7 | **Console web/remote sans chargement de show** : File→Open utilise le dialog natif Tauri, inexistant dans un navigateur — or le dev-bridge sert explicitement l'opération à distance (`0.0.0.0:4173`). Fallback requis : saisie d'un chemin serveur (résolu côté backend, comme `/stagespace/show/load`) ou upload fichier→temp backend. Le flux doit aussi proposer « stop & load ? » au lieu du refus sec pendant la lecture (le garde est correct, le UX non), et vérifier la visibilité du toast de refus | M | session owner 28 nov. |
+| B9 | **Resync d'état d'une page fraîchement connectée** : un browser qui se connecte au bridge après le chargement d'un show ne resynchronise pas les slots (état purement frontend, aucune réconciliation au boot) — cause des échecs de capture en série puppeteer. À caractériser : faut-il un bootstrap d'état backend→frontend ou documenter la limitation ? | M | chantier captures + session A2.1 |
 | B6 | **Bug de sérialisation du signal graph global** : `buildShowEnvelope` écrit le *buffer d'édition courant* du signal store dans la section globale du show, quel que soit le contexte — un Ctrl+S pendant l'édition d'une modulation de slot écrit le graphe per-move (cibles `param:`) dans la section globale ; au reload il échoue à compiler (scope global sans nodes) et le vrai graphe global est perdu du fichier. Fix : sérialiser depuis la source canonique (localStorage global) ou flusher/rebasculer le contexte avant sauvegarde. La copie per-move dans les slots est saine (écrite en continu). | S | analyse scope A2, 28 nov. |
 
 ---
@@ -200,6 +203,8 @@ changement architectural :
 - A4.1+A4.5 infra doc minimale (skeleton + lint)
 - B2 si périmètre confirmé · B6 (fix sérialisation signal — petit,
   pourrait aussi passer en patch 0.7.x si on veut le sortir vite)
+- B7 console web (fallback chargement + « stop & load ? ») · B9 resync état
+  — les deux ensemble : même chantier « opération à distance »
 
 **0.9.0 « documentation structurée »** — A4.2+A4.3+A4.4 : le livre
 complet en ligne et in-app, cas d'usage.
