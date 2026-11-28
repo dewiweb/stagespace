@@ -104,6 +104,7 @@ export const NodeEditor: React.FC = () => {
   const pushSignalGraph = useSignalGraphStore((s) => s.pushSignalGraph);
   const resetSignalToDefault = useSignalGraphStore((s) => s.resetToDefault);
   const setSignalContext = useSignalGraphStore((s) => s.setContext);
+  const signalContext = useSignalGraphStore((s) => s.context);
 
   // Le tab Mods édite la modulation du slot en cours d'édition (per-move,
   // cibles `param:`) quand un slot est sélectionné — sinon le global.
@@ -645,6 +646,46 @@ export const NodeEditor: React.FC = () => {
         </button>
         {activeTab === 'signal' && (
           <>
+            {/* Sélecteur de scope (A2.6/7) — quel graphe de modulation
+                est édité : celui DU SLOT en cours (cibles param: liées à
+                son graphe) ou le GLOBAL (macros du MergeRuntime). Sans
+                ce contrôle le scope est invisible et l'accès au global
+                dépend du bouton « All » du drawer — indécouvrable. */}
+            <span className="flex items-center ml-1 rounded overflow-hidden border border-stagespace-modulation/40 text-xs select-none">
+              <button
+                onClick={() => {
+                  if (!editingSlotId) return;
+                  const g = moveSlots.find((sl) => sl.id === editingSlotId)?.signalGraph ?? null;
+                  setSignalContext(editingSlotId, g);
+                }}
+                disabled={!editingSlotId}
+                className={`px-2 py-0.5 transition-colors ${
+                  signalContext !== 'global'
+                    ? 'bg-stagespace-modulation text-gray-950 font-medium'
+                    : editingSlotId
+                      ? 'bg-gray-800/60 text-gray-400 hover:text-white'
+                      : 'bg-gray-800/60 text-gray-600 cursor-not-allowed'
+                }`}
+                title={
+                  editingSlotId
+                    ? `Edit the modulation of THIS move — param: targets bound to its graph`
+                    : 'No slot selected — per-move modulation needs a slot open in the editor'
+                }
+              >
+                Move{editingSlotName ? `: ${editingSlotName}` : ''}
+              </button>
+              <button
+                onClick={() => setSignalContext(null)}
+                className={`px-2 py-0.5 transition-colors ${
+                  signalContext === 'global'
+                    ? 'bg-stagespace-modulation text-gray-950 font-medium'
+                    : 'bg-gray-800/60 text-gray-400 hover:text-white'
+                }`}
+                title="Edit the GLOBAL modulation — macro targets (yaw, scale…) applied to the whole mix"
+              >
+                Global
+              </button>
+            </span>
             <div className="flex-1" />
             <button
               onClick={() => resetSignalToDefault()}

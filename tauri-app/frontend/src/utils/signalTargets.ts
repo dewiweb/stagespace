@@ -76,6 +76,33 @@ export function signalTargetOptions(moveNodes: GraphNode[]): SignalTargetOption[
   return opts;
 }
 
+
+/// Label friendly d'une cible — utilisé pour le fallback du select quand
+/// la valeur courante n'est pas dans les options générées (cible type-wide
+/// à une instance, node supprimé, graphe rechargé). Rendre la valeur brute
+/// `param:Circular:radius` alors que la liste parle de `Circular · Radius`
+/// brouille le modèle mental (A2.9).
+export function signalTargetLabel(target: string, moveNodes: GraphNode[]): string {
+  if (!target.startsWith('param:')) {
+    return (MACRO_TARGETS as readonly string[]).includes(target)
+      ? `Macro · ${target}`
+      : target;
+  }
+  const rest = target.slice('param:'.length);
+  const sep = rest.indexOf(':');
+  if (sep < 0) return target;
+  const seg = rest.slice(0, sep);
+  const key = rest.slice(sep + 1);
+  // seg = id de node (instance) ou type (type-wide) — chercher les deux.
+  const byId = moveNodes.find((n) => n.id === seg);
+  const type = (byId?.data.type as NodeType | undefined) ?? (seg as NodeType);
+  const spec = NODE_SPECS.find((sp) => sp.node_type === type);
+  const paramLabel = spec?.params.find((p) => p.key === key)?.label ?? key;
+  if (byId) return `${type} · ${paramLabel} (${shortId(seg)})`;
+  if (spec) return `All ${type} · ${paramLabel}`;
+  return target;
+}
+
 /// Clés des params de `node` ciblés par un SignalOut du graphe signal —
 /// utilisé pour l'indicateur "modulé" sur les rows de params du sub-graph.
 export function modulatedParamKeys(

@@ -6,7 +6,7 @@ import { useGlobalGraphStore } from '../store/useGlobalGraphStore';
 import { useSignalGraphStore } from '../store/useSignalGraphStore';
 import { PARAM_SCHEMA, pluginNodeSchema, pluginParamsOnSwitch, type ParamDef, type NodeParamValue, type GraphNode } from './nodeParamSchema';
 import { isSourceNode, isTerminalNode, isBinaryComposite, getInputPorts, getOutputPorts, PORT_COLORS } from '../utils/connectionRules';
-import { signalTargetOptions, modulatedParamKeys } from '../utils/signalTargets';
+import { signalTargetOptions, modulatedParamKeys, signalTargetLabel } from '../utils/signalTargets';
 import { LinkedTracksField, NODE_INPUT_CLS } from './editor/LinkedTracksField';
 import { ParamInput } from './ParamInput';
 import { PORT_TEXT_COLORS } from '../utils/connectionRules';
@@ -153,7 +153,9 @@ const CustomNode: React.FC<NodeProps<AppNode>> = ({ data, id }) => {
         >
           <option value="">(inert)</option>
           {current !== '' && !options.some((o) => o.value === current) && (
-            <option value={current}>{current}</option>
+            // Cible valide hors options générées (type-wide à une instance,
+            // node édité depuis) — label friendly, pas la valeur brute (A2.9).
+            <option value={current}>{signalTargetLabel(current, moveNodes as unknown as GraphNode[])}</option>
           )}
           {options.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>

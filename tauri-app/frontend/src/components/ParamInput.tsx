@@ -97,6 +97,10 @@ export const ParamInput: React.FC<{
             step={def.step ?? 0.1}
             layout="stack"
             live={compact ? undefined : live}
+            // Saisie libre au clic sur la valeur — le drag du range est
+            // quantifié au step, un param précis (fréquence de modulation
+            // accordée, ratio fin) doit pouvoir être tapé exactement (A2.9).
+            editable
             onChange={onChange}
           />
         );

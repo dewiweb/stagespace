@@ -64,6 +64,11 @@ export function buildDefaultSignalGraph(): { nodes: GraphNode[]; edges: Edge[] }
 interface SignalGraphState {
   nodes: GraphNode[];
   edges: Edge[];
+  /// Copie canonique du graphe GLOBAL — le seul domicile en mémoire qui
+  /// ne dépende pas du contexte d'édition. nodes/edges ne sont le graphe
+  /// global QUE lorsque context === 'global' ; `global` l'est toujours.
+  /// Consommateurs : buildShowEnvelope (B6), ModChips (A2.8).
+  global: { nodes: GraphNode[]; edges: Edge[] };
   /// 'global' = modulation du MergeRuntime (macros) ; slotId = modulation
   /// per-move (cibles `param:` liées au graphe du slot).
   context: 'global' | string;
@@ -103,6 +108,10 @@ function saveToStorage(nodes: GraphNode[], edges: Edge[]) {
 function persist(state: SignalGraphState, nodes: GraphNode[], edges: Edge[]) {
   if (state.context === 'global') {
     saveToStorage(nodes, edges);
+    // En contexte global le buffer EST le graphe global — la copie
+    // canonique suit chaque édition. Référence différée : persist ne
+    // s'exécute qu'après création du store.
+    useSignalGraphStore.setState({ global: { nodes, edges } });
   } else {
     // Accès différé (cycle useGraphStore → persistenceSlice → ce module).
     useGraphStore.getState().setSlotSignalGraph(state.context, { nodes, edges });
@@ -145,6 +154,7 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
   // jamais imposée.
   nodes: _stored?.nodes ?? [],
   edges: _stored?.edges ?? [],
+  global: { nodes: _stored?.nodes ?? [], edges: _stored?.edges ?? [] },
   context: 'global',
 
   setNodes: (nodes) => {
@@ -166,14 +176,15 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
     // pas pouvoir le restaurer ici.
     history.clear();
     if (ctx === 'global') {
-      // Relire le storage frais — _stored est figé au chargement du
-      // module : revenir à 'global' après un contexte slot écrasait
-      // silencieusement tous les edits de session.
-      const fresh = loadFromStorage();
+      // Relire la copie canonique — synchronisée à chaque édition en
+      // contexte global et au chargement de show. (Avant : relecture du
+      // localStorage — même source au boot, mais la copie mémoire est
+      // désormais la référence unique, cf. B6.)
+      const g = get().global;
       set({
         context: 'global',
-        nodes: fresh?.nodes ?? [],
-        edges: fresh?.edges ?? [],
+        nodes: g.nodes,
+        edges: g.edges,
       });
     } else {
       set({
@@ -253,7 +264,10 @@ export const useSignalGraphStore = create<SignalGraphState>((set, get) => ({
     history.record(get().nodes, get().edges);
     const { nodes, edges } = buildDefaultSignalGraph();
     set({ nodes, edges });
-    saveToStorage(nodes, edges);
+    // persist et non saveToStorage direct : en contexte slot le reset
+    // concerne le graphe DU SLOT (écrit dans son document) — écrire le
+    // localStorage global y était une corruption croisée.
+    persist(get(), nodes, edges);
   },
 
   undo: () => {

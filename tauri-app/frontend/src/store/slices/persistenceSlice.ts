@@ -132,7 +132,11 @@ export async function buildShowEnvelope(s: PersistenceStore): Promise<ShowFileEn
     nodes: s.nodes,
     edges: s.edges,
     globalGraph: { nodes: globalStore.nodes, edges: globalStore.edges },
-    signalGraph: { nodes: signalStore.nodes, edges: signalStore.edges },
+    // Copie canonique du graphe global — JAMAIS le buffer d'édition,
+    // qui peut contenir la modulation d'un slot si l'utilisateur est en
+    // contexte per-move au moment du save (corruption B6 : les cibles
+    // `param:` d'un graphe de move sont incompilables en scope global).
+    signalGraph: { nodes: signalStore.global.nodes, edges: signalStore.global.edges },
     // Strip runtime state : movementId n'a de sens que pendant la session —
     // un slot rechargé afficherait un fantôme "playing".
     slots: s.moveSlots.map((sl) => ({ ...sl, movementId: null })),
@@ -599,6 +603,9 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       useSignalGraphStore.setState({
         nodes: raw.signalGraph.nodes,
         edges: raw.signalGraph.edges,
+        // Copie canonique synchronisée — le fichier EST la vérité du
+        // graphe global au chargement (B6).
+        global: { nodes: raw.signalGraph.nodes, edges: raw.signalGraph.edges },
         // Le push cible le graphe GLOBAL du merge — si l'utilisateur
         // avait un Mods-tab de slot ouvert (context != 'global'), le
         // push court-circuitait et le graphe était silencieusement
@@ -615,7 +622,10 @@ export const createPersistenceSlice: StateCreator<PersistenceStore, [], [], Pers
       // Section signalGraph absente → modulation vide : un signal graph
       // résiduel continuerait de produire des deltas invisibles (freeze
       // leak constaté en E2E — les gels dérivaient sous un yaw modulé).
-      useSignalGraphStore.setState({ nodes: [], edges: [], context: 'global' });
+      useSignalGraphStore.setState({
+        nodes: [], edges: [], context: 'global',
+        global: { nodes: [], edges: [] },
+      });
       await useSignalGraphStore.getState().pushSignalGraph();
     }
 

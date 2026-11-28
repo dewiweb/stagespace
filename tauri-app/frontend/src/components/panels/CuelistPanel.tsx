@@ -50,8 +50,12 @@ export const CuelistPanel: React.FC<{ readonly?: boolean; canStore?: boolean }> 
   const manualPositions = useGraphStore((s) => s.manualPositions);
   const globalNodes = useGlobalGraphStore((s) => s.nodes);
   const globalEdges = useGlobalGraphStore((s) => s.edges);
-  const signalNodes = useSignalGraphStore((s) => s.nodes);
-  const signalEdges = useSignalGraphStore((s) => s.edges);
+  // Copie canonique du graphe GLOBAL — pas le buffer d'édition : en
+  // contexte per-move celui-ci contient la modulation du slot, et le cue
+  // capturerait des cibles `param:` incompilables en scope global au
+  // recall (même famille que B6 — show file).
+  const signalNodes = useSignalGraphStore((s) => s.global.nodes);
+  const signalEdges = useSignalGraphStore((s) => s.global.edges);
 
   const handleStoreCue = async (autoName?: string) => {
     const name = newCueName.trim() || autoName;

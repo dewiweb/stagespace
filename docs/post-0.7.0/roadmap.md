@@ -74,10 +74,10 @@ Modulation existant et confirme/infirme qu'il fait le job fonctionnellement.
 | A2.3 | Dot-modulation cliquable (navigue vers la modulation source) | S | |
 | A2.4 | Section manuel + capture dédiée au domaine signal — y compris le **modèle de scope** per-move/global | S | |
 | A2.5 | Limite by design à documenter : params structurels non modulables (compile-baked) | — | doc seulement |
-| A2.6 | Badge de scope dans l'onglet signal : « modulation de ce move » vs « modulation globale » explicite en permanence | S | clarification UX |
-| A2.7 | Accès explicite à la modulation globale (aujourd'hui enfoui derrière « All » du drawer live) — entrée dédiée, p.ex. dans l'inspecteur global ou le menu | S | clarification UX |
-| A2.8 | ModChips distinguent l'origine : macro globale vs `param:` per-move | S | clarification UX |
-| A2.9 | Cohérence de labeling du dropdown SignalOut : la valeur sélectionnée s'affiche brute (`param:Circular:radius`) alors que les entrées de liste sont humanisées (`Circular - Radius (#2)`) — unifier. Précision des inputs numériques : frequency injectée 0.4 affichée 0.49 — quantization de slider à supprimer pour les params modulables en continu | S | session owner 28 nov. |
+| ~~A2.6~~ | ~~Badge de scope~~ — **traité** : sélecteur segmenté `Move: <slot> / Global` dans la barre de tabs de l'onglet Modulation, validé en live | ~~S~~ | lot 1, 29 nov. |
+| ~~A2.7~~ | ~~Accès global~~ — **traité** : unifié avec A2.6, le sélecteur bascule `setContext` localement | ~~S~~ | lot 1 |
+| ~~A2.8~~ | ~~ModChips~~ — **traité** : globales lues depuis la copie canonique (visibles en tout contexte) + chips per-move préfixées du slot pour les slots en lecture | ~~S~~ | lot 1 |
+| ~~A2.9~~ | ~~Labeling + précision~~ — **traité** : fallback friendly (`signalTargetLabel` — type-wide affiché `All Circular · Radius`), saisie libre `editable` câblée sur tous les sliders de params | ~~S~~ | lot 1 |
 
 ## A3 — Toggles de visibilité multi-accès
 
@@ -186,7 +186,7 @@ pose est un composant de sélection visuelle déjà disponible.
 | ~~B8~~ Faux positif « missing required node signalout » — **traité** : le validateur exigeait SignalOut même sur graphe vide, alors que vide = « pas de modulation » (état par défaut, accepté comme reset à la compile). Tout utilisateur ouvrant l'onglet Modulation d'un move sans modulation voyait « 1 error ». Fix : exigence seulement si le graphe est non-vide + test de régression | ~~S~~ | validation owner A2.1, 28 nov. |
 | B7 | **Console web/remote sans chargement de show** : File→Open utilise le dialog natif Tauri, inexistant dans un navigateur — or le dev-bridge sert explicitement l'opération à distance (`0.0.0.0:4173`). Fallback requis : saisie d'un chemin serveur (résolu côté backend, comme `/stagespace/show/load`) ou upload fichier→temp backend. Le flux doit aussi proposer « stop & load ? » au lieu du refus sec pendant la lecture (le garde est correct, le UX non), et vérifier la visibilité du toast de refus | M | session owner 28 nov. |
 | B9 | **Resync d'état d'une page fraîchement connectée** : un browser qui se connecte au bridge après le chargement d'un show ne resynchronise pas les slots (état purement frontend, aucune réconciliation au boot) — cause des échecs de capture en série puppeteer. À caractériser : faut-il un bootstrap d'état backend→frontend ou documenter la limitation ? | M | chantier captures + session A2.1 |
-| B6 | **Bug de sérialisation du signal graph global** : `buildShowEnvelope` écrit le *buffer d'édition courant* du signal store dans la section globale du show, quel que soit le contexte — un Ctrl+S pendant l'édition d'une modulation de slot écrit le graphe per-move (cibles `param:`) dans la section globale ; au reload il échoue à compiler (scope global sans nodes) et le vrai graphe global est perdu du fichier. Fix : sérialiser depuis la source canonique (localStorage global) ou flusher/rebasculer le contexte avant sauvegarde. La copie per-move dans les slots est saine (écrite en continu). | S | analyse scope A2, 28 nov. |
+| ~~B6~~ **traité** (29 nov.) : copie canonique `global` dans le store — `buildShowEnvelope` et le cue store la lisent au lieu du buffer d'édition. Bug cousin corrigé au passage : capture de cue en contexte slot (même corruption) + `resetToDefault` qui écrivait le localStorage global en contexte slot. 6 tests de régression | ~~S~~ | lot 1 |
 
 ---
 
@@ -200,10 +200,9 @@ changement architectural :
 - A3.1+A3.2+A3.3 toggles viewers
 - A2.2+A2.3+A2.4 accès modulation (~~prérequis A2.1~~ **validé** le 28 nov. —
   le cœur fonctionne, le problème est l'invisibilité du scope)
-- A2.6+A2.7+A2.8+A2.9 clarification du scope modulation per-move/global
+- ~~A2.6-9~~ clarification scope — **traitée** (lot 1, 29 nov.)
 - A4.1+A4.5 infra doc minimale (skeleton + lint)
-- B2 si périmètre confirmé · B6 (fix sérialisation signal — petit,
-  pourrait aussi passer en patch 0.7.x si on veut le sortir vite)
+- B2 si périmètre confirmé · ~~B6~~ **traité** (lot 1)
 - B7 console web (fallback chargement + « stop & load ? ») · B9 resync état
   — les deux ensemble : même chantier « opération à distance »
 
