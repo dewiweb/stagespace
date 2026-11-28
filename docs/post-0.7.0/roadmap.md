@@ -69,7 +69,7 @@ Modulation existant et confirme/infirme qu'il fait le job fonctionnellement.
 
 | # | Item | Taille | Notes |
 |---|------|--------|-------|
-| A2.1 | Validation owner du domaine signal existant | — | prérequis, aucune prod |
+| ~~A2.1~~ | ~~Validation owner~~ — **validé 28 nov.** : dropdown peuplé (preuve visuelle), persistence per-move OK, macros+params ciblables en per-move ; le fossé confirmé = invisibilité du scope (+ un bug trouvé et corrigé : B8) | — | fait |
 | A2.2 | Clic-droit sur param modulable → « Modulate » créant un SignalOut pré-câblé | M | raccourci d'accès, pas nouveau moteur |
 | A2.3 | Dot-modulation cliquable (navigue vers la modulation source) | S | |
 | A2.4 | Section manuel + capture dédiée au domaine signal — y compris le **modèle de scope** per-move/global | S | |
@@ -192,14 +192,15 @@ pose est un composant de sélection visuelle déjà disponible.
 
 ## Phasage proposé
 
-**0.7.x (patchs)** — ~~B1, B3, B4~~ **traités** (28 nov.) — la voie est libre pour 0.8.0
+**0.7.x (patchs)** — ~~B1, B3, B4~~ **traités** (28 nov.) · ~~B8~~ faux positif validation signal **traité** (28 nov., session A2.1) — la voie est libre pour 0.8.0
 
 **0.8.0 « ergonomie & vérité »** — le lot cohérent UX+doc, faisable sans
 changement architectural :
 - A5.1+A5.2 transform honnête · A6.1+A6.2+A6.3 track IDs
 - A3.1+A3.2+A3.3 toggles viewers
-- A2.2+A2.3+A2.4 accès modulation (après validation A2.1)
-- A2.6+A2.7+A2.8 clarification du scope modulation per-move/global
+- A2.2+A2.3+A2.4 accès modulation (~~prérequis A2.1~~ **validé** le 28 nov. —
+  le cœur fonctionne, le problème est l'invisibilité du scope)
+- A2.6+A2.7+A2.8+A2.9 clarification du scope modulation per-move/global
 - A4.1+A4.5 infra doc minimale (skeleton + lint)
 - B2 si périmètre confirmé · B6 (fix sérialisation signal — petit,
   pourrait aussi passer en patch 0.7.x si on veut le sortir vite)
