@@ -748,6 +748,12 @@ impl Runtime {
             // du cycle continue. N'a de sens qu'en mode loop.
             let mut dur_epoch = 0.0f64;
             let mut prev_duration = 0.0f64;
+            // Frame finale exacte à t=T (one-shot) — sans elle, la position
+            // de fin est quantifiée à la grille de frames : erreur jusqu'à
+            // une frame entière, visible au hold avec les easings à vélocité
+            // terminale élevée (expo_in ≈ 7m/s → ~11cm). Le break est différé
+            // après l'écriture de cette dernière frame.
+            let mut final_frame = false;
             let start = Instant::now();
             let frame_duration = Duration::from_secs_f64(1.0 / params.fps);
             let mut frame_count = 0u64;
@@ -962,8 +968,9 @@ impl Runtime {
                         }
                         PlayDirection::Forward => t_mod,
                     }
-                } else if !loop_is_on && t_virtual_eff >= duration {
-                    break;
+                } else if !loop_is_on && !final_frame && t_virtual_eff >= duration {
+                    final_frame = true;
+                    duration
                 } else {
                     t_virtual_eff
                 };
@@ -989,10 +996,12 @@ impl Runtime {
                     } else if fade_out_s > 0.0 && !loop_is_on && t_eff_secs > duration - fade_out_s
                     {
                         // One-shot: fade out à la fin
-                        let remaining = duration - t_eff_secs;
-                        if remaining > 0.0 {
-                            f *= remaining / fade_out_s;
-                        }
+                        // clamp à 0 : exactement 0 en fin de course — la
+                        // frame finale à t=T ne doit pas repartir à pleine
+                        // profondeur (l'ancien guard laissait f inchangé
+                        // dès que remaining passait sous 0).
+                        let remaining = (duration - t_eff_secs).max(0.0);
+                        f *= remaining / fade_out_s;
                     }
                     f.clamp(0.0, 1.0)
                 };
@@ -1158,6 +1167,11 @@ impl Runtime {
                     perf.update(fps, 0.0, latency_ms, cpu_pct);
                     frames_since_perf = 0;
                     last_perf_update = Instant::now();
+                }
+
+                // La frame finale exacte à t=T est écrite — sortie du worker.
+                if final_frame {
+                    break;
                 }
 
                 // Timing précis — std::thread::sleep rend la main à l'OS.

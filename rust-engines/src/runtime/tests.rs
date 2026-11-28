@@ -703,3 +703,53 @@ fn test_rebase_duration_epoch_shrink_wraps_phase() {
     let epoch = rebase_duration_epoch(75.0, 0.0, 1200.0);
     assert!(((75.0 - epoch) % 8.0 - 3.0).abs() < 1e-9);
 }
+
+#[test]
+fn test_oneshot_final_frame_lands_exactly_at_duration() {
+    // Régression : le worker oneshot break dès que t_virtual franchit
+    // duration — la dernière frame évaluée est quantifiée à la grille
+    // de frames, jamais exactement t=T. Avec une vélocité d'arrivée
+    // élevée (expo_in ~7m/s), le hold écrivait la position jusqu'à
+    // ~11cm avant la cible. Le worker doit évaluer une frame finale
+    // exacte à t=T avant de sortir.
+    let rt = Runtime::new();
+    let buffer = Arc::new(PositionBuffer::new());
+    rt.set_position_buffer(buffer.clone());
+    rt.set_loop_mode(LoopMode::OneShot);
+
+    let duration = 0.4;
+    let params = EngineParams {
+        n_objects: 1,
+        duration,
+        fps: 60.0,
+        extra: json!({}),
+    };
+    // v = 10 u/s — sans le fix, l'écart de quantification atteint
+    // ~0.17u (une frame à 60fps), largement au-dessus de la tolérance.
+    let position_fn =
+        Arc::new(move |t: f64, _obj: usize| nalgebra::Vector3::new(10.0 * t, 0.0, 0.0));
+    rt.play_compiled(position_fn, params, vec![1])
+        .expect("play_compiled");
+
+    // Mort naturelle du worker — polling borné.
+    for _ in 0..300 {
+        if !rt.is_running() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(!rt.is_running(), "worker oneshot encore vivant après 3s");
+
+    let positions = buffer.read();
+    let (_, p) = positions
+        .iter()
+        .find(|(i, _)| *i == 0)
+        .expect("obj 0 présent dans le buffer final");
+    assert!(
+        (p.x - 10.0 * duration).abs() < 1e-9,
+        "frame finale exacte à t=T : x={} attendu {}",
+        p.x,
+        10.0 * duration
+    );
+    rt.stop();
+}
